@@ -8,12 +8,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.R
 
+// Full Bengali + Latin Hind Siliguri (OFL) in four real weights. The previous single file was a
+// Latin-only subset used for every weight, so Bengali fell back to the system font and nothing looked bold.
 val HindSiliguriFontFamily = FontFamily(
-    Font(R.font.hind_siliguri, FontWeight.Normal),
-    Font(R.font.hind_siliguri, FontWeight.Medium),
-    Font(R.font.hind_siliguri, FontWeight.SemiBold),
-    Font(R.font.hind_siliguri, FontWeight.Bold),
-    Font(R.font.hind_siliguri, FontWeight.ExtraBold)
+    Font(R.font.hind_siliguri_regular, FontWeight.Normal),
+    Font(R.font.hind_siliguri_medium, FontWeight.Medium),
+    Font(R.font.hind_siliguri_semibold, FontWeight.SemiBold),
+    Font(R.font.hind_siliguri_bold, FontWeight.Bold),
+    Font(R.font.hind_siliguri_bold, FontWeight.ExtraBold)
 )
 
 val SpaceGroteskFontFamily = HindSiliguriFontFamily

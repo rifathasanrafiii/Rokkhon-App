@@ -26,6 +26,46 @@ enum class BloodGroup(val label: String) {
     }
 }
 
+/**
+ * Red-cell donation compatibility: which donor groups can give to a patient of [patientGroup].
+ * O- is the universal donor and AB+ the universal recipient.
+ */
+fun compatibleDonorGroupsFor(patientGroup: String): Set<String> = when (patientGroup.uppercase()) {
+    "O-" -> setOf("O-")
+    "O+" -> setOf("O+", "O-")
+    "A-" -> setOf("A-", "O-")
+    "A+" -> setOf("A+", "A-", "O+", "O-")
+    "B-" -> setOf("B-", "O-")
+    "B+" -> setOf("B+", "B-", "O+", "O-")
+    "AB-" -> setOf("AB-", "A-", "B-", "O-")
+    "AB+" -> BloodGroup.ALL_LABELS.toSet()
+    else -> setOf(patientGroup)
+}
+
+fun canDonateTo(donorGroup: String, patientGroup: String): Boolean =
+    donorGroup.uppercase() in compatibleDonorGroupsFor(patientGroup)
+
+/** Minimum gap between whole-blood donations (Bangladesh national guideline: ~3-4 months). */
+const val DONATION_GAP_DAYS = 90
+
+/** Parses a stored last-donation value ("yyyy-MM-dd"); free text such as "Never" returns null. */
+fun parseDonationDateMillis(value: String): Long? {
+    if (!Regex("""\d{4}-\d{2}-\d{2}""").matches(value.trim())) return null
+    return try {
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply { isLenient = false }
+            .parse(value.trim())?.time
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/** Days left until the donor can donate again (0 = eligible now). */
+fun daysUntilEligible(lastDonationDate: String, nowMillis: Long = System.currentTimeMillis()): Int {
+    val last = parseDonationDateMillis(lastDonationDate) ?: return 0
+    val elapsedDays = ((nowMillis - last) / (24L * 60L * 60L * 1000L)).toInt()
+    return (DONATION_GAP_DAYS - elapsedDays).coerceAtLeast(0)
+}
+
 data class BangladeshDistrict(
     val areaKey: String,
     val nameEn: String,
@@ -967,33 +1007,37 @@ data class RewardTier(
     val badgeLabel: String
 )
 
+/**
+ * Recognition badges unlocked by points. They are badges only: the old copy promised free lab tests
+ * and priority ambulances that no partner actually provides.
+ */
 val GUARDIAN_REWARD_TIERS = listOf(
     RewardTier(
-        id = "tier_cbc",
-        titleBn = "ফ্রি হিমোগ্লোবিন ও সিবিসি টেস্ট ভাউচার",
-        titleEn = "Free Hemoglobin & CBC Test Voucher",
-        subtitleBn = "নির্ধারিত ডায়াগনস্টিক সেন্টারে ফ্রি রক্ত পরীক্ষা",
-        subtitleEn = "Complimentary blood work at partner diagnostic labs",
+        id = "tier_bronze",
+        titleBn = "ব্রোঞ্জ গার্ডিয়ান",
+        titleEn = "Bronze Guardian",
+        subtitleBn = "নিয়মিত চেক-ইন ও প্রথম সাড়া",
+        subtitleEn = "Regular check-ins and your first response",
         requiredPoints = 300,
-        badgeLabel = "300 PTS"
+        badgeLabel = "300"
     ),
     RewardTier(
-        id = "tier_priority_blood",
-        titleBn = "প্রায়োরিটি ব্লাড ব্যাংক ও অ্যাম্বুলেন্স সাপোর্ট",
-        titleEn = "Priority Blood Bank & Ambulance Support",
-        subtitleBn = "পরিবারের জরুরি প্রয়োজনে অগ্রাধিকার সহায়তা",
-        subtitleEn = "Priority family emergency blood & ambulance dispatch",
+        id = "tier_silver",
+        titleBn = "সিলভার গার্ডিয়ান",
+        titleEn = "Silver Guardian",
+        subtitleBn = "একাধিক রক্তদান বা SOS-এ সাড়া",
+        subtitleEn = "Several donation pledges or SOS responses",
         requiredPoints = 500,
-        badgeLabel = "500 PTS"
+        badgeLabel = "500"
     ),
     RewardTier(
-        id = "tier_guardian_crest",
-        titleBn = "রক্ষণ ন্যাশনাল গার্ডিয়ান সার্টিফিকেট ও ব্যাজ",
-        titleEn = "Rokkhon Verified Guardian Certificate",
-        subtitleBn = "ভেরিফাইড রক্তদাতা ও রেসকিউ গার্ডিয়ান সম্মাননা",
-        subtitleEn = "Official verified community responder recognition",
+        id = "tier_gold",
+        titleBn = "গোল্ড গার্ডিয়ান",
+        titleEn = "Gold Guardian",
+        subtitleBn = "কমিউনিটির নির্ভরযোগ্য রক্ষক",
+        subtitleEn = "A trusted protector of your community",
         requiredPoints = 1000,
-        badgeLabel = "1000 PTS"
+        badgeLabel = "1000"
     )
 )
 
@@ -1004,17 +1048,22 @@ data class DonorNode(
     val displayName: String = "",
     val bloodGroup: String = "O+",
     val isAvailableDonor: Boolean = true,
-    val district: String = "Mirpur 10, Dhaka",
-    val contactPhone: String = "+8801700000000",
+    val district: String = "",
+    val contactPhone: String = "",
     val latitude: Double = 23.8069,
     val longitude: Double = 90.3687,
-    val lastDonationDate: String = "Available now",
+    val lastDonationDate: String = "",
     val trustScore: Long = 100L,
     val verifiedSosCount: Long = 0L,
     val networkKey: String = "BD_ROKKHON",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
-)
+) {
+    /** Available AND past the minimum donation gap. */
+    @get:Exclude
+    val isEligibleNow: Boolean
+        get() = isAvailableDonor && daysUntilEligible(lastDonationDate) == 0
+}
 
 @IgnoreExtraProperties
 data class BloodRequest(
@@ -1024,12 +1073,12 @@ data class BloodRequest(
     val patientName: String = "",
     val bloodGroup: String = "O+",
     val unitsNeeded: Long = 1L,
-    val hemoglobinLevel: String = "7.0 g/dL",
-    val patientProblem: String = "Dengue / Surgery",
+    val hemoglobinLevel: String = "",
+    val patientProblem: String = "",
     val hospitalName: String = "",
-    val wardCabinNumber: String = "Ward 4, Bed 12",
-    val neededDateTime: String = "Immediate (Within 2 Hours)",
-    val district: String = "Mirpur 10, Dhaka",
+    val wardCabinNumber: String = "",
+    val neededDateTime: String = "",
+    val district: String = "",
     val contactPhone: String = "",
     val urgencyLevel: String = "CRITICAL",
     val latitude: Double = 23.8069,
@@ -1073,15 +1122,15 @@ data class SosAlert(
     val senderName: String = "",
     val bloodGroup: String = "O+",
     val emergencyType: String = "ROAD_DANGER",
-    val district: String = "Mirpur 10, Dhaka",
+    val district: String = "",
     val latitude: Double = 23.8069,
     val longitude: Double = 90.3687,
-    val hasLiveCameraVerification: Boolean = true,
-    val hasLiveAudioVerification: Boolean = true,
-    val peakAudioDecibels: Long = 75L,
-    val triggerMethod: String = "3X_POWER_BUTTON",
-    val verificationNote: String = "Auto 5s Camera + Audio Evidence Attached",
-    val bleBeaconHash: String = "BLE-ROKKHON",
+    val hasLiveCameraVerification: Boolean = false,
+    val hasLiveAudioVerification: Boolean = false,
+    val peakAudioDecibels: Long = 0L,
+    val triggerMethod: String = "ONE_TAP_SOS",
+    val verificationNote: String = "",
+    val bleBeaconHash: String = "",
     val status: String = "ACTIVE",
     val responderCount: Long = 0L,
     val falseAlarmReports: Long = 0L,
@@ -1116,14 +1165,13 @@ data class SosAlert(
 
     /**
      * Protects real SOS victims from malicious/fake "False" reports:
-     * If the SOS has verified 5-second camera + audio blackbox evidence (>= 68 dB)
+     * If the SOS carries real microphone/camera evidence captured on the sender's device
      * OR at least 1 nearby responder (`responderCount > 0`) has confirmed "Nearby / যাচ্ছি",
      * the sender's Trust Score is 100% shielded from automatic penalties even if 3+ false reports are submitted.
      */
     @get:Exclude
     val isShieldedByEvidenceOrResponders: Boolean
-        get() = responderCount > 0L ||
-            (hasLiveCameraVerification && hasLiveAudioVerification && peakAudioDecibels >= 68L)
+        get() = responderCount > 0L || hasLiveAudioVerification || hasLiveCameraVerification
 
     @get:Exclude
     val isCommunityDisputed: Boolean
@@ -1146,3 +1194,49 @@ data class BleSosBeacon(
     val unitsNeeded: Int = 1
 )
 
+
+val SOS_EMERGENCY_TYPES = listOf("MEDICAL", "ACCIDENT", "HARASSMENT", "ROAD_DANGER")
+
+fun emergencyTypeLabel(code: String, language: AppLanguage): String {
+    val bn = language == AppLanguage.BENGALI
+    return when (code) {
+        "MEDICAL" -> if (bn) "চিকিৎসা জরুরি" else "Medical emergency"
+        "ACCIDENT" -> if (bn) "দুর্ঘটনা" else "Accident"
+        "HARASSMENT" -> if (bn) "হয়রানি / নিরাপত্তা" else "Harassment / safety"
+        "ROAD_DANGER" -> if (bn) "রাস্তায় বিপদ" else "Danger on the road"
+        else -> code
+    }
+}
+
+fun triggerMethodLabel(code: String, language: AppLanguage): String {
+    val bn = language == AppLanguage.BENGALI
+    return when (code) {
+        "3X_POWER_BUTTON" -> if (bn) "৩x পাওয়ার বাটন" else "3x power button"
+        "3X_VOLUME_BUTTON" -> if (bn) "৩x ভলিউম বাটন" else "3x volume button"
+        "ONE_TAP_SOS" -> if (bn) "অ্যাপ থেকে SOS" else "In-app SOS"
+        else -> code
+    }
+}
+
+/** Google Maps link used in SMS / share text so anyone can open the location. */
+fun mapsLink(lat: Double, lng: Double): String =
+    "https://maps.google.com/?q=${"%.6f".format(java.util.Locale.US, lat)},${"%.6f".format(java.util.Locale.US, lng)}"
+
+/** Family / friends who get an SMS with the live location link when the user sends an SOS. Stored only on the device. */
+data class TrustedContact(
+    val name: String,
+    val phone: String
+)
+
+/** Bangladesh national emergency number (police, fire, ambulance). */
+const val BD_NATIONAL_EMERGENCY_NUMBER = "999"
+
+/** Accepts 01XXXXXXXXX, +8801XXXXXXXXX or 8801XXXXXXXXX with valid operator prefixes 013-019. */
+fun isValidBangladeshMobile(phone: String): Boolean {
+    val digits = phone.filter { it.isDigit() }
+    val local = when {
+        digits.startsWith("880") -> "0" + digits.drop(3)
+        else -> digits
+    }
+    return Regex("""01[3-9]\d{8}""").matches(local)
+}

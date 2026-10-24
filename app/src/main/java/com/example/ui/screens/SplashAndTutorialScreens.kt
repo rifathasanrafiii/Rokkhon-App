@@ -37,7 +37,7 @@ import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -90,7 +90,7 @@ fun RokkhonSplashScreen(
     )
 
     LaunchedEffect(Unit) {
-        delay(1750L)
+        delay(1200L)
         onSplashFinished()
     }
 
@@ -206,7 +206,7 @@ fun RokkhonTutorialScreen(
                 ),
                 TutorialHighlightPoint(
                     icon = Icons.Default.Whatshot,
-                    label = "ডেইলি সেফটি স্ট্রিক (Daily Streak) ও গার্ডিয়ান পয়েন্ট রিওয়ার্ড সিস্টেম"
+                    label = "ডেইলি চেক-ইন স্ট্রিক ও গার্ডিয়ান পয়েন্ট ব্যাজ"
                 )
             ),
             icon = Icons.Default.Bloodtype
@@ -220,7 +220,7 @@ fun RokkhonTutorialScreen(
             highlightPoints = listOf(
                 TutorialHighlightPoint(
                     icon = Icons.Default.Map,
-                    label = "রিয়েল ইন্টারঅ্যাক্টিভ বাংলাদেশ ম্যাপ ও এলাকাভিত্তিক ডোনার পিন"
+                    label = "বাংলাদেশ ম্যাপে এলাকাভিত্তিক ডোনার, রোগী ও SOS পিন"
                 ),
                 TutorialHighlightPoint(
                     icon = Icons.Default.BluetoothConnected,
@@ -228,29 +228,29 @@ fun RokkhonTutorialScreen(
                 ),
                 TutorialHighlightPoint(
                     icon = Icons.Default.NotificationsActive,
-                    label = "রক্ত ম্যানেজ হলে পোস্ট মুছে ফেলার সুবিধা (ডাটাবেসে রেকর্ড সংরক্ষিত থাকবে)"
+                    label = "রক্তের গ্রুপ কম্প্যাটিবিলিটি ও ৯০ দিনের রক্তদান বিরতি অটো চেক"
                 )
             ),
             icon = Icons.Default.BluetoothConnected
         ),
         TutorialSlide(
-            badge = "STEP 3 OF 3 • 3X POWER AUTO-SOS & 5S PLAYABLE EVIDENCE",
-            titleEn = "3x Power tap SOS.\n5s Audio & Video.",
-            titleBn = "৩-বার পাওয়ার বাটনে অটো SOS ও ৫-সেকেন্ডের প্লেয়েবল অডিও-ভিডিও",
-            descriptionBn = "বিপদে পাওয়ার বা ভলিউম বাটনে পরপর ৩ বার চাপ দিলে কোনো ক্যাটাগরি সিলেক্ট ছাড়াই অটোমেটিক ৫-সেকেন্ডের অডিও ও ভিডিও রেকর্ডসহ SOS চলে যাবে এবং নিরাপদ মার্ক না করা পর্যন্ত লাইভ লোকেশন শেয়ার হতে থাকবে।",
-            descriptionEn = "Press Power or Volume 3x rapidly for zero-popup SOS with a playable 5-second audio/video clip and continuous live GPS sharing.",
+            badge = "STEP 3 OF 3 • 3X POWER SOS • TRUSTED CONTACTS",
+            titleEn = "3x Power tap SOS.\n5 seconds to cancel.",
+            titleBn = "৩-বার পাওয়ার বাটনে SOS • ভুল হলে ৫ সেকেন্ডে বাতিল",
+            descriptionBn = "অ্যাপ খোলা থাকলে পাওয়ার বা ভলিউম বাটনে পরপর ৩ বার চাপ দিন। ৫ সেকেন্ডের মধ্যে বাতিল না করলে মাইক্রোফোনের অডিও প্রমাণসহ SOS চলে যাবে, ১ কি.মি.-এর ইউজাররা জানবে এবং নিরাপদ মার্ক না করা পর্যন্ত লাইভ লোকেশন শেয়ার হবে।",
+            descriptionEn = "With the app open, press Power or Volume 3x. You get 5 seconds to cancel, then the SOS goes out with microphone evidence and live GPS until you mark yourself safe.",
             highlightPoints = listOf(
                 TutorialHighlightPoint(
                     icon = Icons.Default.FlashOn,
-                    label = "৩-বার পাওয়ার/ভলিউম চাপে ক্যাটাগরি পপআপ ছাড়াই তাৎক্ষণিক অটো SOS"
+                    label = "৩-বার পাওয়ার/ভলিউম চাপে SOS • ভুল চাপ হলে ৫ সেকেন্ডে বাতিল"
                 ),
                 TutorialHighlightPoint(
-                    icon = Icons.Default.Videocam,
-                    label = "৫-সেকেন্ডের অডিও ও ভিডিও ক্লিপ যা অন্য ইউজাররা সরাসরি প্লে করে শুনতে পারবেন"
+                    icon = Icons.Default.Call,
+                    label = "পরিবারের ৩ জন বিশ্বস্ত কন্টাক্টকে লোকেশন লিংকসহ SMS ও এক ট্যাপে ৯৯৯ কল"
                 ),
                 TutorialHighlightPoint(
                     icon = Icons.Default.LocationOn,
-                    label = "নিরাপদ মার্ক না করা পর্যন্ত লাইভ লোকেশন শেয়ার (নিরাপদ হলে ম্যাপ থেকে সরে ডাটাবেসে থাকবে)"
+                    label = "নিরাপদ মার্ক না করা পর্যন্ত আসল জিপিএস লাইভ লোকেশন শেয়ার"
                 )
             ),
             icon = Icons.Default.FlashOn

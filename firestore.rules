@@ -115,6 +115,9 @@ service cloud.firestore {
                          'lastDonationDate', 'trustScore', 'verifiedSosCount',
                          'networkKey', 'createdAt', 'updatedAt'
                        ]) &&
+                       // Reputation fields start fixed; clients can never raise their own trust.
+                       incoming().trustScore == 100 &&
+                       incoming().verifiedSosCount == 0 &&
                        isValidDonorNode(incoming());
 
       allow update: if isValidDonorNode(incoming()) &&
@@ -127,8 +130,7 @@ service cloud.firestore {
                        incoming().diff(existing()).affectedKeys().hasOnly([
                          'displayName', 'bloodGroup', 'isAvailableDonor',
                          'district', 'contactPhone', 'latitude', 'longitude',
-                         'lastDonationDate', 'trustScore', 'verifiedSosCount',
-                         'updatedAt'
+                         'lastDonationDate', 'updatedAt'
                        ]);
 
       allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
@@ -170,18 +172,33 @@ service cloud.firestore {
                        incoming().createdAt == existing().createdAt &&
                        incoming().networkKey == existing().networkKey && (
                          (request.auth.uid == existing().userId &&
+                          incoming().respondersCount == existing().respondersCount &&
                           incoming().diff(existing()).affectedKeys().hasOnly([
                             'patientName', 'unitsNeeded', 'hemoglobinLevel', 'patientProblem',
                             'hospitalName', 'wardCabinNumber', 'neededDateTime',
-                            'district', 'contactPhone', 'urgencyLevel', 'status',
-                            'respondersCount', 'updatedAt'
+                            'district', 'contactPhone', 'urgencyLevel', 'status', 'updatedAt'
                           ])) ||
+                         // One pledge per account: the counter may only move together with a new
+                         // pledge marker for this user, written in the same batch.
                          (request.auth.uid != existing().userId &&
                           incoming().respondersCount == existing().respondersCount + 1 &&
-                          incoming().diff(existing()).affectedKeys().hasOnly(['respondersCount', 'updatedAt']))
+                          incoming().diff(existing()).affectedKeys().hasOnly(['respondersCount', 'updatedAt']) &&
+                          !exists(/databases/$(database)/documents/blood_requests/$(requestId)/pledges/$(request.auth.uid)) &&
+                          existsAfter(/databases/$(database)/documents/blood_requests/$(requestId)/pledges/$(request.auth.uid)))
                        );
 
       allow delete: if isSignedIn() && isValidId(requestId) && existing().userId == request.auth.uid;
+
+      match /pledges/{voterId} {
+        allow get: if isSignedIn() && request.auth.uid == voterId;
+        allow create: if isSignedIn() &&
+                         request.auth.uid == voterId &&
+                         incoming().keys().hasOnly(['userId', 'createdAt']) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().createdAt == request.time &&
+                         getAfter(/databases/$(database)/documents/blood_requests/$(requestId)).data.respondersCount ==
+                           get(/databases/$(database)/documents/blood_requests/$(requestId)).data.respondersCount + 1;
+      }
     }
 
     // Collection 3: /sos_alerts/{alertId}
@@ -195,7 +212,7 @@ service cloud.firestore {
                        incoming().status == 'ACTIVE' &&
                        incoming().responderCount == 0 &&
                        incoming().falseAlarmReports == 0 &&
-                       (incoming().hasLiveCameraVerification == true || incoming().hasLiveAudioVerification == true) &&
+                       // No evidence requirement: a victim without mic permission must still be able to call for help.
                        incoming().keys().hasAll([
                          'userId', 'senderName', 'bloodGroup', 'emergencyType',
                          'district', 'latitude', 'longitude', 'hasLiveCameraVerification',
@@ -227,13 +244,39 @@ service cloud.firestore {
                           ])) ||
                          (request.auth.uid != existing().userId &&
                           incoming().responderCount == existing().responderCount + 1 &&
-                          incoming().diff(existing()).affectedKeys().hasOnly(['responderCount', 'updatedAt'])) ||
+                          incoming().diff(existing()).affectedKeys().hasOnly(['responderCount', 'updatedAt']) &&
+                          !exists(/databases/$(database)/documents/sos_alerts/$(alertId)/responders/$(request.auth.uid)) &&
+                          existsAfter(/databases/$(database)/documents/sos_alerts/$(alertId)/responders/$(request.auth.uid))) ||
                          (request.auth.uid != existing().userId &&
                           incoming().falseAlarmReports == existing().falseAlarmReports + 1 &&
-                          incoming().diff(existing()).affectedKeys().hasOnly(['falseAlarmReports', 'status', 'updatedAt']))
+                          incoming().diff(existing()).affectedKeys().hasOnly(['falseAlarmReports', 'updatedAt']) &&
+                          !exists(/databases/$(database)/documents/sos_alerts/$(alertId)/false_reports/$(request.auth.uid)) &&
+                          existsAfter(/databases/$(database)/documents/sos_alerts/$(alertId)/false_reports/$(request.auth.uid)))
                        );
 
       allow delete: if isSignedIn() && isValidId(alertId) && existing().userId == request.auth.uid;
+
+      match /responders/{voterId} {
+        allow get: if isSignedIn() && request.auth.uid == voterId;
+        allow create: if isSignedIn() &&
+                         request.auth.uid == voterId &&
+                         incoming().keys().hasOnly(['userId', 'createdAt']) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().createdAt == request.time &&
+                         getAfter(/databases/$(database)/documents/sos_alerts/$(alertId)).data.responderCount ==
+                           get(/databases/$(database)/documents/sos_alerts/$(alertId)).data.responderCount + 1;
+      }
+
+      match /false_reports/{voterId} {
+        allow get: if isSignedIn() && request.auth.uid == voterId;
+        allow create: if isSignedIn() &&
+                         request.auth.uid == voterId &&
+                         incoming().keys().hasOnly(['userId', 'createdAt']) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().createdAt == request.time &&
+                         getAfter(/databases/$(database)/documents/sos_alerts/$(alertId)).data.falseAlarmReports ==
+                           get(/databases/$(database)/documents/sos_alerts/$(alertId)).data.falseAlarmReports + 1;
+      }
     }
   }
 }
