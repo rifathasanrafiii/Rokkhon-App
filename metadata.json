@@ -1,0 +1,6 @@
+{
+  "name": "Rokkhon",
+  "description": "Bilingual Bangladesh map-based blood donor social network and offline-ready Bluetooth + Cloud Emergency SOS app with live camera/audio verification and AI emergency poster studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

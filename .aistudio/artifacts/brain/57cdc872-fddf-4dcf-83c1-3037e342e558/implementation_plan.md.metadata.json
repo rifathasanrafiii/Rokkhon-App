@@ -1,0 +1,6 @@
+{
+  "summary":  "Revised implementation plan for Rokkhon incorporating Fake-Report-Resistant SOS Verification (Evidence & Responder Shield instead of automatic 3-report trust penalties), 1-vote-per-account False reporting, 24-hour SOS auto-expiry, 1km BLE/Internet SOS alert routing, and Area-Wide Matching Blood Donor BLE/Internet alerts.",
+  "updatedAt":  "2026-10-24T12:34:59.830491997Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

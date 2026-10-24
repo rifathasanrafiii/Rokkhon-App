@@ -1,0 +1,239 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidBloodGroup(bg) {
+      return bg is string && bg.size() <= 4 && bg in ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+    }
+
+    function isValidCoordinate(lat, lng) {
+      return (lat is float || lat is int) && lat >= -90.0 && lat <= 90.0 &&
+             (lng is float || lng is int) && lng >= -180.0 && lng <= 180.0;
+    }
+
+    // 1. DonorNode Validation Helper
+    function isValidDonorNode(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             isValidBloodGroup(data.bloodGroup) &&
+             data.isAvailableDonor is bool &&
+             data.district is string && data.district.size() >= 1 && data.district.size() <= 80 &&
+             data.contactPhone is string && data.contactPhone.size() >= 3 && data.contactPhone.size() <= 24 &&
+             isValidCoordinate(data.latitude, data.longitude) &&
+             data.lastDonationDate is string && data.lastDonationDate.size() <= 40 &&
+             data.trustScore is int && data.trustScore >= 0 && data.trustScore <= 100 &&
+             data.verifiedSosCount is int && data.verifiedSosCount >= 0 && data.verifiedSosCount <= 10000 &&
+             data.networkKey is string && data.networkKey.size() <= 20 && data.networkKey == 'BD_ROKKHON' &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // 2. BloodRequest Validation Helper (with Clinical Fields: hemoglobinLevel, patientProblem, wardCabinNumber, neededDateTime)
+    function isValidBloodRequest(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.requesterName is string && data.requesterName.size() >= 1 && data.requesterName.size() <= 80 &&
+             data.patientName is string && data.patientName.size() >= 1 && data.patientName.size() <= 100 &&
+             isValidBloodGroup(data.bloodGroup) &&
+             data.unitsNeeded is int && data.unitsNeeded >= 1 && data.unitsNeeded <= 10 &&
+             data.hemoglobinLevel is string && data.hemoglobinLevel.size() >= 1 && data.hemoglobinLevel.size() <= 40 &&
+             data.patientProblem is string && data.patientProblem.size() >= 1 && data.patientProblem.size() <= 160 &&
+             data.hospitalName is string && data.hospitalName.size() >= 1 && data.hospitalName.size() <= 120 &&
+             data.wardCabinNumber is string && data.wardCabinNumber.size() >= 1 && data.wardCabinNumber.size() <= 80 &&
+             data.neededDateTime is string && data.neededDateTime.size() >= 1 && data.neededDateTime.size() <= 80 &&
+             data.district is string && data.district.size() >= 1 && data.district.size() <= 80 &&
+             data.contactPhone is string && data.contactPhone.size() >= 3 && data.contactPhone.size() <= 24 &&
+             data.urgencyLevel is string && data.urgencyLevel.size() <= 16 && data.urgencyLevel in ['CRITICAL', 'URGENT', 'STANDARD'] &&
+             isValidCoordinate(data.latitude, data.longitude) &&
+             data.status is string && data.status.size() <= 16 && data.status in ['OPEN', 'FULFILLED'] &&
+             data.respondersCount is int && data.respondersCount >= 0 && data.respondersCount <= 1000 &&
+             data.networkKey is string && data.networkKey.size() <= 20 && data.networkKey == 'BD_ROKKHON' &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // 3. SosAlert Validation Helper (with triggerMethod and Silent 3s Blackbox verification)
+    function isValidSosAlert(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80 &&
+             isValidBloodGroup(data.bloodGroup) &&
+             data.emergencyType is string && data.emergencyType.size() <= 24 && data.emergencyType in ['ROAD_DANGER', 'MEDICAL', 'ACCIDENT', 'HARASSMENT'] &&
+             data.district is string && data.district.size() >= 1 && data.district.size() <= 80 &&
+             isValidCoordinate(data.latitude, data.longitude) &&
+             data.hasLiveCameraVerification is bool &&
+             data.hasLiveAudioVerification is bool &&
+             data.peakAudioDecibels is int && data.peakAudioDecibels >= 0 && data.peakAudioDecibels <= 140 &&
+             data.triggerMethod is string && data.triggerMethod.size() >= 1 && data.triggerMethod.size() <= 40 &&
+             data.verificationNote is string && data.verificationNote.size() >= 1 && data.verificationNote.size() <= 300 &&
+             data.bleBeaconHash is string && data.bleBeaconHash.size() >= 1 && data.bleBeaconHash.size() <= 64 &&
+             data.status is string && data.status.size() <= 16 && data.status in ['ACTIVE', 'RESOLVED', 'FALSE_ALARM'] &&
+             data.responderCount is int && data.responderCount >= 0 && data.responderCount <= 1000 &&
+             data.falseAlarmReports is int && data.falseAlarmReports >= 0 && data.falseAlarmReports <= 100 &&
+             data.networkKey is string && data.networkKey.size() <= 20 && data.networkKey == 'BD_ROKKHON' &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Collection 1: /donor_nodes/{userId}
+    match /donor_nodes/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && existing().networkKey == 'BD_ROKKHON';
+      allow list: if isSignedIn() && existing().networkKey == 'BD_ROKKHON';
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'displayName', 'bloodGroup', 'isAvailableDonor',
+                         'district', 'contactPhone', 'latitude', 'longitude',
+                         'lastDonationDate', 'trustScore', 'verifiedSosCount',
+                         'networkKey', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'displayName', 'bloodGroup', 'isAvailableDonor',
+                         'district', 'contactPhone', 'latitude', 'longitude',
+                         'lastDonationDate', 'trustScore', 'verifiedSosCount',
+                         'networkKey', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidDonorNode(incoming());
+
+      allow update: if isValidDonorNode(incoming()) &&
+                       isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().networkKey == existing().networkKey &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'displayName', 'bloodGroup', 'isAvailableDonor',
+                         'district', 'contactPhone', 'latitude', 'longitude',
+                         'lastDonationDate', 'trustScore', 'verifiedSosCount',
+                         'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // Collection 2: /blood_requests/{requestId}
+    match /blood_requests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId) && existing().networkKey == 'BD_ROKKHON';
+      allow list: if isSignedIn() && existing().networkKey == 'BD_ROKKHON';
+
+      allow create: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'OPEN' &&
+                       incoming().respondersCount == 0 &&
+                       incoming().keys().hasAll([
+                         'userId', 'requesterName', 'patientName', 'bloodGroup',
+                         'unitsNeeded', 'hemoglobinLevel', 'patientProblem',
+                         'hospitalName', 'wardCabinNumber', 'neededDateTime',
+                         'district', 'contactPhone', 'urgencyLevel',
+                         'latitude', 'longitude', 'status', 'respondersCount',
+                         'networkKey', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'requesterName', 'patientName', 'bloodGroup',
+                         'unitsNeeded', 'hemoglobinLevel', 'patientProblem',
+                         'hospitalName', 'wardCabinNumber', 'neededDateTime',
+                         'district', 'contactPhone', 'urgencyLevel',
+                         'latitude', 'longitude', 'status', 'respondersCount',
+                         'networkKey', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidBloodRequest(incoming());
+
+      allow update: if isValidBloodRequest(incoming()) &&
+                       isSignedIn() &&
+                       isValidId(requestId) &&
+                       existing().status == 'OPEN' &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().networkKey == existing().networkKey && (
+                         (request.auth.uid == existing().userId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'patientName', 'unitsNeeded', 'hemoglobinLevel', 'patientProblem',
+                            'hospitalName', 'wardCabinNumber', 'neededDateTime',
+                            'district', 'contactPhone', 'urgencyLevel', 'status',
+                            'respondersCount', 'updatedAt'
+                          ])) ||
+                         (request.auth.uid != existing().userId &&
+                          incoming().respondersCount == existing().respondersCount + 1 &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['respondersCount', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(requestId) && existing().userId == request.auth.uid;
+    }
+
+    // Collection 3: /sos_alerts/{alertId}
+    match /sos_alerts/{alertId} {
+      allow get: if isSignedIn() && isValidId(alertId) && existing().networkKey == 'BD_ROKKHON';
+      allow list: if isSignedIn() && existing().networkKey == 'BD_ROKKHON';
+
+      allow create: if isSignedIn() &&
+                       isValidId(alertId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'ACTIVE' &&
+                       incoming().responderCount == 0 &&
+                       incoming().falseAlarmReports == 0 &&
+                       (incoming().hasLiveCameraVerification == true || incoming().hasLiveAudioVerification == true) &&
+                       incoming().keys().hasAll([
+                         'userId', 'senderName', 'bloodGroup', 'emergencyType',
+                         'district', 'latitude', 'longitude', 'hasLiveCameraVerification',
+                         'hasLiveAudioVerification', 'peakAudioDecibels', 'triggerMethod',
+                         'verificationNote', 'bleBeaconHash', 'status',
+                         'responderCount', 'falseAlarmReports', 'networkKey',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'senderName', 'bloodGroup', 'emergencyType',
+                         'district', 'latitude', 'longitude', 'hasLiveCameraVerification',
+                         'hasLiveAudioVerification', 'peakAudioDecibels', 'triggerMethod',
+                         'verificationNote', 'bleBeaconHash', 'status',
+                         'responderCount', 'falseAlarmReports', 'networkKey',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidSosAlert(incoming());
+
+      allow update: if isValidSosAlert(incoming()) &&
+                       isSignedIn() &&
+                       isValidId(alertId) &&
+                       existing().status == 'ACTIVE' &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().networkKey == existing().networkKey && (
+                         (request.auth.uid == existing().userId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'latitude', 'longitude', 'status', 'verificationNote', 'updatedAt'
+                          ])) ||
+                         (request.auth.uid != existing().userId &&
+                          incoming().responderCount == existing().responderCount + 1 &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['responderCount', 'updatedAt'])) ||
+                         (request.auth.uid != existing().userId &&
+                          incoming().falseAlarmReports == existing().falseAlarmReports + 1 &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['falseAlarmReports', 'status', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(alertId) && existing().userId == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,179 @@
+{
+  "entities": {
+    "DonorNode": {
+      "title": "DonorNode",
+      "description": "Publicly queryable blood donor beacon and availability status on the Rokkhon Bangladesh map.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated Firebase UID of the donor." },
+        "displayName": { "type": "string", "description": "Display name of the donor." },
+        "bloodGroup": {
+          "type": "string",
+          "enum": ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],
+          "description": "Blood group of the donor."
+        },
+        "isAvailableDonor": { "type": "boolean", "description": "Whether the user is currently active and ready to donate blood." },
+        "district": { "type": "string", "description": "Bangladesh district or area name." },
+        "contactPhone": { "type": "string", "description": "Voluntary emergency contact number for blood donation requests." },
+        "latitude": { "type": "number", "description": "Latitude coordinate on the Bangladesh map." },
+        "longitude": { "type": "number", "description": "Longitude coordinate on the Bangladesh map." },
+        "lastDonationDate": { "type": "string", "description": "Last blood donation date string." },
+        "trustScore": { "type": "integer", "description": "Community accountability and anti-false-alarm score (0 to 100)." },
+        "verifiedSosCount": { "type": "integer", "description": "Count of verified SOS responses." },
+        "networkKey": { "type": "string", "enum": ["BD_ROKKHON"], "description": "Network partition key for secure list queries." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "bloodGroup",
+        "isAvailableDonor",
+        "district",
+        "contactPhone",
+        "latitude",
+        "longitude",
+        "lastDonationDate",
+        "trustScore",
+        "verifiedSosCount",
+        "networkKey",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BloodRequest": {
+      "title": "BloodRequest",
+      "description": "Clinical urgent blood request in Bangladesh with Hemoglobin, Problem/Diagnosis, Hospital, Ward/Cabin, and Required Date/Time.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID of the user requesting blood." },
+        "requesterName": { "type": "string", "description": "Name of the requester." },
+        "patientName": { "type": "string", "description": "Name of the patient." },
+        "bloodGroup": {
+          "type": "string",
+          "enum": ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],
+          "description": "Required blood group."
+        },
+        "unitsNeeded": { "type": "integer", "description": "Number of blood bags needed (1 to 10)." },
+        "hemoglobinLevel": { "type": "string", "description": "Patient hemoglobin level in g/dL (e.g., 6.8 g/dL)." },
+        "patientProblem": { "type": "string", "description": "Medical problem or diagnosis (e.g., Dengue Shock, Thalassemia, C-Section, Trauma)." },
+        "hospitalName": { "type": "string", "description": "Hospital or clinic name in Bangladesh." },
+        "wardCabinNumber": { "type": "string", "description": "Ward, Cabin, ICU, or Bed number." },
+        "neededDateTime": { "type": "string", "description": "When the blood is required." },
+        "district": { "type": "string", "description": "Area or district name." },
+        "contactPhone": { "type": "string", "description": "Emergency contact number at the hospital." },
+        "urgencyLevel": {
+          "type": "string",
+          "enum": ["CRITICAL", "URGENT", "STANDARD"],
+          "description": "Urgency level of the blood request."
+        },
+        "latitude": { "type": "number", "description": "Hospital latitude." },
+        "longitude": { "type": "number", "description": "Hospital longitude." },
+        "status": {
+          "type": "string",
+          "enum": ["OPEN", "FULFILLED"],
+          "description": "Whether the request is still open or fulfilled."
+        },
+        "respondersCount": { "type": "integer", "description": "Number of donors who pledged to help." },
+        "networkKey": { "type": "string", "enum": ["BD_ROKKHON"], "description": "Network partition key for secure list queries." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId",
+        "requesterName",
+        "patientName",
+        "bloodGroup",
+        "unitsNeeded",
+        "hemoglobinLevel",
+        "patientProblem",
+        "hospitalName",
+        "wardCabinNumber",
+        "neededDateTime",
+        "district",
+        "contactPhone",
+        "urgencyLevel",
+        "latitude",
+        "longitude",
+        "status",
+        "respondersCount",
+        "networkKey",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SosAlert": {
+      "title": "SosAlert",
+      "description": "Zero-effort emergency SOS alert triggered via 3x Power/Volume/Shake or 1-tap with automatic 3-second silent camera & audio blackbox attachment.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID of the person in distress." },
+        "senderName": { "type": "string", "description": "Name of the person triggering SOS." },
+        "bloodGroup": {
+          "type": "string",
+          "enum": ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],
+          "description": "Blood group of the sender."
+        },
+        "emergencyType": {
+          "type": "string",
+          "enum": ["ROAD_DANGER", "MEDICAL", "ACCIDENT", "HARASSMENT"],
+          "description": "Category of emergency."
+        },
+        "district": { "type": "string", "description": "Area or street landmark." },
+        "latitude": { "type": "number", "description": "Live GPS latitude." },
+        "longitude": { "type": "number", "description": "Live GPS longitude." },
+        "hasLiveCameraVerification": { "type": "boolean", "description": "True if 3s silent camera blackbox snapshot attached." },
+        "hasLiveAudioVerification": { "type": "boolean", "description": "True if 3s silent audio blackbox clip attached." },
+        "peakAudioDecibels": { "type": "integer", "description": "Ambient audio decibel reading." },
+        "triggerMethod": { "type": "string", "description": "How SOS was triggered (e.g., 3X_POWER_BUTTON, 3X_VOLUME_KEY, SHAKE_SENSOR, ONE_TAP)." },
+        "verificationNote": { "type": "string", "description": "Silent 3s blackbox metadata and telemetry." },
+        "bleBeaconHash": { "type": "string", "description": "Compact BLE offline packet identifier." },
+        "status": {
+          "type": "string",
+          "enum": ["ACTIVE", "RESOLVED", "FALSE_ALARM"],
+          "description": "Current status of the SOS alert."
+        },
+        "responderCount": { "type": "integer", "description": "Count of nearby citizens responding." },
+        "falseAlarmReports": { "type": "integer", "description": "Count of false alarm flags." },
+        "networkKey": { "type": "string", "enum": ["BD_ROKKHON"], "description": "Network partition key for secure list queries." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId",
+        "senderName",
+        "bloodGroup",
+        "emergencyType",
+        "district",
+        "latitude",
+        "longitude",
+        "hasLiveCameraVerification",
+        "hasLiveAudioVerification",
+        "peakAudioDecibels",
+        "triggerMethod",
+        "verificationNote",
+        "bleBeaconHash",
+        "status",
+        "responderCount",
+        "falseAlarmReports",
+        "networkKey",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/donor_nodes/{userId}": {
+      "schema": { "$ref": "#/entities/DonorNode" },
+      "description": "Publicly queryable donor availability beacons keyed by userId."
+    },
+    "/blood_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/BloodRequest" },
+      "description": "Urgent clinical blood donation requests across Bangladesh."
+    },
+    "/sos_alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/SosAlert" },
+      "description": "Emergency SOS alerts with 3s silent camera/audio blackbox verification."
+    }
+  }
+}
