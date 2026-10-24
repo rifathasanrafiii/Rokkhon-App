@@ -51,7 +51,7 @@ import java.io.FileOutputStream
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 // Plain JDK TLS so map tile downloads use the JVM trust store and proxy settings.
 @ConscryptMode(ConscryptMode.Mode.OFF)
-@Config(sdk = [34], qualifiers = "w392dp-h850dp-xhdpi")
+@Config(sdk = [34], qualifiers = "w412dp-h915dp-xhdpi")
 class ScreenshotTourTest {
 
     @get:Rule

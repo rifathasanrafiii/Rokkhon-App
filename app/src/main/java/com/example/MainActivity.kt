@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
@@ -578,7 +579,7 @@ private fun RokkhonFloatingBottomBar(
 
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.SOS_GUARDIAN,
-                    icon = Icons.Default.Shield,
+                    icon = Icons.Outlined.ChatBubbleOutline,
                     label = "SOS + BLE",
                     onClick = { onSelectTab(RokkhonTab.SOS_GUARDIAN) },
                     modifier = Modifier

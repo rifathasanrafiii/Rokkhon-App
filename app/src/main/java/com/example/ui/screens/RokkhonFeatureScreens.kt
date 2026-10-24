@@ -414,10 +414,10 @@ fun HomeMatchHubScreen(
                 // Eyebrow: DONATE • SAVE • TOGETHER
                 Text(
                     text = if (language == AppLanguage.BENGALI) "রক্ত দিন  •  জীবন বাঁচান  •  পাশে থাকুন" else "DONATE  •  SAVE  •  TOGETHER",
-                    fontSize = 10.5.sp,
+                    fontSize = 9.5.sp,
                     color = Color.White.copy(alpha = 0.72f),
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 2.0.sp
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 2.2.sp
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -425,11 +425,11 @@ fun HomeMatchHubScreen(
                 // Main Headline
                 Text(
                     text = if (language == AppLanguage.BENGALI) "প্রতিটি ফোঁটা\nএকটি জীবন বাঁচাতে পারে।" else "Every drop\ncan save a life.",
-                    fontSize = 33.sp,
+                    fontSize = 40.sp,
                     color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 37.sp,
-                    letterSpacing = (-0.5).sp
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 39.sp,
+                    letterSpacing = (-0.6).sp
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -441,9 +441,9 @@ fun HomeMatchHubScreen(
                     } else {
                         "Area-based available blood donors & 1 km\nBluetooth + audio emergency SOS."
                     },
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    color = Color.White.copy(alpha = 0.82f)
+                    fontSize = 15.5.sp,
+                    lineHeight = 21.sp,
+                    color = Color.White.copy(alpha = 0.85f)
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -558,7 +558,7 @@ fun HomeMatchHubScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = if (language == AppLanguage.BENGALI) {
-                                        "আপনার লাইভ SOS শেয়ার হচ্ছে • নিরাপদ হলে বন্ধ করুন"
+                                        "আপনার লাইভ SOS শেয়ার হচ্ছে • নিরাপদ হলে বন্ধ করুন"
                                     } else {
                                         "Your Live SOS GPS Active • Tap Safe to Stop"
                                     },
@@ -778,9 +778,9 @@ fun HomeMatchHubScreen(
                                 Column {
                                     Text(
                                         text = if (language == AppLanguage.BENGALI) "রক্তের গ্রুপ খুঁজুন" else "Find your match",
-                                        fontSize = 18.sp,
+                                        fontSize = 19.sp,
                                         color = Color(0xFF1A1113),
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Normal
                                     )
                                     Text(
                                         text = if (language == AppLanguage.BENGALI) {
@@ -1278,7 +1278,7 @@ fun DailySafetyStreakCheckInCard(
                 Column {
                     Text(
                         text = if (language == AppLanguage.BENGALI) {
-                            "$streakDays দিনের সেফটি স্ট্রিক • $guardianPoints পয়েন্ট"
+                            "$streakDays দিনের সেফটি স্ট্রিক • $guardianPoints পয়েন্ট"
                         } else {
                             "$streakDays Day Safety Streak • $guardianPoints\u00A0Pts"
                         },
@@ -1289,9 +1289,9 @@ fun DailySafetyStreakCheckInCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = if (language == AppLanguage.BENGALI) {
-                            "প্রতিদিনের চেক-ইন স্ট্রিক বাড়ায় ও রিওয়ার্ড আনলক করে।"
+                            "প্রতিদিনের চেক-ইন স্ট্রিক বাড়ায় ও রিওয়ার্ড আনলক করে।"
                         } else {
-                            "Daily check-in builds your streak & unlocks rewards."
+                            "Daily check-in builds your streak\n& unlocks rewards."
                         },
                         fontSize = 12.5.sp,
                         lineHeight = 17.sp,
@@ -1524,7 +1524,7 @@ fun BloodGroupPillGrid2x4(
  * Screen 2 (Find — Real Interactive Bangladesh Map + 3 Dedicated Tabs:
  * 1. Available Donors
  * 2. Patient Blood Requests
- * 3. Active SOS Alerts (with "Nearby / যাচ্ছি" & "False / ভুয়া (X/3)" buttons, auto-removing at 3 false reports)
+ * 3. Active SOS Alerts (with "Nearby / যাচ্ছি" & "False / ভুয়া (X/3)" buttons, auto-removing at 3 false reports)
  */
 @Composable
 fun RadarMapHubScreen(
@@ -1831,7 +1831,7 @@ fun RadarMapHubScreen(
                                         text = if (isAreaAutoDetected) {
                                             if (language == AppLanguage.BENGALI) "অটো জিপিএস" else "Auto GPS"
                                         } else {
-                                            if (language == AppLanguage.BENGALI) "ম্যানুয়াল" else "Manual"
+                                            if (language == AppLanguage.BENGALI) "ম্যানুয়াল" else "Manual"
                                         },
                                         color = if (isAreaAutoDetected) IosSystemGreen else IosSystemRed,
                                         style = MaterialTheme.typography.labelSmall,
@@ -1907,7 +1907,7 @@ fun RadarMapHubScreen(
                                 ) {
                                     Text(
                                         text = if (language == AppLanguage.BENGALI) {
-                                            "এই এলাকায় বর্তমানে কোনো খোলা রক্তের আবেদন নেই।"
+                                            "এই এলাকায় বর্তমানে কোনো খোলা রক্তের আবেদন নেই।"
                                         } else {
                                             "No active patient blood requests in this area."
                                         },
@@ -1957,7 +1957,7 @@ fun RadarMapHubScreen(
                                 ) {
                                     Text(
                                         text = if (language == AppLanguage.BENGALI) {
-                                            "এই এলাকায় বর্তমানে কোনো সক্রিয় SOS বিপদ সংকেত নেই।"
+                                            "এই এলাকায় বর্তমানে কোনো সক্রিয় SOS বিপদ সংকেত নেই।"
                                         } else {
                                             "No active SOS alerts in this area right now."
                                         },
@@ -2344,7 +2344,7 @@ fun ClinicalBloodRequestCard(
                         }
                         Column(modifier = Modifier.weight(1.1f)) {
                             Text(
-                                text = if (language == AppLanguage.BENGALI) "ওয়ার্ড / কেবিন" else "Ward / Cabin",
+                                text = if (language == AppLanguage.BENGALI) "ওয়ার্ড / কেবিন" else "Ward / Cabin",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF756568)
                             )
@@ -2411,13 +2411,13 @@ fun ClinicalBloodRequestCard(
                     Text(
                         text = if (hasPledged) {
                             if (language == AppLanguage.BENGALI) {
-                                "সাড়া দিয়েছেন (${req.respondersCount})"
+                                "সাড়া দিয়েছেন (${req.respondersCount})"
                             } else {
                                 "Pledged (${req.respondersCount})"
                             }
                         } else {
                             if (language == AppLanguage.BENGALI) {
-                                "রক্ত দিন (${req.respondersCount} সাড়া)"
+                                "রক্ত দিন (${req.respondersCount} সাড়া)"
                             } else {
                                 "Donate Blood (${req.respondersCount})"
                             }
@@ -2588,7 +2588,7 @@ private fun MapPinDetailOverlayCard(
                     ) {
                         Text(
                             if (hasPledged) {
-                                if (language == AppLanguage.BENGALI) "আপনি সাড়া দিয়েছেন" else "Already Pledged"
+                                if (language == AppLanguage.BENGALI) "আপনি সাড়া দিয়েছেন" else "Already Pledged"
                             } else {
                                 if (language == AppLanguage.BENGALI) "রক্ত দিন (১ বার)" else "Donate Blood (1x)"
                             }
@@ -2670,7 +2670,7 @@ private fun MapPinDetailOverlayCard(
                                         }
                                     } else {
                                         if (language == AppLanguage.BENGALI) {
-                                            "ভুয়া (${pin.alert.falseAlarmReports})"
+                                            "ভুয়া (${pin.alert.falseAlarmReports})"
                                         } else {
                                             "False (${pin.alert.falseAlarmReports})"
                                         }
@@ -2799,7 +2799,7 @@ fun SosGuardianAndBleScreen(
             Text(
                 text = if (myActiveSos != null || isLiveLocationActive) {
                     if (language == AppLanguage.BENGALI) {
-                        "আপনার SOS এখন সক্রিয় আছে!"
+                        "আপনার SOS এখন সক্রিয় আছে!"
                     } else {
                         "Your Emergency SOS is LIVE!"
                     }
@@ -2938,7 +2938,7 @@ fun SosGuardianAndBleScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (language == AppLanguage.BENGALI) {
-                            "আমি এখন নিরাপদ • আমার সক্রিয় SOS বন্ধ করুন"
+                            "আমি এখন নিরাপদ • আমার সক্রিয় SOS বন্ধ করুন"
                         } else {
                             "I Am Safe Now • Turn Off My Active SOS"
                         },
@@ -2984,7 +2984,7 @@ fun SosGuardianAndBleScreen(
                     item {
                         Text(
                             text = if (language == AppLanguage.BENGALI) {
-                                "আপনার বর্তমান সক্রিয় SOS (চালু আছে)"
+                                "আপনার বর্তমান সক্রিয় SOS (চালু আছে)"
                             } else {
                                 "Your Currently Active SOS Broadcast"
                             },
@@ -3312,7 +3312,7 @@ fun SosGuardianAndBleScreen(
  * Reusable SOS Post Card (used in Find -> Active SOS and in SOS + BLE -> My Past SOS History).
  * - In Find -> Active SOS:
  *   - Shows the "Nearby / যাচ্ছি (Count)" button (`sos_nearby_respond_button_${alert.id}`)
- *   - Shows the "False / ভুয়া (X/3)" button (`sos_false_report_button_${alert.id}`) with live false count
+ *   - Shows the "False / ভুয়া (X/3)" button (`sos_false_report_button_${alert.id}`) with live false count
  *   - Auto-removes when false count reaches 3/3 and warns the sender!
  * - Strictly shows the "নিরাপদ / Mark Safe" button ONLY when `isMySos == true` and `!isHistoryItem`.
  */
@@ -3507,7 +3507,7 @@ fun SosPostCardItem(
                 ) {
                     Text(
                         text = if (language == AppLanguage.BENGALI) {
-                            "ভুয়া (False) কাউন্ট: ${alert.falseAlarmReports}"
+                            "ভুয়া (False) কাউন্ট: ${alert.falseAlarmReports}"
                         } else {
                             "False Count: ${alert.falseAlarmReports}"
                         },
@@ -3555,7 +3555,7 @@ fun SosPostCardItem(
                             }
                         } else {
                             if (language == AppLanguage.BENGALI) {
-                                "কমিউনিটি ডিসপিউটেড (${alert.falseAlarmReports}টি False রিপোর্ট): অ্যালার্টটি সাথে সাথে মুছে ফেলা হয়নি; ২৪ ঘণ্টা পর অটো-রিমুভ হবে।"
+                                "কমিউনিটি ডিসপিউটেড (${alert.falseAlarmReports}টি False রিপোর্ট): অ্যালার্টটি সাথে সাথে মুছে ফেলা হয়নি; ২৪ ঘণ্টা পর অটো-রিমুভ হবে।"
                             } else {
                                 "Community Disputed (${alert.falseAlarmReports} False reports): Kept visible with live False count and auto-removes after 24 hours."
                             }
@@ -3608,7 +3608,7 @@ fun SosPostCardItem(
                 } else {
                     // Find -> SOS Card Action Row:
                     // 1. "Nearby / যাচ্ছি (Count)" Button (1 tap per account)
-                    // 2. "False / ভুয়া (Count)" Button (Strictly 1 vote per account; never auto-deletes at 3)
+                    // 2. "False / ভুয়া (Count)" Button (Strictly 1 vote per account; never auto-deletes at 3)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -3669,13 +3669,13 @@ fun SosPostCardItem(
                             Text(
                                 text = if (hasReportedFalse) {
                                     if (language == AppLanguage.BENGALI) {
-                                        "ভুয়া দেওয়া হয়েছে (${alert.falseAlarmReports})"
+                                        "ভুয়া দেওয়া হয়েছে (${alert.falseAlarmReports})"
                                     } else {
                                         "Reported False (${alert.falseAlarmReports})"
                                     }
                                 } else {
                                     if (language == AppLanguage.BENGALI) {
-                                        "ভুয়া / False (${alert.falseAlarmReports})"
+                                        "ভুয়া / False (${alert.falseAlarmReports})"
                                     } else {
                                         "False (${alert.falseAlarmReports})"
                                     }
@@ -3690,7 +3690,7 @@ fun SosPostCardItem(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = if (language == AppLanguage.BENGALI) {
-                            "নোট: ১টি অ্যাকাউন্ট থেকে ১ বারই False দেওয়া যাবে। ৩+ False হলেও অ্যালার্ট মুছে যাবে না (২৪ ঘণ্টা পর অটো-রিমুভ হবে) এবং প্রমাণ থাকলে ট্রাস্ট পয়েন্ট সুরক্ষিত থাকবে।"
+                            "নোট: ১টি অ্যাকাউন্ট থেকে ১ বারই False দেওয়া যাবে। ৩+ False হলেও অ্যালার্ট মুছে যাবে না (২৪ ঘণ্টা পর অটো-রিমুভ হবে) এবং প্রমাণ থাকলে ট্রাস্ট পয়েন্ট সুরক্ষিত থাকবে।"
                         } else {
                             "Note: 1 False vote per account. Alerts stay active for 24h even with 3+ False reports, and verified 5s evidence shields the sender's Trust Points."
                         },
@@ -3763,7 +3763,7 @@ fun FiveSecondEvidencePlayerCard(
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                            contentDescription = "Play 5s Clip",
+                            contentDescription = "Play 5s audio",
                             tint = Color.White,
                             modifier = Modifier.size(16.dp)
                         )
@@ -3772,7 +3772,7 @@ fun FiveSecondEvidencePlayerCard(
                             text = if (isPlaying) {
                                 if (language == AppLanguage.BENGALI) "থামান" else "Stop"
                             } else {
-                                if (language == AppLanguage.BENGALI) "৫-সেকেন্ড শুনুন ও দেখুন" else "Play 5s Clip"
+                                if (language == AppLanguage.BENGALI) "৫-সেকেন্ড শুনুন" else "Play 5s audio"
                             },
                             color = Color.White,
                             style = MaterialTheme.typography.labelSmall,
@@ -3827,7 +3827,7 @@ fun FiveSecondEvidencePlayerCard(
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = "CAM 5S",
+                            text = "MIC 5S",
                             color = Color.White,
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 9.sp,
@@ -3889,11 +3889,11 @@ fun FiveSecondEvidencePlayerCard(
                 )
                 Text(
                     text = if (isPlaying) {
-                        "PLAYING 5S VIDEO & AUDIO..."
+                        "PLAYING 5S AUDIO..."
                     } else if (language == AppLanguage.BENGALI) {
                         "বিস্তারিত দেখতে ট্যাপ করুন"
                     } else {
-                        "TAP POST TO WATCH VIDEO & AUDIO"
+                        "TAP FOR SOS DETAILS"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = if (isPlaying) IosSystemGreen else Color(0xFFFFB3C0),
@@ -4176,7 +4176,7 @@ fun SosVideoAudioInspectorDialog(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (language == AppLanguage.BENGALI) {
-                                        "কাছাকাছি / যাচ্ছি মার্ক করুন (+৫০ পয়েন্ট)"
+                                        "কাছাকাছি / যাচ্ছি মার্ক করুন (+৫০ পয়েন্ট)"
                                     } else {
                                         "Mark Nearby / Going (+50 Pts)"
                                     },
@@ -4469,7 +4469,7 @@ fun PostBloodRequestDialog(
                         OutlinedTextField(
                             value = wardCabinNumber,
                             onValueChange = { wardCabinNumber = it },
-                            label = { Text(if (language == AppLanguage.BENGALI) "ওয়ার্ড / কেবিন" else "Ward / Cabin") },
+                            label = { Text(if (language == AppLanguage.BENGALI) "ওয়ার্ড / কেবিন" else "Ward / Cabin") },
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("blood_request_ward_input"),

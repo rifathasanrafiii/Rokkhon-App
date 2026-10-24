@@ -7,6 +7,9 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -58,17 +61,30 @@ val IosShapes = Shapes(
     extraLarge = RoundedCornerShape(32.dp)
 )
 
+/**
+ * The design mockup is drawn denser than default Android sizing: every card, pill and caption
+ * is about 0.86x (like Android's "small" display size). Scaling once here gives every screen
+ * the same proportions; the user's own font-size setting still applies on top.
+ */
+private const val ROKKHON_UI_SCALE = 0.86f
+
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    // The screens are drawn with light colours; a dark scheme made text fields white on white.
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) IosDarkColorScheme else IosLightColorScheme
+    val baseDensity = LocalDensity.current
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = IosShapes,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalDensity provides Density(baseDensity.density * ROKKHON_UI_SCALE, baseDensity.fontScale)
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            shapes = IosShapes,
+            content = content
+        )
+    }
 }

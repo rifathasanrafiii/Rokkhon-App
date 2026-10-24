@@ -10,18 +10,19 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 
 // The old family pointed every weight at one small single-weight file without Bangla letters,
-// so Bold/ExtraBold looked thin and Bangla fell back to another font. These are the full
-// Hind Siliguri files (Bangla + Latin), one per weight.
-val HindSiliguriFontFamily = FontFamily(
-    Font(R.font.hind_siliguri_regular, FontWeight.Normal),
-    Font(R.font.hind_siliguri_medium, FontWeight.Medium),
-    Font(R.font.hind_siliguri_semibold, FontWeight.SemiBold),
-    Font(R.font.hind_siliguri_bold, FontWeight.Bold),
-    Font(R.font.hind_siliguri_bold, FontWeight.ExtraBold)
+// so Bold/ExtraBold looked thin. Google Sans is the typeface of the design mockup and covers
+// both Bangla and Latin, with one file per weight.
+val GoogleSansFontFamily = FontFamily(
+    Font(R.font.google_sans_regular, FontWeight.Normal),
+    Font(R.font.google_sans_medium, FontWeight.Medium),
+    Font(R.font.google_sans_semibold, FontWeight.SemiBold),
+    Font(R.font.google_sans_bold, FontWeight.Bold),
+    Font(R.font.google_sans_bold, FontWeight.ExtraBold)
 )
 
-val SpaceGroteskFontFamily = HindSiliguriFontFamily
-val PlusJakartaSansFontFamily = HindSiliguriFontFamily
+val HindSiliguriFontFamily = GoogleSansFontFamily
+val SpaceGroteskFontFamily = GoogleSansFontFamily
+val PlusJakartaSansFontFamily = GoogleSansFontFamily
 
 // Line heights scale with each text's own size (a fixed 22sp made small captions look loose).
 val Typography = Typography(
