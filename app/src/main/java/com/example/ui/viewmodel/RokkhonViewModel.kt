@@ -44,6 +44,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
@@ -57,7 +60,6 @@ enum class RokkhonTab {
     HOME_MATCH,
     RADAR_MAP,
     SOS_GUARDIAN,
-    REQUESTS,
     DONOR_PROFILE
 }
 
@@ -171,6 +173,16 @@ class RokkhonViewModel(
 
     private val _falseSosWarningBanner = MutableStateFlow<String?>(null)
     val falseSosWarningBanner: StateFlow<String?> = _falseSosWarningBanner.asStateFlow()
+
+    // Daily check-in streak: starts at 0 and resets if a day is missed.
+    private val _dailyStreakCount = MutableStateFlow(currentStreakFromPrefs())
+    val dailyStreakCount: StateFlow<Int> = _dailyStreakCount.asStateFlow()
+
+    private val _checkedInToday = MutableStateFlow(prefs.getString(KEY_LAST_CHECKIN_DAY, "") == todayKey())
+    val checkedInToday: StateFlow<Boolean> = _checkedInToday.asStateFlow()
+
+    private val _guardianPoints = MutableStateFlow(prefs.getInt(KEY_GUARDIAN_POINTS, 0))
+    val guardianPoints: StateFlow<Int> = _guardianPoints.asStateFlow()
 
     private val _toastBanner = MutableStateFlow<String?>(null)
     val toastBanner: StateFlow<String?> = _toastBanner.asStateFlow()
@@ -522,12 +534,31 @@ class RokkhonViewModel(
 
     // ---------------------------------------------------------------- helpers
 
+    private fun todayKey(offsetDays: Int = 0): String {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, offsetDays)
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+    }
+
+    private fun currentStreakFromPrefs(): Int {
+        val last = prefs.getString(KEY_LAST_CHECKIN_DAY, "") ?: ""
+        val stored = prefs.getInt(KEY_STREAK_COUNT, 0)
+        // A streak survives only if the last check-in was today or yesterday.
+        return if (last == todayKey() || last == todayKey(-1)) stored else 0
+    }
+
     private fun loadStringSet(key: String): Set<String> {
         return prefs.getStringSet(key, emptySet())?.toSet() ?: emptySet()
     }
 
     private fun saveStringSet(key: String, ids: Set<String>) {
         prefs.edit().putStringSet(key, ids).apply()
+    }
+
+    private fun addGuardianPoints(delta: Int) {
+        val next = (_guardianPoints.value + delta).coerceAtLeast(0)
+        _guardianPoints.value = next
+        prefs.edit().putInt(KEY_GUARDIAN_POINTS, next).apply()
     }
 
     private fun bn(): Boolean = _language.value == AppLanguage.BENGALI
@@ -585,6 +616,31 @@ class RokkhonViewModel(
     fun dismissToastBanner() {
         toastJob?.cancel()
         _toastBanner.value = null
+    }
+
+    // ---------------------------------------------------------------- daily check-in
+
+    fun performDailySafeCheckIn() {
+        if (_checkedInToday.value) {
+            showToast(
+                "আজকের চেক-ইন হয়ে গেছে • ${_dailyStreakCount.value} দিনের স্ট্রিক",
+                "Already checked in today • ${_dailyStreakCount.value}-day streak"
+            )
+            return
+        }
+        val continues = prefs.getString(KEY_LAST_CHECKIN_DAY, "") == todayKey(-1)
+        val nextStreak = if (continues) _dailyStreakCount.value + 1 else 1
+        _dailyStreakCount.value = nextStreak
+        _checkedInToday.value = true
+        prefs.edit()
+            .putInt(KEY_STREAK_COUNT, nextStreak)
+            .putString(KEY_LAST_CHECKIN_DAY, todayKey())
+            .apply()
+        addGuardianPoints(25)
+        showToast(
+            "চেক-ইন সম্পন্ন! $nextStreak দিনের স্ট্রিক • +২৫ পয়েন্ট",
+            "Checked in! $nextStreak-day streak • +25 points"
+        )
     }
 
     // ---------------------------------------------------------------- settings & filters
@@ -690,14 +746,6 @@ class RokkhonViewModel(
         val next = _inspectedEvidenceSosIds.value + alertId
         _inspectedEvidenceSosIds.value = next
         saveStringSet(KEY_INSPECTED_EVIDENCE_SOS_IDS, next)
-    }
-
-    /** Opens the Find map on the SOS layer with this alert's details showing. */
-    fun openSosOnMap(sosId: String?) {
-        val alert = sosId?.let { id -> (sosAlertsState.value as? UiState.Success)?.data?.firstOrNull { it.id == id } }
-        _mapLayerFilter.value = MapLayerFilter.SOS_ALERTS_ONLY
-        _currentTab.value = RokkhonTab.RADAR_MAP
-        if (alert != null) _sosToInspect.value = alert
     }
 
     fun consumeSosToInspect() {
@@ -958,6 +1006,7 @@ class RokkhonViewModel(
         val updatedPledgedIds = _pledgedRequestIds.value + request.id
         _pledgedRequestIds.value = updatedPledgedIds
         saveStringSet(KEY_PLEDGED_IDS, updatedPledgedIds)
+        addGuardianPoints(100)
 
         _localBloodRequests.value = _localBloodRequests.value.map {
             if (it.id == request.id) it.copy(respondersCount = it.respondersCount + 1L) else it
@@ -971,8 +1020,8 @@ class RokkhonViewModel(
             RokkhonNotificationItem(
                 id = "notif_pledge_${request.id}",
                 kind = NotificationKind.RESPONDER_UPDATE,
-                titleBn = "রক্তদানের সাড়া নথিভুক্ত",
-                titleEn = "Donation pledge recorded",
+                titleBn = "রক্তদানের সাড়া নথিভুক্ত (+১০০ পয়েন্ট)",
+                titleEn = "Donation pledge recorded (+100 pts)",
                 bodyBn = "${request.patientName} (${request.bloodGroup}) • ${request.hospitalName} • যোগাযোগ: ${request.contactPhone}",
                 bodyEn = "${request.patientName} (${request.bloodGroup}) • ${request.hospitalName} • Contact: ${request.contactPhone}",
                 timestampLabel = if (bn()) "এইমাত্র" else "Just now",
@@ -1207,6 +1256,7 @@ class RokkhonViewModel(
         val nextIds = _respondedSosIds.value + alert.id
         _respondedSosIds.value = nextIds
         saveStringSet(KEY_RESPONDED_SOS_IDS, nextIds)
+        addGuardianPoints(50)
 
         bumpLocalSos(alert) { it.copy(responderCount = it.responderCount + 1L) }
 
@@ -1214,8 +1264,8 @@ class RokkhonViewModel(
             RokkhonNotificationItem(
                 id = "notif_sos_resp_${alert.id}",
                 kind = NotificationKind.RESPONDER_UPDATE,
-                titleBn = "আপনি সাহায্যে যাচ্ছেন",
-                titleEn = "You are going to help",
+                titleBn = "আপনি সাহায্যে যাচ্ছেন (+৫০ পয়েন্ট)",
+                titleEn = "You are going to help (+50 pts)",
                 bodyBn = "${alert.senderName} • ${alert.district} • নিজের নিরাপত্তা আগে, প্রয়োজনে ৯৯৯-এ কল করুন",
                 bodyEn = "${alert.senderName} • ${alert.district} • Stay safe yourself; call 999 if needed",
                 timestampLabel = if (bn()) "এইমাত্র" else "Just now",
@@ -1352,6 +1402,9 @@ class RokkhonViewModel(
         private const val KEY_REPORTED_FALSE_SOS_IDS = "reported_false_sos_ids"
         private const val KEY_INSPECTED_EVIDENCE_SOS_IDS = "inspected_evidence_sos_ids"
         private const val KEY_READ_NOTIFICATION_IDS = "read_notification_ids"
+        private const val KEY_STREAK_COUNT = "daily_streak_count"
+        private const val KEY_LAST_CHECKIN_DAY = "last_checkin_day"
+        private const val KEY_GUARDIAN_POINTS = "guardian_points"
         private const val KEY_TRUSTED_CONTACTS = "trusted_contacts"
         private const val KEY_DEMO_NAME = "demo_profile_name"
         private const val KEY_DEMO_BLOOD = "demo_profile_blood"

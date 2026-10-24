@@ -5,11 +5,13 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.example.R
 
-// Full Bengali + Latin Hind Siliguri (OFL) in four real weights. The previous single file was a
-// Latin-only subset used for every weight, so Bengali fell back to the system font and nothing looked bold.
+// The old family pointed every weight at one small single-weight file without Bangla letters,
+// so Bold/ExtraBold looked thin and Bangla fell back to another font. These are the full
+// Hind Siliguri files (Bangla + Latin), one per weight.
 val HindSiliguriFontFamily = FontFamily(
     Font(R.font.hind_siliguri_regular, FontWeight.Normal),
     Font(R.font.hind_siliguri_medium, FontWeight.Medium),
@@ -21,79 +23,80 @@ val HindSiliguriFontFamily = FontFamily(
 val SpaceGroteskFontFamily = HindSiliguriFontFamily
 val PlusJakartaSansFontFamily = HindSiliguriFontFamily
 
+// Line heights scale with each text's own size (a fixed 22sp made small captions look loose).
 val Typography = Typography(
     displayLarge = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
-        lineHeight = 38.sp,
+        lineHeight = 1.15.em,
         letterSpacing = (-0.3).sp
     ),
     headlineLarge = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 26.sp,
-        lineHeight = 33.sp,
+        lineHeight = 1.2.em,
         letterSpacing = (-0.2).sp
     ),
     headlineMedium = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 21.sp,
-        lineHeight = 28.sp
+        lineHeight = 1.25.em
     ),
     titleLarge = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 18.sp,
-        lineHeight = 25.sp
+        lineHeight = 1.3.em
     ),
     titleMedium = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
-        lineHeight = 23.sp
+        lineHeight = 1.3.em
     ),
     titleSmall = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
-        lineHeight = 20.sp
+        lineHeight = 1.3.em
     ),
     bodyLarge = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 15.sp,
-        lineHeight = 22.sp
+        lineHeight = 1.4.em
     ),
     bodyMedium = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 13.sp,
-        lineHeight = 19.sp
+        lineHeight = 1.4.em
     ),
     bodySmall = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
-        lineHeight = 17.sp
+        lineHeight = 1.4.em
     ),
     labelLarge = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp,
-        lineHeight = 18.sp
+        lineHeight = 1.3.em
     ),
     labelMedium = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
-        lineHeight = 16.sp
+        lineHeight = 1.3.em
     ),
     labelSmall = TextStyle(
         fontFamily = HindSiliguriFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
-        lineHeight = 15.sp
+        lineHeight = 1.3.em
     )
 )

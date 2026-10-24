@@ -11,6 +11,9 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollToKey
@@ -42,7 +45,7 @@ import java.io.FileOutputStream
  * Opt-in: set ROKKHON_SCREENSHOTS=/path/to/output/dir, e.g.
  *   ROKKHON_SCREENSHOTS=$PWD/screenshots ./gradlew testDebugUnitTest --tests '*ScreenshotTourTest*'
  * Without Firebase config the app runs in demo mode, so the shots show the sample community.
- * The map tab draws real OpenStreetMap tiles, so it needs network access while rendering.
+ * The street map is a WebView and cannot render here; the built-in vector map underneath is shown instead.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -113,11 +116,15 @@ class ScreenshotTourTest {
         File(outDir, "$name.tags.json").writeText("[" + entries.joinToString(",") + "]")
     }
 
+
     private fun startApp() {
         composeRule.mainClock.autoAdvance = false
         composeRule.setContent { MyApplicationTheme { RokkhonAppRoot() } }
         repeat(40) {
-            if (composeRule.onAllNodesWithTag("home_screen").fetchSemanticsNodes().isNotEmpty()) return
+            if (composeRule.onAllNodesWithTag("nav_tab_home").fetchSemanticsNodes().isNotEmpty()) {
+                composeRule.mainClock.advanceTimeBy(600)
+                return
+            }
             // Another test may have initialised Firebase in this JVM: continue as a guest.
             if (composeRule.onAllNodesWithTag("skip_sign_in_button").fetchSemanticsNodes().isNotEmpty()) {
                 composeRule.onNodeWithTag("skip_sign_in_button").performClick()
@@ -134,9 +141,19 @@ class ScreenshotTourTest {
         composeRule.waitForIdle()
     }
 
-    private fun scrollTo(listTag: String, itemKey: String) {
-        composeRule.onNodeWithTag(listTag).performScrollToKey(itemKey)
-        composeRule.mainClock.advanceTimeBy(400)
+    /** Scrolls the screen content up by about half a screen. */
+    private fun swipeUp() {
+        composeRule.onAllNodes(androidx.compose.ui.test.isRoot())[0].performTouchInput {
+            swipe(start = Offset(centerX, height * 0.70f), end = Offset(centerX, height * 0.25f), durationMillis = 300)
+        }
+        composeRule.mainClock.advanceTimeBy(1_200)
+    }
+
+    private fun tap(tag: String): Boolean {
+        if (composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()) return false
+        composeRule.onAllNodesWithTag(tag)[0].performClick()
+        composeRule.mainClock.advanceTimeBy(900)
+        return true
     }
 
     /** Lets osmdroid fetch and draw map tiles on its background threads. */
@@ -152,107 +169,77 @@ class ScreenshotTourTest {
         }
     }
 
-    private fun clickIfPresent(tag: String): Boolean {
-        if (composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()) return false
-        composeRule.onNodeWithTag(tag).performClick()
-        composeRule.mainClock.advanceTimeBy(800)
-        return true
-    }
-
     @Test
     fun home() {
         startApp()
-        save("01_home_top")
-        scrollTo("home_screen", "match")
-        save("02_home_match")
-        scrollTo("home_screen", "feed_tabs")
-        save("02b_home_feed")
+        save("01_home")
+        swipeUp()
+        save("02_home_scrolled")
+        swipeUp()
+        save("03_home_scrolled_more")
     }
 
     @Test
-    fun requests() {
+    fun find() {
         startApp()
-        scrollTo("home_screen", "all_requests")
-        clickIfPresent("home_see_all_requests")
-        save("03_requests")
-    }
-
-    @Test
-    fun map() {
-        startApp()
-        composeRule.onNodeWithTag("nav_tab_map").performClick()
-        composeRule.mainClock.advanceTimeBy(800)
+        tap("nav_tab_map")
         waitForMapTiles()
-        save("04_map_donors")
-        composeRule.onNodeWithTag("segment_BLOOD_REQUESTS_ONLY").performClick()
-        composeRule.mainClock.advanceTimeBy(800)
+        save("04_find_donors")
+        tap("map_filter_tab_patient_requests")
         waitForMapTiles()
-        save("05_map_requests")
-        composeRule.onNodeWithTag("segment_SOS_ALERTS_ONLY").performClick()
-        composeRule.mainClock.advanceTimeBy(800)
+        save("05_find_patients")
+        tap("map_filter_tab_sos_alerts")
         waitForMapTiles()
-        save("06_map_sos")
+        save("06_find_sos")
     }
 
     @Test
     fun sos() {
         startApp()
-        composeRule.onNodeWithTag("nav_tab_sos").performClick()
+        tap("nav_tab_sos")
+        save("07_sos")
+        swipeUp()
+        save("08_sos_scrolled")
+        tap("nav_tab_sos")
+        tap("sos_guardian_main_button")
         composeRule.mainClock.advanceTimeBy(800)
-        save("08_sos_screen")
-        scrollTo("sos_screen", "helplines")
-        save("09_sos_network_helplines")
-        scrollTo("sos_screen", "contacts")
-        clickIfPresent("edit_trusted_contacts")
-        save("10_trusted_contacts_editor")
-    }
-
-    @Test
-    fun sosDialog() {
-        startApp()
-        composeRule.onNodeWithTag("home_sos_button").performClick()
-        composeRule.mainClock.advanceTimeBy(1_200)
-        save("11_sos_send_dialog")
+        save("09_sos_send_dialog")
     }
 
     @Test
     fun profile() {
         startApp()
-        composeRule.onNodeWithTag("nav_tab_profile").performClick()
-        composeRule.mainClock.advanceTimeBy(800)
-        save("12_profile")
-        if (!clickIfPresent("edit_profile_button")) clickIfPresent("create_profile_button")
-        save("13_profile_editor")
+        tap("nav_tab_profile")
+        save("10_profile")
+        swipeUp()
+        save("11_profile_scrolled")
+        swipeUp()
+        save("12_profile_scrolled_more")
     }
 
     @Test
     fun bloodRequestForm() {
         startApp()
-        composeRule.onNodeWithTag("nav_center_plus_button").performClick()
-        composeRule.mainClock.advanceTimeBy(800)
-        save("14_blood_request_form")
-        // Semantic click: works although the button is below the fold.
+        tap("nav_center_plus_button")
+        save("13_blood_request_form")
+        // Semantic click: the submit button is below the fold of the form.
         composeRule.onNodeWithTag("submit_blood_request_button").performSemanticsAction(SemanticsActions.OnClick)
-        composeRule.mainClock.advanceTimeBy(400)
-        save("15_blood_request_validation")
+        composeRule.mainClock.advanceTimeBy(600)
+        save("13b_blood_request_validation")
     }
 
     @Test
-    fun areaPickerAndNotifications() {
+    fun notificationsAndArea() {
         startApp()
-        composeRule.onNodeWithTag("area_dropdown_selector").performClick()
-        composeRule.mainClock.advanceTimeBy(800)
-        save("16_area_picker")
+        tap("notification_bell_button")
+        save("14_notifications")
     }
 
     @Test
-    fun notifications() {
+    fun areaPicker() {
         startApp()
-        composeRule.onNodeWithTag("notification_bell_button").performClick()
-        composeRule.mainClock.advanceTimeBy(800)
-        save("17_notifications")
-        // Tapping an SOS notification opens that SOS on the map with its details.
-        if (clickIfPresent("notification_item_notif_sos_bd_sos_mirpur_1")) save("07_sos_details")
+        tap("area_dropdown_selector")
+        save("15_area_picker")
     }
 
     @Test
@@ -266,13 +253,13 @@ class ScreenshotTourTest {
                 onSendNow = {}
             )
         }
-        save("18_hardware_sos_countdown")
+        save("16_hardware_sos_countdown")
     }
 
     @Test
     fun tutorial() {
         showOnly { RokkhonTutorialScreen(onFinishTutorial = {}) }
-        save("19_tutorial")
+        save("17_tutorial")
     }
 
     @Test
@@ -289,6 +276,6 @@ class ScreenshotTourTest {
             )
         }
         showOnly { AuthScreen(onAuthSuccess = {}, onSkipSignIn = {}) }
-        save("20_sign_in")
+        save("18_sign_in")
     }
 }

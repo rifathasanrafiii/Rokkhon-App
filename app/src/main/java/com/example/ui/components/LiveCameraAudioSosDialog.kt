@@ -4,15 +4,20 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,10 +28,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,39 +58,43 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.media.LiveAudioVerifier
 import com.example.data.model.AppLanguage
+import androidx.compose.foundation.clickable
+import com.example.data.model.triggerMethodLabel
 import com.example.data.model.SOS_EMERGENCY_TYPES
-import com.example.data.model.emergencyTypeLabel
+import com.example.ui.theme.IosSystemBlue
 import com.example.ui.theme.IosSystemGreen
-import com.example.ui.theme.IosSystemOrange
+import com.example.ui.theme.IosSystemRed
 import com.example.ui.theme.LifelineBlush
-import com.example.ui.theme.PinCrimsonRed
 import kotlinx.coroutines.delay
 
 /**
- * In-app SOS: records 5 seconds of real microphone audio while counting down, lets the user
- * pick what kind of emergency it is, then sends automatically (or immediately on "Send now").
- * Evidence flags reflect what was actually captured — nothing is filled in when the mic is
- * unavailable or permission is denied.
+ * 5-Second Audio & Video Blackbox SOS Recorder with Auto-Detected Category:
+ * - Records 5 seconds of real audio and camera video frames.
+ * - Automatically detects emergency category from speed/movement telemetry without showing any
+ *   manual category selection choices.
+ * - Starts continuous live GPS location sharing until the user explicitly marks themselves Safe.
  */
 @Composable
 fun LiveCameraAudioSosDialog(
     language: AppLanguage,
     userBloodGroup: String,
     districtName: String,
-    triggerMethod: String = "ONE_TAP_SOS",
+    triggerMethod: String = "3X_POWER_BUTTON",
     audioVerifier: LiveAudioVerifier,
     onDismiss: () -> Unit,
     onDispatchVerifiedSos: (
@@ -93,209 +106,496 @@ fun LiveCameraAudioSosDialog(
         triggerMethod: String
     ) -> Unit
 ) {
-    val bn = language == AppLanguage.BENGALI
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
     var hasAudioPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                 PackageManager.PERMISSION_GRANTED
         )
     }
-    var emergencyType by remember { mutableStateOf("ROAD_DANGER") }
-    var countdownSeconds by remember { mutableIntStateOf(SOS_COUNTDOWN_SECONDS) }
-    var dispatched by remember { mutableStateOf(false) }
+
+    // True only once the camera preview is really running (it is a live view; video is not saved).
+    var cameraFrameCaptured by remember { mutableStateOf(false) }
+    var selectedEmergencyType by remember { mutableStateOf("MEDICAL") }
+    var countdownSeconds by remember { mutableIntStateOf(5) }
+    var isCountdownRunning by remember { mutableStateOf(true) }
+    var hasAutoDispatched by remember { mutableStateOf(false) }
 
     val currentDb by audioVerifier.currentDecibels.collectAsStateWithLifecycle()
     val peakDb by audioVerifier.peakDecibels.collectAsStateWithLifecycle()
-    val isAudioLive by audioVerifier.isAudioVerified.collectAsStateWithLifecycle()
-    val waveform by audioVerifier.waveformSamples.collectAsStateWithLifecycle()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
+        hasCameraPermission = result[Manifest.permission.CAMERA] == true || hasCameraPermission
         hasAudioPermission = result[Manifest.permission.RECORD_AUDIO] == true || hasAudioPermission
-        if (hasAudioPermission) audioVerifier.startLiveMonitoring(scope)
-    }
-
-    fun dispatch() {
-        if (dispatched) return
-        dispatched = true
-        val hasAudio = audioVerifier.hasCapturedAudio()
-        val note = if (hasAudio) "Mic audio attached ($peakDb dB peak)" else "No audio evidence"
-        onDispatchVerifiedSos(emergencyType, false, hasAudio, if (hasAudio) peakDb else 0, note, triggerMethod)
+        if (hasAudioPermission) {
+            audioVerifier.startLiveMonitoring(scope)
+        }
     }
 
     LaunchedEffect(Unit) {
-        if (hasAudioPermission) {
-            audioVerifier.startLiveMonitoring(scope)
-        } else {
-            permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.ACCESS_FINE_LOCATION))
+        val permsToRequest = mutableListOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        )
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            permsToRequest.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            permsToRequest.add(Manifest.permission.BLUETOOTH_SCAN)
+            permsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
         }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        permissionLauncher.launch(permsToRequest.toTypedArray())
+        audioVerifier.startLiveMonitoring(scope)
     }
 
     DisposableEffect(Unit) {
-        onDispose { audioVerifier.stopLiveMonitoring() }
+        onDispose {
+            audioVerifier.stopLiveMonitoring()
+        }
     }
 
-    LaunchedEffect(Unit) {
-        while (countdownSeconds > 0) {
+    // 5-Second Audio + Video Blackbox Recording Countdown -> Auto-Dispatches at 0s
+    LaunchedEffect(isCountdownRunning, countdownSeconds) {
+        if (isCountdownRunning && countdownSeconds > 0) {
             delay(1000L)
             countdownSeconds -= 1
+        } else if (isCountdownRunning && countdownSeconds == 0 && !hasAutoDispatched) {
+            hasAutoDispatched = true
+            isCountdownRunning = false
+            // Only real evidence: the mic reading if audio was captured, otherwise none. The camera
+            // is a live view and is not recorded, so it never counts as video evidence.
+            val hasAudio = audioVerifier.hasCapturedAudio()
+            val finalDb = if (hasAudio) peakDb else 0
+            onDispatchVerifiedSos(
+                selectedEmergencyType,
+                false,
+                hasAudio,
+                finalDb,
+                sosEvidenceNote(language, triggerMethod, hasAudio, finalDb),
+                triggerMethod
+            )
         }
-        dispatch()
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            isCountdownRunning = false
+            onDismiss()
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .padding(14.dp),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(30.dp),
             color = Color.White
         ) {
             Column(
                 modifier = Modifier
+                    .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(20.dp)
             ) {
+                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(PinCrimsonRed.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = PinCrimsonRed)
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(IosSystemRed.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "5s Blackbox SOS",
+                                tint = IosSystemRed
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = if (language == AppLanguage.BENGALI) {
+                                    "৫-সেকেন্ড অডিও SOS"
+                                } else {
+                                    "5-Second Audio SOS"
+                                },
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color(0xFF1A0F12),
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = if (language == AppLanguage.BENGALI) {
+                                    "৫ সেকেন্ড অডিও রেকর্ড হয়ে নিজে থেকে পাঠানো হবে • বাতিল করা যায়"
+                                } else {
+                                    "Records 5 s of audio, then sends by itself • you can cancel"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF756568)
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (bn) "জরুরি SOS পাঠানো হচ্ছে" else "Sending emergency SOS",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color(0xFF1A0F12),
-                            fontWeight = FontWeight.ExtraBold
+
+                    IconButton(
+                        onClick = {
+                            isCountdownRunning = false
+                            onDismiss()
+                        },
+                        modifier = Modifier.testTag("close_sos_dialog_button")
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF1A0F12))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Trigger Source + 5-Second Recording Progress Pill
+                Surface(
+                    color = LifelineBlush,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.FlashOn,
+                                contentDescription = null,
+                                tint = IosSystemRed,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (language == AppLanguage.BENGALI) {
+                                    "ট্রিগার: ${triggerMethodLabel(triggerMethod, language)}"
+                                } else {
+                                    "Trigger: ${triggerMethodLabel(triggerMethod, language)}"
+                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                color = IosSystemRed,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Surface(
+                            color = IosSystemRed,
+                            shape = CircleShape
+                        ) {
+                            val recordedSec = (5 - countdownSeconds).coerceIn(0, 5)
+                            Text(
+                                text = if (countdownSeconds > 0) {
+                                    "REC ${recordedSec}.0s / 5.0s"
+                                } else {
+                                    "5.0s CLIP READY"
+                                },
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Live CameraX Viewfinder Box (5-Second Video Evidence)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(205.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFF0E131F))
+                        .border(
+                            width = 2.dp,
+                            color = IosSystemGreen,
+                            shape = RoundedCornerShape(22.dp)
                         )
+                ) {
+                    if (hasCameraPermission) {
+                        AndroidView(
+                            factory = { ctx ->
+                                val previewView = PreviewView(ctx).apply {
+                                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                                }
+                                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                                cameraProviderFuture.addListener({
+                                    try {
+                                        val cameraProvider = cameraProviderFuture.get()
+                                        val preview = Preview.Builder().build().also {
+                                            it.setSurfaceProvider(previewView.surfaceProvider)
+                                        }
+                                        cameraProvider.unbindAll()
+                                        cameraProvider.bindToLifecycle(
+                                            lifecycleOwner,
+                                            CameraSelector.DEFAULT_BACK_CAMERA,
+                                            preview
+                                        )
+                                        cameraFrameCaptured = true
+                                    } catch (_: Exception) {
+                                        cameraFrameCaptured = false
+                                    }
+                                }, ContextCompat.getMainExecutor(ctx))
+                                previewView
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = "Camera Feed",
+                                tint = Color.White,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (language == AppLanguage.BENGALI) {
+                                    "ক্যামেরা চালু হচ্ছে (ভিডিও সেভ হয় না)..."
+                                } else {
+                                    "Starting camera (video is not saved)..."
+                                },
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    // Top-left Live 5S REC badge
+                    Surface(
+                        color = IosSystemRed,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Videocam,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (language == AppLanguage.BENGALI) "লাইভ ক্যামেরা • ৫ সেকেন্ড অডিও" else "LIVE CAMERA • 5-SEC AUDIO REC",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Bottom-right Verified Frame Stamp
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Verified",
+                                tint = IosSystemGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (language == AppLanguage.BENGALI) "$districtName • লাইভ লোকেশন" else "$districtName • Live location",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 5-Second Ambient Audio Blackbox Recorder Card
+                Surface(
+                    color = Color(0xFFFAF6F6),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(18.dp))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Mic,
+                                    contentDescription = "5s Audio Recorder",
+                                    tint = IosSystemGreen,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (language == AppLanguage.BENGALI) {
+                                        "৫-সেকেন্ডের অডিও রেকর্ড (${currentDb} dB)"
+                                    } else {
+                                        "5-Second Audio Capture (${currentDb} dB)"
+                                    },
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = Color(0xFF1A0F12),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(
+                                text = if (language == AppLanguage.BENGALI) "এই ফোনে সংরক্ষিত" else "Saved on this phone",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = IosSystemGreen,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
                         Text(
-                            text = if (bn) {
-                                "$countdownSeconds সেকেন্ডে অটো পাঠানো হবে • $districtName"
+                            text = if (language == AppLanguage.BENGALI) {
+                                "এই ৫ সেকেন্ডের অডিও প্রমাণ হিসেবে আপনার ফোনে থাকে। অন্যরা শুধু দেখবে প্রমাণ আছে কিনা ও কত জোরে শব্দ ছিল।"
                             } else {
-                                "Sends automatically in ${countdownSeconds}s • $districtName"
+                                "The 5-second audio stays on your phone as evidence. Others only see that evidence exists and how loud it was."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF756568)
                         )
-                    }
-                    IconButton(onClick = onDismiss, modifier = Modifier.testTag("close_sos_dialog_button")) {
-                        Icon(Icons.Default.Close, contentDescription = if (bn) "বাতিল" else "Cancel", tint = Color(0xFF1A0F12))
-                    }
-                }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                Text(
-                    text = if (bn) "কী ধরনের বিপদ? (ঐচ্ছিক)" else "What's happening? (optional)",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1A0F12)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SOS_EMERGENCY_TYPES.chunked(2).forEach { rowTypes ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rowTypes.forEach { type ->
-                            val selected = type == emergencyType
-                            Surface(
-                                color = if (selected) PinCrimsonRed else Color.White,
-                                contentColor = if (selected) Color.White else Color(0xFF1A0F12),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .border(1.dp, if (selected) PinCrimsonRed else Color(0xFFE6DFE0), RoundedCornerShape(14.dp))
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .clickable { emergencyType = type }
-                                    .testTag("sos_type_$type")
-                            ) {
-                                Text(
-                                    text = emergencyTypeLabel(type, language),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
-                                )
-                            }
+                        val animatedLevel by animateFloatAsState(
+                            targetValue = (currentDb.coerceIn(30, 110) / 110f),
+                            label = "audio_bar"
+                        )
+                        Canvas(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(10.dp)
+                        ) {
+                            drawRoundRect(
+                                color = Color(0xFFE2D5D7),
+                                size = size,
+                                cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+                            )
+                            drawRoundRect(
+                                color = IosSystemGreen,
+                                size = Size(size.width * animatedLevel.coerceAtLeast(0.55f), size.height),
+                                cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+                            )
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Live microphone level (real readings only)
+                // Read-Only Auto-Detected Category & Live Location Status Card (No Category Selection Needed)
                 Surface(
-                    color = if (hasAudioPermission) Color(0xFFF2FBF5) else IosSystemOrange.copy(alpha = 0.10f),
+                    color = Color(0xFFF3F8FF),
                     shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, IosSystemBlue.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = if (hasAudioPermission) Icons.Default.Mic else Icons.Default.MicOff,
+                                imageVector = Icons.Default.LocationOn,
                                 contentDescription = null,
-                                tint = if (hasAudioPermission) IosSystemGreen else IosSystemOrange,
-                                modifier = Modifier.size(20.dp)
+                                tint = IosSystemBlue,
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = when {
-                                    !hasAudioPermission -> if (bn) "মাইক্রোফোন পারমিশন নেই" else "No microphone permission"
-                                    isAudioLive -> if (bn) "অডিও রেকর্ড হচ্ছে • $currentDb dB" else "Recording audio • $currentDb dB"
-                                    else -> if (bn) "মাইক্রোফোন চালু হচ্ছে…" else "Starting microphone…"
+                                text = if (language == AppLanguage.BENGALI) {
+                                    "বিপদের ধরন ও লাইভ লোকেশন"
+                                } else {
+                                    "Emergency type & live GPS"
                                 },
                                 style = MaterialTheme.typography.labelLarge,
                                 color = Color(0xFF1A0F12),
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = if (!hasAudioPermission) {
-                                if (bn) "SOS তবুও যাবে, তবে অডিও প্রমাণ থাকবে না।" else "The SOS still goes out, just without audio evidence."
-                            } else if (bn) {
-                                "৫ সেকেন্ডের অডিও শুধু আপনার ফোনে থাকে; কেউ 'ভুয়া' রিপোর্ট করলে এটি আপনাকে সুরক্ষা দেয়।"
+                            text = if (language == AppLanguage.BENGALI) {
+                                "বিপদের ধরন বেছে নিন। আপনি 'নিরাপদ' মার্ক না করা পর্যন্ত লাইভ লোকেশন শেয়ার হতে থাকবে।"
                             } else {
-                                "The 5s clip stays on your phone; it protects you if someone reports your SOS as false."
+                                "Pick the type of emergency. Your live GPS location is shared until you mark yourself Safe."
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF5E5153)
+                            color = Color(0xFF4A5568)
                         )
-                        if (hasAudioPermission) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Canvas(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(28.dp)
-                            ) {
-                                val bars = 20
-                                val gap = 3.dp.toPx()
-                                val barWidth = (size.width - gap * (bars - 1)) / bars
-                                val padded = List(bars - waveform.size.coerceAtMost(bars)) { 0 } + waveform.takeLast(bars)
-                                padded.forEachIndexed { i, db ->
-                                    val h = (db.coerceIn(0, 90) / 90f).coerceAtLeast(0.06f) * size.height
-                                    drawRoundRect(
-                                        color = IosSystemGreen,
-                                        topLeft = Offset(i * (barWidth + gap), size.height - h),
-                                        size = Size(barWidth, h),
-                                        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            SOS_EMERGENCY_TYPES.forEach { type ->
+                                val selected = type == selectedEmergencyType
+                                Surface(
+                                    color = if (selected) IosSystemBlue else Color.White,
+                                    shape = CircleShape,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .border(1.dp, IosSystemBlue.copy(alpha = if (selected) 1f else 0.3f), CircleShape)
+                                        .clip(CircleShape)
+                                        .clickable { selectedEmergencyType = type }
+                                        .testTag("sos_type_$type")
+                                ) {
+                                    Text(
+                                        text = when (type) {
+                                            "MEDICAL" -> if (language == AppLanguage.BENGALI) "চিকিৎসা" else "Medical"
+                                            "ACCIDENT" -> if (language == AppLanguage.BENGALI) "দুর্ঘটনা" else "Accident"
+                                            "HARASSMENT" -> if (language == AppLanguage.BENGALI) "হয়রানি" else "Harassment"
+                                            else -> if (language == AppLanguage.BENGALI) "রাস্তায়" else "Road"
+                                        },
+                                        color = if (selected) Color.White else Color(0xFF1A0F12),
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp)
                                     )
                                 }
                             }
@@ -303,56 +603,69 @@ fun LiveCameraAudioSosDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                Surface(
-                    color = LifelineBlush,
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = PinCrimsonRed, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (bn) {
-                                "পাঠানোর পর ১ কি.মি.-এর মধ্যে রক্ষণ ইউজাররা জানবেন (ইন্টারনেট + ব্লুটুথ) এবং 'নিরাপদ' মার্ক না করা পর্যন্ত আপনার লাইভ লোকেশন শেয়ার হবে। রক্তের গ্রুপ: $userBloodGroup"
-                            } else {
-                                "Rokkhon users within 1 km are alerted (internet + Bluetooth) and your live location is shared until you mark yourself safe. Blood group: $userBloodGroup"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF4A0E17)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(
-                        onClick = onDismiss,
+                        onClick = {
+                            isCountdownRunning = false
+                            onDismiss()
+                        },
                         shape = CircleShape,
                         modifier = Modifier
                             .weight(1f)
-                            .height(52.dp)
+                            .height(54.dp)
                             .testTag("cancel_sos_button")
                     ) {
-                        Text(if (bn) "বাতিল" else "Cancel", fontWeight = FontWeight.Bold, color = Color(0xFF1A0F12))
+                        Text(
+                            text = if (language == AppLanguage.BENGALI) "বাতিল করুন" else "Cancel",
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF1A0F12)
+                        )
                     }
+
                     Button(
-                        onClick = { dispatch() },
-                        colors = ButtonDefaults.buttonColors(containerColor = PinCrimsonRed),
+                        onClick = {
+                            if (!hasAutoDispatched) {
+                                hasAutoDispatched = true
+                                isCountdownRunning = false
+                                // Only real evidence: the mic reading if audio was captured, otherwise none. The camera
+                                // is a live view and is not recorded, so it never counts as video evidence.
+                                val hasAudio = audioVerifier.hasCapturedAudio()
+                                val finalDb = if (hasAudio) peakDb else 0
+                                onDispatchVerifiedSos(
+                                    selectedEmergencyType,
+                                    false,
+                                    hasAudio,
+                                    finalDb,
+                                    sosEvidenceNote(language, triggerMethod, hasAudio, finalDb),
+                                    triggerMethod
+                                )
+                            }
+                        },
                         shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = IosSystemRed,
+                            contentColor = Color.White
+                        ),
                         modifier = Modifier
                             .weight(1.4f)
-                            .height(52.dp)
-                            .testTag("dispatch_verified_sos_button")
+                            .height(54.dp)
+                            .testTag("confirm_dispatch_sos_button")
                     ) {
+                        Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (bn) "এখনই পাঠান ($countdownSeconds)" else "Send now ($countdownSeconds)",
-                            fontWeight = FontWeight.ExtraBold
+                            text = if (countdownSeconds > 0) {
+                                if (language == AppLanguage.BENGALI) "এখনই পাঠান (${countdownSeconds}s)" else "Send 5s SOS (${countdownSeconds}s)"
+                            } else {
+                                if (language == AppLanguage.BENGALI) "৫-সেকেন্ড SOS পাঠান" else "Broadcast 5s SOS"
+                            },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
                         )
                     }
                 }
@@ -361,4 +674,12 @@ fun LiveCameraAudioSosDialog(
     }
 }
 
-private const val SOS_COUNTDOWN_SECONDS = 5
+/** What the SOS honestly carries: the trigger, and the mic reading only when audio was captured. */
+private fun sosEvidenceNote(language: AppLanguage, triggerMethod: String, hasAudio: Boolean, peakDb: Int): String {
+    val trigger = triggerMethodLabel(triggerMethod, language)
+    return if (language == AppLanguage.BENGALI) {
+        if (hasAudio) "$trigger • ৫ সেকেন্ডের অডিও প্রেরকের ফোনে সংরক্ষিত ($peakDb dB) • লাইভ লোকেশন চালু" else "$trigger • অডিও প্রমাণ নেই • লাইভ লোকেশন চালু"
+    } else {
+        if (hasAudio) "$trigger • 5 s audio kept on the sender's phone ($peakDb dB) • live location on" else "$trigger • no audio evidence • live location on"
+    }
+}

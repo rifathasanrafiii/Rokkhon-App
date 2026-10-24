@@ -16,6 +16,9 @@
 
     <!-- 5-second microphone evidence for SOS -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Live camera view in the SOS sheet (the view is not recorded) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <!-- Offline Bluetooth Low Energy (BLE) SOS Mesh Permissions -->
     <uses-permission

@@ -34,12 +34,6 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.Marker
 
-/** Something drawn on the map that the user can tap. */
-sealed interface SelectedMapPin {
-    data class DonorPin(val donor: DonorNode) : SelectedMapPin
-    data class RequestPin(val request: BloodRequest) : SelectedMapPin
-    data class SosPin(val alert: SosAlert) : SelectedMapPin
-}
 
 /** Imperative handle so Compose buttons (zoom, my location) can drive the map view. */
 class RokkhonMapController {

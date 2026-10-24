@@ -1,5 +1,6 @@
 package com.example.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
@@ -30,7 +31,7 @@ private val IosDarkColorScheme = darkColorScheme(
 )
 
 private val IosLightColorScheme = lightColorScheme(
-    primary = Rk.Crimson,
+    primary = IosSystemRed,
     onPrimary = Color.White,
     primaryContainer = Color(0xFFFFE5EA),
     onPrimaryContainer = IosDeepCrimson,
@@ -40,7 +41,7 @@ private val IosLightColorScheme = lightColorScheme(
     onSecondaryContainer = Color(0xFF004C99),
     tertiary = IosSystemGreen,
     onTertiary = Color.White,
-    background = Rk.Bg,
+    background = IosLightBackground,
     onBackground = IosLightTextPrimary,
     surface = IosLightSurface,
     onSurface = IosLightTextPrimary,
@@ -59,9 +60,7 @@ val IosShapes = Shapes(
 
 @Composable
 fun MyApplicationTheme(
-    // The screens are designed for light surfaces only. Following the system dark theme made
-    // text fields and dialogs render light text on white cards, so light is used everywhere.
-    darkTheme: Boolean = false,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) IosDarkColorScheme else IosLightColorScheme
