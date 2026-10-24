@@ -32,12 +32,19 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.PersonOutline
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -82,9 +89,11 @@ import com.example.ui.screens.PostBloodRequestDialog
 import com.example.ui.screens.RadarMapHubScreen
 import com.example.ui.screens.RokkhonSplashScreen
 import com.example.ui.screens.RokkhonTutorialScreen
+import com.example.ui.screens.RequestsScreen
 import com.example.ui.screens.SosGuardianAndBleScreen
 import com.example.ui.screens.signOutRokkhon
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.Rk
 import com.example.ui.viewmodel.RokkhonTab
 import com.example.ui.viewmodel.RokkhonViewModel
 import com.example.ui.viewmodel.UiState
@@ -287,7 +296,7 @@ fun RokkhonAuthenticatedShell(
                 }
                 RokkhonViewModel(
                     repository = repository,
-                    bleMeshManager = BleSosMeshManager(appContext),
+                    bleMeshManager = BleSosMeshManager.get(appContext),
                     appContext = appContext,
                     currentUserId = currentUserId,
                     currentUserName = currentUserName,
@@ -340,10 +349,10 @@ fun RokkhonAuthenticatedShell(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = Color(0xFFFAF8F8),
+        containerColor = Rk.Bg,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            RokkhonFloatingBottomBar(
+            RokkhonBottomBar(
                 currentTab = currentTab,
                 language = language,
                 onSelectTab = { viewModel.selectTab(it) },
@@ -359,15 +368,11 @@ fun RokkhonAuthenticatedShell(
             when (currentTab) {
                 RokkhonTab.HOME_MATCH -> HomeMatchHubScreen(
                     viewModel = viewModel,
-                    recentPowerTaps = recentPowerTaps,
-                    onSimulatePowerTap = onSimulatePowerTap,
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true },
-                    onOpenSosVerification = { showSosVerificationDialog = true },
-                    onOpenTutorial = onOpenTutorial
+                    onOpenSosVerification = { showSosVerificationDialog = true }
                 )
                 RokkhonTab.RADAR_MAP -> RadarMapHubScreen(
                     viewModel = viewModel,
-                    onOpenSosVerification = { showSosVerificationDialog = true },
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true }
                 )
                 RokkhonTab.SOS_GUARDIAN -> SosGuardianAndBleScreen(
@@ -376,28 +381,26 @@ fun RokkhonAuthenticatedShell(
                     onSimulatePowerTap = onSimulatePowerTap,
                     onOpenSosVerification = { showSosVerificationDialog = true }
                 )
-                RokkhonTab.DONOR_PROFILE -> Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                ) {
-                    DonorProfileScreen(
-                        viewModel = viewModel,
-                        canSignIn = canSignIn,
-                        onOpenTutorial = onOpenTutorial,
-                        onSignOut = {
-                            if (isGuestSession) {
-                                onExitGuestOrSignOut()
-                            } else {
-                                signOutRokkhon(
-                                    context = context,
-                                    onSignOutComplete = onExitGuestOrSignOut,
-                                    scope = coroutineScope
-                                )
-                            }
+                RokkhonTab.REQUESTS -> RequestsScreen(
+                    viewModel = viewModel,
+                    onOpenBloodRequestDialog = { showPostBloodRequestDialog = true }
+                )
+                RokkhonTab.DONOR_PROFILE -> DonorProfileScreen(
+                    viewModel = viewModel,
+                    canSignIn = canSignIn,
+                    onOpenTutorial = onOpenTutorial,
+                    onSignOut = {
+                        if (isGuestSession) {
+                            onExitGuestOrSignOut()
+                        } else {
+                            signOutRokkhon(
+                                context = context,
+                                onSignOutComplete = onExitGuestOrSignOut,
+                                scope = coroutineScope
+                            )
                         }
-                    )
-                }
+                    }
+                )
             }
 
             // Top banner: neutral dark for info so it is not confused with an SOS alarm.
@@ -502,8 +505,12 @@ fun RokkhonAuthenticatedShell(
     }
 }
 
+/**
+ * Floating bottom bar (the original Rokkhon layout): Home, Find, centre "+" to post a blood
+ * request, SOS, Profile. Requests open from Home ("সব দেখুন").
+ */
 @Composable
-private fun RokkhonFloatingBottomBar(
+private fun RokkhonBottomBar(
     currentTab: RokkhonTab,
     language: AppLanguage,
     onSelectTab: (RokkhonTab) -> Unit,
@@ -513,14 +520,14 @@ private fun RokkhonFloatingBottomBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFFAF8F8))
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Surface(
             color = Color.White,
             shape = RoundedCornerShape(36.dp),
-            shadowElevation = 10.dp,
+            shadowElevation = 14.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, Rk.Line),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(70.dp)
@@ -529,74 +536,61 @@ private fun RokkhonFloatingBottomBar(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RokkhonBottomNavItem(
-                    selected = currentTab == RokkhonTab.HOME_MATCH,
-                    icon = Icons.Default.Home,
+                    selected = currentTab == RokkhonTab.HOME_MATCH || currentTab == RokkhonTab.REQUESTS,
+                    icon = Icons.Outlined.Home,
+                    selectedIcon = Icons.Filled.Home,
                     label = if (isBn) "হোম" else "Home",
                     onClick = { onSelectTab(RokkhonTab.HOME_MATCH) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("nav_tab_home")
+                    modifier = Modifier.weight(1f).testTag("nav_tab_home")
                 )
-
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.RADAR_MAP,
-                    icon = Icons.Default.Search,
+                    icon = Icons.Outlined.Map,
+                    selectedIcon = Icons.Filled.Map,
                     label = if (isBn) "খুঁজুন" else "Find",
                     onClick = { onSelectTab(RokkhonTab.RADAR_MAP) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("nav_tab_map")
+                    modifier = Modifier.weight(1f).testTag("nav_tab_map")
                 )
-
                 // Centre "+" = post a blood request
-                Box(
-                    modifier = Modifier.weight(0.95f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Surface(
-                        color = Color(0xFFC8102E),
-                        shape = CircleShape,
-                        shadowElevation = 6.dp,
+                Box(modifier = Modifier.weight(0.95f), contentAlignment = Alignment.Center) {
+                    Box(
                         modifier = Modifier
-                            .offset(y = (-6).dp)
-                            .size(52.dp)
+                            .offset(y = (-8).dp)
+                            .size(58.dp)
+                            .shadow(10.dp, CircleShape, spotColor = Rk.Crimson)
                             .clip(CircleShape)
+                            .background(Brush.linearGradient(listOf(Color(0xFFE5283F), Rk.Crimson, Rk.CrimsonDark)))
+                            .border(3.dp, Color.White, CircleShape)
                             .clickable(role = Role.Button) { onPlusClick() }
-                            .testTag("nav_center_plus_button")
+                            .testTag("nav_center_plus_button"),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = if (isBn) "রক্তের আবেদন করুন" else "Request blood",
-                                tint = Color.White,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = if (isBn) "রক্তের আবেদন করুন" else "Request blood",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
                 }
-
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.SOS_GUARDIAN,
-                    icon = Icons.Default.Shield,
+                    icon = Icons.Outlined.Shield,
+                    selectedIcon = Icons.Filled.Shield,
                     label = "SOS",
                     onClick = { onSelectTab(RokkhonTab.SOS_GUARDIAN) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("nav_tab_sos")
+                    modifier = Modifier.weight(1f).testTag("nav_tab_sos")
                 )
-
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.DONOR_PROFILE,
-                    icon = Icons.Default.PersonOutline,
+                    icon = Icons.Outlined.Person,
+                    selectedIcon = Icons.Filled.Person,
                     label = if (isBn) "প্রোফাইল" else "Profile",
                     onClick = { onSelectTab(RokkhonTab.DONOR_PROFILE) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("nav_tab_profile")
+                    modifier = Modifier.weight(1f).testTag("nav_tab_profile")
                 )
             }
         }
@@ -607,39 +601,33 @@ private fun RokkhonFloatingBottomBar(
 private fun RokkhonBottomNavItem(
     selected: Boolean,
     icon: ImageVector,
+    selectedIcon: ImageVector,
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val activeRed = Color(0xFFB80F24)
-    val inactiveGray = Color(0xFF6E6265)
-    Surface(
-        color = if (selected) Color(0xFFFBE9EB) else Color.Transparent,
-        shape = RoundedCornerShape(28.dp),
+    Column(
         modifier = modifier
             .height(54.dp)
             .clip(RoundedCornerShape(28.dp))
-            .clickable(role = Role.Tab) { onClick() }
+            .background(if (selected) Rk.Rose else Color.Transparent)
+            .clickable(role = Role.Tab) { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (selected) activeRed else inactiveGray,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = label,
-                fontSize = 11.5.sp,
-                color = if (selected) activeRed else inactiveGray,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1
-            )
-        }
+        Icon(
+            imageVector = if (selected) selectedIcon else icon,
+            contentDescription = null,
+            tint = if (selected) Rk.Crimson else Rk.Muted,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 11.5.sp,
+            color = if (selected) Rk.Crimson else Rk.Muted,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1
+        )
     }
 }

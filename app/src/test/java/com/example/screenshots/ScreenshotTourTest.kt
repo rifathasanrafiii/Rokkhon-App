@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.semantics.SemanticsActions
@@ -29,6 +31,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.ConscryptMode
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 import java.io.File
@@ -39,10 +42,12 @@ import java.io.FileOutputStream
  * Opt-in: set ROKKHON_SCREENSHOTS=/path/to/output/dir, e.g.
  *   ROKKHON_SCREENSHOTS=$PWD/screenshots ./gradlew testDebugUnitTest --tests '*ScreenshotTourTest*'
  * Without Firebase config the app runs in demo mode, so the shots show the sample community.
- * The street map is a WebView and cannot render here; the built-in vector map underneath is shown instead.
+ * The map tab draws real OpenStreetMap tiles, so it needs network access while rendering.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
+// Plain JDK TLS so map tile downloads use the JVM trust store and proxy settings.
+@ConscryptMode(ConscryptMode.Mode.OFF)
 @Config(sdk = [34], qualifiers = "w392dp-h850dp-xhdpi")
 class ScreenshotTourTest {
 
@@ -83,6 +88,29 @@ class ScreenshotTourTest {
             canvas.restore()
         }
         FileOutputStream(File(outDir, "$name.png")).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        writeTagBounds(name, root.width, root.height)
+    }
+
+    /**
+     * Writes where every tagged element sits on this screenshot ($name.tags.json), so a
+     * click-through preview can put its tap areas exactly on the real buttons.
+     */
+    private fun writeTagBounds(name: String, rootWidth: Int, rootHeight: Int) {
+        val hasTag = SemanticsMatcher("has test tag") { it.config.contains(SemanticsProperties.TestTag) }
+        val nodes = composeRule.onAllNodes(hasTag, useUnmergedTree = true).fetchSemanticsNodes(atLeastOneRootRequired = false)
+        val entries = nodes.mapNotNull { node ->
+            var top = node
+            while (top.parent != null) top = top.parent!!
+            val rootSize = top.size
+            // Dialog windows are drawn centred over the screen (see save()).
+            val dx = if (rootSize.width < rootWidth) (rootWidth - rootSize.width) / 2f else 0f
+            val dy = if (rootSize.height < rootHeight) (rootHeight - rootSize.height) / 2f else 0f
+            val b = node.boundsInRoot
+            if (b.width <= 0f || b.height <= 0f) return@mapNotNull null
+            val tag = node.config[SemanticsProperties.TestTag].replace("\"", "")
+            "{\"tag\":\"$tag\",\"x\":${(b.left + dx).toInt()},\"y\":${(b.top + dy).toInt()},\"w\":${b.width.toInt()},\"h\":${b.height.toInt()},\"dialog\":${dx != 0f || dy != 0f}}"
+        }
+        File(outDir, "$name.tags.json").writeText("[" + entries.joinToString(",") + "]")
     }
 
     private fun startApp() {
@@ -111,33 +139,59 @@ class ScreenshotTourTest {
         composeRule.mainClock.advanceTimeBy(400)
     }
 
+    /** Lets osmdroid fetch and draw map tiles on its background threads. */
+    private fun waitForMapTiles() {
+        val root = composeRule.activity.window.decorView
+        val scratch = Canvas(Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888))
+        repeat(16) {
+            // osmdroid requests tiles while drawing; nothing draws in a test unless we do.
+            root.draw(scratch)
+            Thread.sleep(500)
+            composeRule.mainClock.advanceTimeBy(500)
+            composeRule.waitForIdle()
+        }
+    }
+
+    private fun clickIfPresent(tag: String): Boolean {
+        if (composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()) return false
+        composeRule.onNodeWithTag(tag).performClick()
+        composeRule.mainClock.advanceTimeBy(800)
+        return true
+    }
+
     @Test
     fun home() {
         startApp()
         save("01_home_top")
+        scrollTo("home_screen", "match")
+        save("02_home_match")
         scrollTo("home_screen", "feed_tabs")
-        save("02_home_requests")
-        composeRule.onNodeWithTag("filter_tab_available_donors").performClick()
-        composeRule.mainClock.advanceTimeBy(400)
-        scrollTo("home_screen", "feed_tabs")
-        save("03_home_donors")
+        save("02b_home_feed")
     }
 
     @Test
-    fun find() {
+    fun requests() {
+        startApp()
+        scrollTo("home_screen", "all_requests")
+        clickIfPresent("home_see_all_requests")
+        save("03_requests")
+    }
+
+    @Test
+    fun map() {
         startApp()
         composeRule.onNodeWithTag("nav_tab_map").performClick()
         composeRule.mainClock.advanceTimeBy(800)
-        save("04_find_donors")
-        composeRule.onNodeWithTag("map_filter_tab_patient_requests").performClick()
+        waitForMapTiles()
+        save("04_map_donors")
+        composeRule.onNodeWithTag("segment_BLOOD_REQUESTS_ONLY").performClick()
         composeRule.mainClock.advanceTimeBy(800)
-        save("05_find_patients")
-        composeRule.onNodeWithTag("map_filter_tab_sos_alerts").performClick()
+        waitForMapTiles()
+        save("05_map_requests")
+        composeRule.onNodeWithTag("segment_SOS_ALERTS_ONLY").performClick()
         composeRule.mainClock.advanceTimeBy(800)
-        save("06_find_sos")
-        composeRule.onNodeWithTag("sos_post_card_bd_sos_mirpur_1").performClick()
-        composeRule.mainClock.advanceTimeBy(800)
-        save("07_sos_details")
+        waitForMapTiles()
+        save("06_map_sos")
     }
 
     @Test
@@ -146,9 +200,11 @@ class ScreenshotTourTest {
         composeRule.onNodeWithTag("nav_tab_sos").performClick()
         composeRule.mainClock.advanceTimeBy(800)
         save("08_sos_screen")
-        composeRule.onNodeWithTag("edit_trusted_contacts").performClick()
-        composeRule.mainClock.advanceTimeBy(800)
-        save("09_trusted_contacts_editor")
+        scrollTo("sos_screen", "helplines")
+        save("09_sos_network_helplines")
+        scrollTo("sos_screen", "contacts")
+        clickIfPresent("edit_trusted_contacts")
+        save("10_trusted_contacts_editor")
     }
 
     @Test
@@ -156,7 +212,7 @@ class ScreenshotTourTest {
         startApp()
         composeRule.onNodeWithTag("home_sos_button").performClick()
         composeRule.mainClock.advanceTimeBy(1_200)
-        save("10_sos_send_dialog")
+        save("11_sos_send_dialog")
     }
 
     @Test
@@ -164,7 +220,9 @@ class ScreenshotTourTest {
         startApp()
         composeRule.onNodeWithTag("nav_tab_profile").performClick()
         composeRule.mainClock.advanceTimeBy(800)
-        save("11_profile")
+        save("12_profile")
+        if (!clickIfPresent("edit_profile_button")) clickIfPresent("create_profile_button")
+        save("13_profile_editor")
     }
 
     @Test
@@ -172,11 +230,11 @@ class ScreenshotTourTest {
         startApp()
         composeRule.onNodeWithTag("nav_center_plus_button").performClick()
         composeRule.mainClock.advanceTimeBy(800)
-        save("12_blood_request_form")
+        save("14_blood_request_form")
         // Semantic click: works although the button is below the fold.
         composeRule.onNodeWithTag("submit_blood_request_button").performSemanticsAction(SemanticsActions.OnClick)
         composeRule.mainClock.advanceTimeBy(400)
-        save("13_blood_request_validation")
+        save("15_blood_request_validation")
     }
 
     @Test
@@ -184,7 +242,7 @@ class ScreenshotTourTest {
         startApp()
         composeRule.onNodeWithTag("area_dropdown_selector").performClick()
         composeRule.mainClock.advanceTimeBy(800)
-        save("14_area_picker")
+        save("16_area_picker")
     }
 
     @Test
@@ -192,7 +250,9 @@ class ScreenshotTourTest {
         startApp()
         composeRule.onNodeWithTag("notification_bell_button").performClick()
         composeRule.mainClock.advanceTimeBy(800)
-        save("15_notifications")
+        save("17_notifications")
+        // Tapping an SOS notification opens that SOS on the map with its details.
+        if (clickIfPresent("notification_item_notif_sos_bd_sos_mirpur_1")) save("07_sos_details")
     }
 
     @Test
@@ -206,13 +266,13 @@ class ScreenshotTourTest {
                 onSendNow = {}
             )
         }
-        save("16_hardware_sos_countdown")
+        save("18_hardware_sos_countdown")
     }
 
     @Test
     fun tutorial() {
         showOnly { RokkhonTutorialScreen(onFinishTutorial = {}) }
-        save("17_tutorial")
+        save("19_tutorial")
     }
 
     @Test
@@ -229,6 +289,6 @@ class ScreenshotTourTest {
             )
         }
         showOnly { AuthScreen(onAuthSuccess = {}, onSkipSignIn = {}) }
-        save("18_sign_in")
+        save("20_sign_in")
     }
 }

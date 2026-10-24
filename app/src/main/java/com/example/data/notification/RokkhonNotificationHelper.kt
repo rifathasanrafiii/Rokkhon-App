@@ -43,6 +43,25 @@ object RokkhonNotificationHelper {
         return NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 
+    private const val NOTIFIED_PREFS = "rokkhon_notified_keys"
+    private const val NOTIFIED_TTL_MS = 24L * 60L * 60L * 1000L
+
+    /**
+     * Posts an alert only the first time [key] is seen in 24 h. The screen and the background
+     * guard service can both hear the same SOS (Firestore + Bluetooth); this keeps it to one alert.
+     */
+    @Synchronized
+    fun notifyOnce(context: Context, key: String, title: String, body: String): Boolean {
+        val prefs = context.getSharedPreferences(NOTIFIED_PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - prefs.getLong(key, 0L) < NOTIFIED_TTL_MS) return false
+        val editor = prefs.edit()
+        prefs.all.forEach { (k, v) -> if (v is Long && now - v > NOTIFIED_TTL_MS) editor.remove(k) }
+        editor.putLong(key, now).apply()
+        dispatchEmergencyAlert(context, title, body, notificationId = key.hashCode())
+        return true
+    }
+
     @SuppressLint("MissingPermission")
     fun dispatchEmergencyAlert(
         context: Context,
@@ -69,6 +88,7 @@ object RokkhonNotificationHelper {
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setContentIntent(openApp)
                 .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
                 .build()
 
             NotificationManagerCompat.from(context).notify(notificationId, notification)

@@ -3,7 +3,10 @@
 Bangladesh blood-donor network + personal safety SOS app (Kotlin, Jetpack Compose, Firebase).
 
 - **রক্ত (Blood):** find available, *compatible* donors by area; post a blood request that notifies matching donors in that area; share requests to WhatsApp/Facebook; one pledge per account.
-- **SOS:** in-app SOS or 3x power/volume press (5-second cancel window), real microphone evidence, live GPS until "I'm safe", Bluetooth (BLE) broadcast for nearby phones without internet, one-tap 999 call and SMS with a location link to up to 3 trusted contacts.
+- **SOS:** in-app SOS or 3x power/volume press (5-second cancel window), real microphone evidence, live GPS until "I'm safe", one-tap 999 call and SMS with a location link to up to 3 trusted contacts.
+- **1 km Bluetooth mesh:** an SOS is broadcast over BLE with the sender's position, a packet id and a hop count. Every Rokkhon phone that hears it alerts its user and re-broadcasts it while it is within 1 km of the sender, so it reaches every app user in that circle without internet; it stops at the 1 km edge or after 6 hops (3 hops for a phone that doesn't know its own location).
+- **Safety network (background):** a foreground service (`data/guard/RokkhonGuardService`) keeps listening and relaying while the app is closed, keeps a low-power location fix, and for signed-in users alerts on new cloud SOS within 1 km. It restarts after a reboot and can be turned off from the SOS tab, Profile or its notification.
+- **Map:** real OpenStreetMap tiles (osmdroid) with donor, patient and SOS pins.
 - **Demo mode:** without Google sign-in (or without Firebase config) the app shows a clearly labelled sample community; nothing is uploaded.
 
 ## Build
@@ -36,6 +39,6 @@ ROKKHON_SCREENSHOTS=$PWD/screenshots gradle testDebugUnitTest --tests '*Screensh
 ROKKHON_SCREENSHOT_LANG=en ROKKHON_SCREENSHOTS=$PWD/screenshots-en gradle testDebugUnitTest --tests '*ScreenshotTourTest*'
 ```
 
-The street map is a WebView (OpenStreetMap + Leaflet) and does not render in Robolectric; the built-in vector map underneath is shown instead.
+The Find tab downloads real OpenStreetMap tiles, so rendering it needs network access. Each screenshot also gets a `.tags.json` with the bounds of every tagged element (used by the click-through simulator).
 
 Fonts: Hind Siliguri (SIL Open Font License, see `licenses/HindSiliguri-OFL.txt`).

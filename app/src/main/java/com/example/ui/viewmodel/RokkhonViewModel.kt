@@ -6,6 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.ble.BleSosMeshManager
 import com.example.data.demo.DemoData
+import com.example.data.guard.GuardPrefs
+import com.example.data.guard.MeshAlertNotifier
+import com.example.data.guard.RokkhonGuardService
 import com.example.data.location.LocationTracker
 import com.example.data.media.LiveAudioVerifier
 import com.example.data.model.AppLanguage
@@ -41,9 +44,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
@@ -57,6 +57,7 @@ enum class RokkhonTab {
     HOME_MATCH,
     RADAR_MAP,
     SOS_GUARDIAN,
+    REQUESTS,
     DONOR_PROFILE
 }
 
@@ -171,16 +172,6 @@ class RokkhonViewModel(
     private val _falseSosWarningBanner = MutableStateFlow<String?>(null)
     val falseSosWarningBanner: StateFlow<String?> = _falseSosWarningBanner.asStateFlow()
 
-    // Daily check-in streak: starts at 0 and resets if a day is missed.
-    private val _dailyStreakCount = MutableStateFlow(currentStreakFromPrefs())
-    val dailyStreakCount: StateFlow<Int> = _dailyStreakCount.asStateFlow()
-
-    private val _checkedInToday = MutableStateFlow(prefs.getString(KEY_LAST_CHECKIN_DAY, "") == todayKey())
-    val checkedInToday: StateFlow<Boolean> = _checkedInToday.asStateFlow()
-
-    private val _guardianPoints = MutableStateFlow(prefs.getInt(KEY_GUARDIAN_POINTS, 0))
-    val guardianPoints: StateFlow<Int> = _guardianPoints.asStateFlow()
-
     private val _toastBanner = MutableStateFlow<String?>(null)
     val toastBanner: StateFlow<String?> = _toastBanner.asStateFlow()
     private var toastJob: Job? = null
@@ -202,7 +193,6 @@ class RokkhonViewModel(
 
     private val seenBloodRequestIds = mutableSetOf<String>()
     private val seenSosAlertIds = mutableSetOf<String>()
-    private val seenBlePacketIds = mutableSetOf<String>()
     private var bloodInitialLoadDone = false
     private var sosInitialLoadDone = false
 
@@ -308,8 +298,9 @@ class RokkhonViewModel(
             if (seenBloodRequestIds.add(req.id) && req.userId != currentUserId &&
                 isCurrentUserMatchingDonorForAreaRequest(req)
             ) {
-                RokkhonNotificationHelper.dispatchEmergencyAlert(
+                RokkhonNotificationHelper.notifyOnce(
                     context = appContext,
+                    key = "req_${req.id}",
                     title = "জরুরি রক্তের প্রয়োজন (${req.bloodGroup} • ${req.district})",
                     body = "${req.unitsNeeded} bag(s) ${req.bloodGroup} needed for ${req.patientName} at ${req.hospitalName}."
                 )
@@ -380,8 +371,9 @@ class RokkhonViewModel(
                 val distanceKm = alert.distanceFromKm(_userLatitude.value, _userLongitude.value)
                 // 1 km proximity filter so distant users are not disturbed
                 if (distanceKm <= SOS_NOTIFICATION_RADIUS_KM) {
-                    RokkhonNotificationHelper.dispatchEmergencyAlert(
+                    RokkhonNotificationHelper.notifyOnce(
                         context = appContext,
+                        key = "sos_${alert.id}",
                         title = "জরুরি SOS • ${"%.1f".format(distanceKm)} km দূরে",
                         body = "${alert.senderName} needs help near ${alert.district}. Open Rokkhon to respond."
                     )
@@ -475,17 +467,51 @@ class RokkhonViewModel(
         )
 
     val bleBeacons: StateFlow<List<BleSosBeacon>> = bleMeshManager.nearbyBeacons
+    val bleRelayedCount: StateFlow<Int> = bleMeshManager.relayedCount
+
+    private val _guardNetworkEnabled = MutableStateFlow(GuardPrefs.isEnabled(appContext))
+    /** Background "safety network": Bluetooth relay + 1 km SOS alerts while the app is closed. */
+    val guardNetworkEnabled: StateFlow<Boolean> = _guardNetworkEnabled.asStateFlow()
 
     init {
+        GuardPrefs.lastLocation(appContext)?.let { (lat, lng) -> bleMeshManager.updateOwnLocation(lat, lng) }
+        MeshAlertNotifier.ensureStarted(appContext)
         bleMeshManager.startMeshScanning()
-        observeIncomingBlePackets()
         refreshGpsLocation()
+        RokkhonGuardService.start(appContext)
+        viewModelScope.launch {
+            // The background guard reads the donor profile to decide on Bluetooth blood alerts.
+            combine(donorNodesState, _selectedDistrict) { state, district ->
+                (state as? UiState.Success)?.data?.firstOrNull { it.userId == currentUserId && it.contactPhone.isNotBlank() }
+                    ?.let { me ->
+                        val area = BANGLADESH_DISTRICTS.firstOrNull { it.matchesArea(me.district) } ?: district
+                        GuardPrefs.DonorProfile(me.bloodGroup, BleSosMeshManager.areaHashOf(area.areaKey), me.isEligibleNow)
+                    }
+            }.collect { GuardPrefs.saveDonorProfile(appContext, it) }
+        }
     }
 
     /** Called after the user grants Bluetooth / location permissions. */
     fun onPermissionsChanged() {
         bleMeshManager.startMeshScanning()
         refreshGpsLocation()
+        RokkhonGuardService.start(appContext)
+    }
+
+    fun setGuardNetworkEnabled(enabled: Boolean) {
+        if (enabled && !RokkhonGuardService.canRun(appContext)) {
+            showToast("আগে ব্লুটুথ বা লোকেশনের অনুমতি দিন", "Allow Bluetooth or location first")
+            return
+        }
+        GuardPrefs.setEnabled(appContext, enabled)
+        _guardNetworkEnabled.value = enabled
+        if (enabled) {
+            RokkhonGuardService.start(appContext)
+            showToast("সুরক্ষা নেটওয়ার্ক চালু", "Safety network on")
+        } else {
+            RokkhonGuardService.stop(appContext)
+            showToast("সুরক্ষা নেটওয়ার্ক বন্ধ", "Safety network off")
+        }
     }
 
     private fun refreshGpsLocation() {
@@ -494,52 +520,7 @@ class RokkhonViewModel(
         }
     }
 
-    private fun observeIncomingBlePackets() {
-        viewModelScope.launch {
-            bleMeshManager.latestIncomingBleBeacon
-                .filterNotNull()
-                .collect { beacon ->
-                    if (!seenBlePacketIds.add(beacon.beaconId)) return@collect
-
-                    if (beacon.packetKind == BleSosMeshManager.PACKET_KIND_SOS_1KM) {
-                        // Anything heard over BLE is physically close (BLE range is far below 1 km).
-                        RokkhonNotificationHelper.dispatchEmergencyAlert(
-                            context = appContext,
-                            title = "ব্লুটুথ SOS • প্রায় ${"%.0f".format(beacon.estimatedDistanceMeters)} মিটার দূরে",
-                            body = "A nearby Rokkhon user broadcast an SOS over Bluetooth (no internet needed)."
-                        )
-                    } else if (beacon.packetKind == BleSosMeshManager.PACKET_KIND_BLOOD_AREA) {
-                        val me = myDonorNode()
-                        val sameArea = beacon.districtAreaKey ==
-                            "areahash_${BleSosMeshManager.areaHashOf(_selectedDistrict.value.areaKey)}"
-                        if (me != null && me.isEligibleNow && sameArea &&
-                            me.bloodGroup.equals(beacon.bloodGroup, ignoreCase = true)
-                        ) {
-                            RokkhonNotificationHelper.dispatchEmergencyAlert(
-                                context = appContext,
-                                title = "ব্লুটুথ রক্তের অ্যালার্ট (${beacon.bloodGroup})",
-                                body = "${beacon.unitsNeeded} bag(s) ${beacon.bloodGroup} needed in your area (${_selectedDistrict.value.nameEn})."
-                            )
-                        }
-                    }
-                }
-        }
-    }
-
     // ---------------------------------------------------------------- helpers
-
-    private fun todayKey(offsetDays: Int = 0): String {
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.DAY_OF_YEAR, offsetDays)
-        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
-    }
-
-    private fun currentStreakFromPrefs(): Int {
-        val last = prefs.getString(KEY_LAST_CHECKIN_DAY, "") ?: ""
-        val stored = prefs.getInt(KEY_STREAK_COUNT, 0)
-        // A streak survives only if the last check-in was today or yesterday.
-        return if (last == todayKey() || last == todayKey(-1)) stored else 0
-    }
 
     private fun loadStringSet(key: String): Set<String> {
         return prefs.getStringSet(key, emptySet())?.toSet() ?: emptySet()
@@ -547,12 +528,6 @@ class RokkhonViewModel(
 
     private fun saveStringSet(key: String, ids: Set<String>) {
         prefs.edit().putStringSet(key, ids).apply()
-    }
-
-    private fun addGuardianPoints(delta: Int) {
-        val next = (_guardianPoints.value + delta).coerceAtLeast(0)
-        _guardianPoints.value = next
-        prefs.edit().putInt(KEY_GUARDIAN_POINTS, next).apply()
     }
 
     private fun bn(): Boolean = _language.value == AppLanguage.BENGALI
@@ -610,31 +585,6 @@ class RokkhonViewModel(
     fun dismissToastBanner() {
         toastJob?.cancel()
         _toastBanner.value = null
-    }
-
-    // ---------------------------------------------------------------- daily check-in
-
-    fun performDailySafeCheckIn() {
-        if (_checkedInToday.value) {
-            showToast(
-                "আজকের চেক-ইন হয়ে গেছে • ${_dailyStreakCount.value} দিনের স্ট্রিক",
-                "Already checked in today • ${_dailyStreakCount.value}-day streak"
-            )
-            return
-        }
-        val continues = prefs.getString(KEY_LAST_CHECKIN_DAY, "") == todayKey(-1)
-        val nextStreak = if (continues) _dailyStreakCount.value + 1 else 1
-        _dailyStreakCount.value = nextStreak
-        _checkedInToday.value = true
-        prefs.edit()
-            .putInt(KEY_STREAK_COUNT, nextStreak)
-            .putString(KEY_LAST_CHECKIN_DAY, todayKey())
-            .apply()
-        addGuardianPoints(25)
-        showToast(
-            "চেক-ইন সম্পন্ন! $nextStreak দিনের স্ট্রিক • +২৫ পয়েন্ট",
-            "Checked in! $nextStreak-day streak • +25 points"
-        )
     }
 
     // ---------------------------------------------------------------- settings & filters
@@ -712,6 +662,8 @@ class RokkhonViewModel(
         _userLatitude.value = lat
         _userLongitude.value = lng
         _hasRealGpsFix.value = true
+        bleMeshManager.updateOwnLocation(lat, lng)
+        GuardPrefs.saveLastLocation(appContext, lat, lng)
         if (autoSelectArea) autoSelectAreaFromPermission(lat, lng, notifyUser = false)
     }
 
@@ -738,6 +690,14 @@ class RokkhonViewModel(
         val next = _inspectedEvidenceSosIds.value + alertId
         _inspectedEvidenceSosIds.value = next
         saveStringSet(KEY_INSPECTED_EVIDENCE_SOS_IDS, next)
+    }
+
+    /** Opens the Find map on the SOS layer with this alert's details showing. */
+    fun openSosOnMap(sosId: String?) {
+        val alert = sosId?.let { id -> (sosAlertsState.value as? UiState.Success)?.data?.firstOrNull { it.id == id } }
+        _mapLayerFilter.value = MapLayerFilter.SOS_ALERTS_ONLY
+        _currentTab.value = RokkhonTab.RADAR_MAP
+        if (alert != null) _sosToInspect.value = alert
     }
 
     fun consumeSosToInspect() {
@@ -998,7 +958,6 @@ class RokkhonViewModel(
         val updatedPledgedIds = _pledgedRequestIds.value + request.id
         _pledgedRequestIds.value = updatedPledgedIds
         saveStringSet(KEY_PLEDGED_IDS, updatedPledgedIds)
-        addGuardianPoints(100)
 
         _localBloodRequests.value = _localBloodRequests.value.map {
             if (it.id == request.id) it.copy(respondersCount = it.respondersCount + 1L) else it
@@ -1012,8 +971,8 @@ class RokkhonViewModel(
             RokkhonNotificationItem(
                 id = "notif_pledge_${request.id}",
                 kind = NotificationKind.RESPONDER_UPDATE,
-                titleBn = "রক্তদানের সাড়া নথিভুক্ত (+১০০ পয়েন্ট)",
-                titleEn = "Donation pledge recorded (+100 pts)",
+                titleBn = "রক্তদানের সাড়া নথিভুক্ত",
+                titleEn = "Donation pledge recorded",
                 bodyBn = "${request.patientName} (${request.bloodGroup}) • ${request.hospitalName} • যোগাযোগ: ${request.contactPhone}",
                 bodyEn = "${request.patientName} (${request.bloodGroup}) • ${request.hospitalName} • Contact: ${request.contactPhone}",
                 timestampLabel = if (bn()) "এইমাত্র" else "Just now",
@@ -1248,7 +1207,6 @@ class RokkhonViewModel(
         val nextIds = _respondedSosIds.value + alert.id
         _respondedSosIds.value = nextIds
         saveStringSet(KEY_RESPONDED_SOS_IDS, nextIds)
-        addGuardianPoints(50)
 
         bumpLocalSos(alert) { it.copy(responderCount = it.responderCount + 1L) }
 
@@ -1256,8 +1214,8 @@ class RokkhonViewModel(
             RokkhonNotificationItem(
                 id = "notif_sos_resp_${alert.id}",
                 kind = NotificationKind.RESPONDER_UPDATE,
-                titleBn = "আপনি সাহায্যে যাচ্ছেন (+৫০ পয়েন্ট)",
-                titleEn = "You are going to help (+50 pts)",
+                titleBn = "আপনি সাহায্যে যাচ্ছেন",
+                titleEn = "You are going to help",
                 bodyBn = "${alert.senderName} • ${alert.district} • নিজের নিরাপত্তা আগে, প্রয়োজনে ৯৯৯-এ কল করুন",
                 bodyEn = "${alert.senderName} • ${alert.district} • Stay safe yourself; call 999 if needed",
                 timestampLabel = if (bn()) "এইমাত্র" else "Just now",
@@ -1394,9 +1352,6 @@ class RokkhonViewModel(
         private const val KEY_REPORTED_FALSE_SOS_IDS = "reported_false_sos_ids"
         private const val KEY_INSPECTED_EVIDENCE_SOS_IDS = "inspected_evidence_sos_ids"
         private const val KEY_READ_NOTIFICATION_IDS = "read_notification_ids"
-        private const val KEY_STREAK_COUNT = "daily_streak_count"
-        private const val KEY_LAST_CHECKIN_DAY = "last_checkin_day"
-        private const val KEY_GUARDIAN_POINTS = "guardian_points"
         private const val KEY_TRUSTED_CONTACTS = "trusted_contacts"
         private const val KEY_DEMO_NAME = "demo_profile_name"
         private const val KEY_DEMO_BLOOD = "demo_profile_blood"

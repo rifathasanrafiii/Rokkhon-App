@@ -1,43 +1,43 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Login
-import androidx.compose.material.icons.filled.Stars
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Whatshot
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -54,7 +54,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -63,24 +62,25 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AppLanguage
 import com.example.data.model.BANGLADESH_DISTRICTS
-import com.example.data.model.GUARDIAN_REWARD_TIERS
+import com.example.data.model.DonorNode
+import com.example.data.model.daysUntilEligible
 import com.example.data.model.isValidBangladeshMobile
 import com.example.data.model.parseDonationDateMillis
 import com.example.ui.components.BangladeshAreaPickerDialog
-import com.example.ui.components.InkText
-import com.example.ui.components.MutedText
+import com.example.ui.components.BloodBadge
+import com.example.ui.components.DemoModeBanner
+import com.example.ui.components.IconTile
+import com.example.ui.components.PrimaryButton
+import com.example.ui.components.RkCard
+import com.example.ui.components.ScreenHeader
 import com.example.ui.components.StatusChip
 import com.example.ui.components.donationStatusText
-import com.example.ui.theme.IosSystemBlue
-import com.example.ui.theme.IosSystemGreen
-import com.example.ui.theme.IosSystemOrange
-import com.example.ui.theme.IosSystemRed
-import com.example.ui.theme.LifelineBlush
-import com.example.ui.theme.RadarDarkMaroon
-import com.example.ui.theme.RadarObsidianBg
+import com.example.ui.theme.Rk
 import com.example.ui.viewmodel.RokkhonViewModel
 import com.example.ui.viewmodel.UiState
 import java.text.SimpleDateFormat
@@ -89,10 +89,9 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Profile: donor details (validated), availability, last donation date (drives the 90-day rule),
- * streak/points badges and account actions.
+ * Profile: who you are as a donor (summary + edit form), availability, what you have done,
+ * and settings.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DonorProfileScreen(
     viewModel: RokkhonViewModel,
@@ -103,180 +102,264 @@ fun DonorProfileScreen(
     val language by viewModel.language.collectAsStateWithLifecycle()
     val bn = language == AppLanguage.BENGALI
     val donorsState by viewModel.donorNodesState.collectAsStateWithLifecycle()
-    val selectedDistrict by viewModel.selectedDistrict.collectAsStateWithLifecycle()
-    val dailyStreakCount by viewModel.dailyStreakCount.collectAsStateWithLifecycle()
-    val checkedInToday by viewModel.checkedInToday.collectAsStateWithLifecycle()
-    val guardianPoints by viewModel.guardianPoints.collectAsStateWithLifecycle()
+    val pledgedIds by viewModel.pledgedRequestIds.collectAsStateWithLifecycle()
+    val respondedSosIds by viewModel.respondedSosIds.collectAsStateWithLifecycle()
+    val guardEnabled by viewModel.guardNetworkEnabled.collectAsStateWithLifecycle()
 
-    val myDonor = (donorsState as? UiState.Success)?.data?.firstOrNull { it.userId == viewModel.currentUserId }
-
-    // Re-initialise the form when the stored profile first arrives (cloud loads after the first frame).
-    val formKey = myDonor?.updatedAt?.seconds ?: myDonor?.userId ?: "new"
-    var displayName by rememberSaveable(formKey) {
-        mutableStateOf(myDonor?.displayName?.ifBlank { null } ?: viewModel.currentUserName.takeUnless { it == "Guest" || it == "Demo User" }.orEmpty())
-    }
-    var bloodGroup by rememberSaveable(formKey) { mutableStateOf(myDonor?.bloodGroup) }
-    var district by rememberSaveable(formKey) { mutableStateOf(myDonor?.district?.takeIf { it.isNotBlank() } ?: selectedDistrict.nameEn) }
-    var contactPhone by rememberSaveable(formKey) { mutableStateOf(myDonor?.contactPhone.orEmpty()) }
-    var lastDonationDate by rememberSaveable(formKey) { mutableStateOf(myDonor?.lastDonationDate.orEmpty()) }
-    var showErrors by remember { mutableStateOf(false) }
-    var showAreaPicker by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
-
-    val isAvailable = myDonor?.isAvailableDonor ?: true
-    val phoneError = !isValidBangladeshMobile(contactPhone)
-    val nameError = displayName.isBlank()
-    val groupError = bloodGroup == null
+    val me = (donorsState as? UiState.Success)?.data?.firstOrNull { it.userId == viewModel.currentUserId }
+    val hasProfile = me != null && me.contactPhone.isNotBlank()
+    var showEditor by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFFAF8F8))
+            .background(Rk.Bg)
             .verticalScroll(rememberScrollState())
-            .imePadding()
             .testTag("profile_screen")
     ) {
+        ScreenHeader(title = if (bn) "প্রোফাইল" else "Profile")
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color(0xFF4C0D18), RadarDarkMaroon, RadarObsidianBg)))
-                .padding(horizontal = 20.dp, vertical = 18.dp)
+            modifier = Modifier.padding(horizontal = Rk.Gutter, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .clip(CircleShape)
-                        .background(Color.White),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(myDonor?.bloodGroup ?: "?", color = IosSystemRed, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
+            if (viewModel.isDemoMode) DemoModeBanner(language)
+
+            if (hasProfile) {
+                RkCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = myDonor?.displayName?.ifBlank { null } ?: viewModel.currentUserName,
-                            color = Color.White,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        if ((myDonor?.verifiedSosCount ?: 0) > 0) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(Icons.Default.Verified, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(18.dp))
+                        BloodBadge(me!!.bloodGroup, size = 58, filled = true)
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(me.displayName, color = Rk.Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(me.contactPhone, color = Rk.Muted, fontSize = 13.5.sp)
+                            Text(me.district, color = Rk.Muted, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        IconButton(onClick = { showEditor = true }, modifier = Modifier.testTag("edit_profile_button")) {
+                            Icon(Icons.Default.Edit, contentDescription = if (bn) "এডিট" else "Edit", tint = Rk.Ink)
                         }
                     }
-                    Text(
-                        text = when {
-                            viewModel.isDemoMode -> if (bn) "ডেমো মোড • শুধু এই ফোনে সেভ হয়" else "Demo mode • saved on this phone only"
-                            myDonor == null -> if (bn) "প্রোফাইল এখনো তৈরি হয়নি" else "Profile not created yet"
-                            else -> (if (bn) "ট্রাস্ট স্কোর " else "Trust score ") + "${myDonor.trustScore}%"
-                        },
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 13.sp
-                    )
-                    if (myDonor != null) {
-                        Spacer(modifier = Modifier.height(5.dp))
-                        val (status, color) = donationStatusText(myDonor, language)
-                        StatusChip(text = status, color = if (color == MutedText) Color.White else color)
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(thickness = 0.5.dp, color = Rk.Line)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(if (bn) "রক্তদানে উপলব্ধ" else "Available to donate", color = Rk.Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                            val (status, color) = donationStatusText(me, language)
+                            Spacer(modifier = Modifier.height(3.dp))
+                            StatusChip(text = status, color = color)
+                        }
+                        Switch(
+                            checked = me.isAvailableDonor,
+                            onCheckedChange = { viewModel.toggleDonorActiveStatus(me, it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Rk.Green),
+                            modifier = Modifier.testTag("profile_donor_availability_switch")
+                        )
                     }
+                }
+            } else {
+                RkCard(color = Rk.Maroon, border = Rk.Maroon) {
+                    Text(if (bn) "রক্তদাতা হিসেবে যোগ দিন" else "Become a donor", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (bn) "রক্তের গ্রুপ, এলাকা আর নম্বর দিন। আপনার এলাকায় আপনার গ্রুপের রক্ত দরকার হলে নোটিফিকেশন পাবেন।" else "Add your blood group, area and number. You'll be notified when your group is needed nearby.",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 13.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    PrimaryButton(
+                        text = if (bn) "প্রোফাইল তৈরি করুন" else "Create profile",
+                        onClick = { showEditor = true },
+                        color = Color.White.copy(alpha = 0.16f),
+                        modifier = Modifier.fillMaxWidth().testTag("create_profile_button")
+                    )
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatTile(value = "${pledgedIds.size}", label = if (bn) "রক্তদানে সাড়া" else "Donation pledges", modifier = Modifier.weight(1f))
+                StatTile(value = "${respondedSosIds.size}", label = if (bn) "SOS-এ সাহায্য" else "SOS responses", modifier = Modifier.weight(1f))
+                StatTile(
+                    value = me?.let { val d = daysUntilEligible(it.lastDonationDate); if (d == 0) (if (bn) "এখন" else "Now") else (if (bn) "$d দিন" else "${d}d") } ?: "-",
+                    label = if (bn) "পরের রক্তদান" else "Next donation",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            RkCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp)) {
+                SettingsRow(
+                    icon = Icons.AutoMirrored.Filled.BluetoothSearching,
+                    title = if (bn) "সুরক্ষা নেটওয়ার্ক" else "Safety network",
+                    subtitle = if (bn) "অ্যাপ বন্ধ থাকলেও ১ কি.মি.-এর SOS পাবেন ও ব্লুটুথে অন্যদের কাছে পৌঁছে দেবেন" else "Get SOS within 1 km and relay them over Bluetooth, even when the app is closed",
+                    tag = "profile_guard_toggle",
+                    trailing = {
+                        Switch(
+                            checked = guardEnabled,
+                            onCheckedChange = { viewModel.setGuardNetworkEnabled(it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Rk.Green)
+                        )
+                    }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Translate,
+                    title = if (bn) "ভাষা" else "Language",
+                    subtitle = if (bn) "বাংলা • ইংরেজিতে বদলাতে ট্যাপ করুন" else "English • tap for Bangla",
+                    onClick = { viewModel.toggleLanguage() },
+                    tag = "profile_language_toggle"
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.AutoMirrored.Filled.HelpOutline,
+                    title = if (bn) "অ্যাপ কীভাবে কাজ করে" else "How the app works",
+                    subtitle = if (bn) "পরিচিতি আবার দেখুন" else "See the introduction again",
+                    onClick = onOpenTutorial,
+                    tag = "profile_open_tutorial"
+                )
+                if (viewModel.isGuestSession) {
+                    if (canSignIn) {
+                        SettingsDivider()
+                        SettingsRow(
+                            icon = Icons.AutoMirrored.Filled.Login,
+                            title = if (bn) "গুগল দিয়ে সাইন-ইন" else "Sign in with Google",
+                            subtitle = if (bn) "আসল ডোনার নেটওয়ার্কে যোগ দিন" else "Join the real donor network",
+                            onClick = onSignOut,
+                            tag = "sign_in_button"
+                        )
+                    }
+                } else {
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.AutoMirrored.Filled.Logout,
+                        title = if (bn) "লগ আউট" else "Sign out",
+                        subtitle = null,
+                        onClick = onSignOut,
+                        tag = "sign_out_button",
+                        danger = true
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatBox(
-                    icon = Icons.Default.Whatshot,
-                    value = "$dailyStreakCount",
-                    label = if (bn) "দিনের স্ট্রিক" else "day streak",
-                    tint = Color(0xFFF59E0B),
-                    modifier = Modifier.weight(1f)
-                )
-                StatBox(
-                    icon = Icons.Default.Stars,
-                    value = "$guardianPoints",
-                    label = if (bn) "পয়েন্ট" else "points",
-                    tint = Color(0xFFEAB308),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            Button(
-                onClick = { viewModel.performDailySafeCheckIn() },
-                enabled = !checkedInToday,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE01E37),
-                    disabledContainerColor = Color.White.copy(alpha = 0.12f),
-                    disabledContentColor = Color.White
-                ),
-                shape = CircleShape,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("profile_daily_checkin_button")
-            ) {
-                Text(
-                    text = if (checkedInToday) {
-                        if (bn) "আজকের চেক-ইন সম্পন্ন ✓" else "Checked in today ✓"
-                    } else {
-                        if (bn) "আজ আমি নিরাপদ ও প্রস্তুত (+২৫)" else "I'm safe & ready today (+25)"
-                    },
-                    fontWeight = FontWeight.Bold
-                )
-            }
         }
+    }
 
+    if (showEditor) {
+        DonorProfileEditor(
+            viewModel = viewModel,
+            language = language,
+            me = me,
+            onDone = { showEditor = false }
+        )
+    }
+}
+
+@Composable
+private fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
+    RkCard(modifier = modifier, contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
+        Text(value, color = Rk.Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label, color = Rk.Muted, fontSize = 12.sp, maxLines = 2, lineHeight = 15.sp)
+    }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(thickness = 0.5.dp, color = Rk.Line, modifier = Modifier.padding(start = 68.dp))
+}
+
+@Composable
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    tag: String,
+    onClick: (() -> Unit)? = null,
+    danger: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .testTag(tag),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconTile(icon, tint = if (danger) Rk.Crimson else Rk.InkSoft, background = if (danger) Rk.Rose else Rk.SurfaceMuted, size = 38)
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = if (danger) Rk.Crimson else Rk.Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            if (subtitle != null) Text(subtitle, color = Rk.Muted, fontSize = 12.5.sp, lineHeight = 17.sp)
+        }
+        if (trailing != null) {
+            trailing()
+        } else if (onClick != null) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Rk.Faint)
+        }
+    }
+}
+
+/** Full-screen donor form with validation, area picker and last-donation date picker. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DonorProfileEditor(
+    viewModel: RokkhonViewModel,
+    language: AppLanguage,
+    me: DonorNode?,
+    onDone: () -> Unit
+) {
+    val bn = language == AppLanguage.BENGALI
+    val selectedDistrict by viewModel.selectedDistrict.collectAsStateWithLifecycle()
+    var displayName by rememberSaveable {
+        mutableStateOf(me?.displayName?.ifBlank { null } ?: viewModel.currentUserName.takeUnless { it == "Guest" || it == "Demo User" }.orEmpty())
+    }
+    var bloodGroup by rememberSaveable { mutableStateOf(me?.bloodGroup?.takeIf { me.contactPhone.isNotBlank() }) }
+    var district by rememberSaveable { mutableStateOf(me?.district?.takeIf { it.isNotBlank() } ?: selectedDistrict.nameEn) }
+    var contactPhone by rememberSaveable { mutableStateOf(me?.contactPhone.orEmpty()) }
+    var lastDonationDate by rememberSaveable { mutableStateOf(me?.lastDonationDate.orEmpty()) }
+    var showErrors by remember { mutableStateOf(false) }
+    var showAreaPicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val phoneError = !isValidBangladeshMobile(contactPhone)
+    val nameError = displayName.isBlank()
+    val groupError = bloodGroup == null
+
+    Dialog(onDismissRequest = onDone, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Rk.Bg)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .testTag("profile_editor")
         ) {
-            ProfileCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(if (bn) "রক্তদানে উপলব্ধ" else "Available to donate", color = InkText, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Text(
-                            text = if (isAvailable) {
-                                if (bn) "রোগীরা আপনাকে ডোনার তালিকায় দেখবেন" else "Patients can see you in donor lists"
-                            } else {
-                                if (bn) "আপনি ডোনার তালিকায় লুকানো" else "You are hidden from donor lists"
-                            },
-                            color = MutedText,
-                            fontSize = 12.5.sp
-                        )
-                    }
-                    Switch(
-                        checked = isAvailable,
-                        onCheckedChange = { viewModel.toggleDonorActiveStatus(myDonor, it) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = IosSystemGreen),
-                        modifier = Modifier.testTag("profile_donor_availability_switch")
-                    )
+            Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onDone) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (bn) "ফিরে যান" else "Back", tint = Rk.Ink)
                 }
+                Text(if (bn) "ডোনার তথ্য" else "Donor details", color = Rk.Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold)
             }
-
-            ProfileCard {
-                Text(if (bn) "ডোনার তথ্য" else "Donor details", color = InkText, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                Spacer(modifier = Modifier.height(12.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+                    .padding(horizontal = Rk.Gutter),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 OutlinedTextField(
                     value = displayName,
                     onValueChange = { displayName = it.take(80) },
                     label = { Text(if (bn) "আপনার নাম *" else "Your name *") },
                     isError = showErrors && nameError,
                     singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("profile_name_input")
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("profile_name_input")
                 )
-                Spacer(modifier = Modifier.height(14.dp))
                 Text(
                     text = if (bn) "রক্তের গ্রুপ *" else "Blood group *",
-                    color = if (showErrors && groupError) IosSystemRed else InkText,
-                    fontWeight = FontWeight.Bold,
+                    color = if (showErrors && groupError) Rk.Crimson else Rk.Ink,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp
                 )
-                Spacer(modifier = Modifier.height(8.dp))
                 BloodGroupPillGrid2x4(selectedBloodGroup = bloodGroup, onSelectBloodGroup = { bloodGroup = it })
-                Spacer(modifier = Modifier.height(14.dp))
                 PickerField(
                     label = if (bn) "এলাকা" else "Area",
                     value = district,
@@ -284,7 +367,6 @@ fun DonorProfileScreen(
                     onClick = { showAreaPicker = true },
                     tag = "profile_open_64_districts_button"
                 )
-                Spacer(modifier = Modifier.height(10.dp))
                 OutlinedTextField(
                     value = contactPhone,
                     onValueChange = { contactPhone = it.filter { ch -> ch.isDigit() || ch == '+' }.take(14) },
@@ -301,12 +383,10 @@ fun DonorProfileScreen(
                         )
                     },
                     singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("profile_phone_input")
+                    modifier = Modifier.fillMaxWidth().testTag("profile_phone_input")
                 )
-                Spacer(modifier = Modifier.height(4.dp))
                 PickerField(
                     label = if (bn) "শেষ রক্তদানের তারিখ" else "Last donation date",
                     value = lastDonationDate.ifBlank { if (bn) "কখনো দেইনি / মনে নেই" else "Never / not sure" },
@@ -314,124 +394,37 @@ fun DonorProfileScreen(
                     onClick = { showDatePicker = true },
                     tag = "profile_last_donation_picker"
                 )
-                if (lastDonationDate.isNotBlank()) {
-                    TextButton(onClick = { lastDonationDate = "" }) {
-                        Text(if (bn) "তারিখ মুছুন" else "Clear date", color = MutedText)
-                    }
-                } else {
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
                 Text(
-                    text = if (bn) "শেষ রক্তদানের ৯০ দিন পর্যন্ত আপনাকে 'উপলব্ধ' তালিকায় দেখানো হবে না।" else "For 90 days after a donation you won't be listed as available.",
-                    color = MutedText,
-                    fontSize = 12.sp
+                    text = if (bn) "শেষ রক্তদানের পর ৯০ দিন আপনাকে 'উপলব্ধ' তালিকায় দেখানো হবে না।" else "For 90 days after donating you won't be listed as available.",
+                    color = Rk.Muted,
+                    fontSize = 12.5.sp
                 )
-                Spacer(modifier = Modifier.height(14.dp))
-                Button(
+                if (lastDonationDate.isNotBlank()) {
+                    TextButton(onClick = { lastDonationDate = "" }) { Text(if (bn) "তারিখ মুছুন" else "Clear date", color = Rk.Muted) }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            Box(modifier = Modifier.padding(Rk.Gutter)) {
+                PrimaryButton(
+                    text = if (bn) "সেভ করুন" else "Save",
                     onClick = {
                         if (nameError || groupError || phoneError) {
                             showErrors = true
                         } else {
-                            viewModel.saveDonorProfile(
+                            val saved = viewModel.saveDonorProfile(
                                 displayName = displayName,
-                                bloodGroup = bloodGroup ?: return@Button,
-                                isAvailableDonor = isAvailable,
+                                bloodGroup = bloodGroup ?: return@PrimaryButton,
+                                isAvailableDonor = me?.isAvailableDonor ?: true,
                                 district = district,
                                 contactPhone = contactPhone,
                                 lastDonationDate = lastDonationDate
                             )
+                            if (saved) onDone()
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IosSystemRed),
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .testTag("save_donor_profile_button")
-                ) {
-                    Text(if (bn) "প্রোফাইল সেভ করুন" else "Save profile", fontWeight = FontWeight.ExtraBold)
-                }
-            }
-
-            ProfileCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = Color(0xFFEAB308))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (bn) "গার্ডিয়ান ব্যাজ" else "Guardian badges", color = InkText, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                }
-                Text(
-                    text = if (bn) "চেক-ইন +২৫ • রক্তদানে সাড়া +১০০ • SOS-এ সাড়া +৫০" else "Check-in +25 • donation pledge +100 • SOS response +50",
-                    color = MutedText,
-                    fontSize = 12.sp
+                    modifier = Modifier.fillMaxWidth().testTag("save_donor_profile_button")
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                GUARDIAN_REWARD_TIERS.forEach { tier ->
-                    val unlocked = guardianPoints >= tier.requiredPoints
-                    Row(modifier = Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(if (unlocked) Color(0xFFFFF4D6) else Color(0xFFF1ECED)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (unlocked) Icons.Default.EmojiEvents else Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = if (unlocked) Color(0xFFD99A00) else MutedText,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(if (bn) tier.titleBn else tier.titleEn, color = InkText, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(if (bn) tier.subtitleBn else tier.subtitleEn, color = MutedText, fontSize = 12.sp)
-                        }
-                        StatusChip(
-                            text = if (unlocked) (if (bn) "অর্জিত" else "Earned") else "${guardianPoints}/${tier.requiredPoints}",
-                            color = if (unlocked) IosSystemGreen else IosSystemOrange
-                        )
-                    }
-                }
             }
-
-            ProfileCard {
-                SettingsRow(
-                    icon = Icons.Default.Translate,
-                    title = if (bn) "ভাষা: বাংলা" else "Language: English",
-                    subtitle = if (bn) "ইংরেজিতে বদলাতে ট্যাপ করুন" else "Tap to switch to Bangla",
-                    onClick = { viewModel.toggleLanguage() },
-                    tag = "profile_language_toggle"
-                )
-                SettingsRow(
-                    icon = Icons.Default.HelpOutline,
-                    title = if (bn) "অ্যাপ কীভাবে কাজ করে" else "How the app works",
-                    subtitle = if (bn) "টিউটোরিয়াল আবার দেখুন" else "Show the tutorial again",
-                    onClick = onOpenTutorial,
-                    tag = "profile_open_tutorial"
-                )
-                if (viewModel.isGuestSession) {
-                    if (canSignIn) {
-                        SettingsRow(
-                            icon = Icons.Default.Login,
-                            title = if (bn) "গুগল দিয়ে সাইন-ইন করুন" else "Sign in with Google",
-                            subtitle = if (bn) "আসল ডোনার নেটওয়ার্কে যোগ দিন" else "Join the real donor network",
-                            onClick = onSignOut,
-                            tag = "sign_in_button"
-                        )
-                    }
-                } else {
-                    SettingsRow(
-                        icon = Icons.AutoMirrored.Filled.Logout,
-                        title = if (bn) "লগ আউট" else "Sign out",
-                        subtitle = if (bn) "অন্য অ্যাকাউন্টে যেতে" else "Switch account",
-                        onClick = onSignOut,
-                        tag = "sign_out_button",
-                        tint = IosSystemRed
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 
@@ -465,9 +458,7 @@ fun DonorProfileScreen(
                     showDatePicker = false
                 }) { Text(if (bn) "ঠিক আছে" else "OK") }
             },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text(if (bn) "বাতিল" else "Cancel") }
-            }
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text(if (bn) "বাতিল" else "Cancel") } }
         ) {
             DatePicker(state = pickerState)
         }
@@ -475,85 +466,23 @@ fun DonorProfileScreen(
 }
 
 @Composable
-private fun ProfileCard(content: @Composable () -> Unit) {
-    Surface(
-        color = Color.White,
-        shape = RoundedCornerShape(22.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Color(0xFFEEE6E8), RoundedCornerShape(22.dp))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) { content() }
-    }
-}
-
-@Composable
-private fun StatBox(icon: ImageVector, value: String, label: String, tint: Color, modifier: Modifier = Modifier) {
-    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(18.dp), modifier = modifier) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
-                Text(value, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                Text(label, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-@Composable
 private fun PickerField(label: String, value: String, icon: ImageVector, onClick: () -> Unit, tag: String) {
     Surface(
-        color = Color.White,
-        shape = RoundedCornerShape(6.dp),
+        color = Rk.Surface,
+        shape = RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Rk.Faint),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFF857375), RoundedCornerShape(6.dp))
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .testTag(tag)
     ) {
         Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(label, color = MutedText, fontSize = 12.sp)
-                Text(value, color = InkText, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(label, color = Rk.Muted, fontSize = 12.sp)
+                Text(value, color = Rk.Ink, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Icon(icon, contentDescription = null, tint = InkText)
-        }
-    }
-}
-
-@Composable
-private fun SettingsRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-    tag: String,
-    tint: Color = IosSystemBlue
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(vertical = 10.dp)
-            .testTag(tag),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(if (tint == IosSystemRed) LifelineBlush else tint.copy(alpha = 0.10f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column {
-            Text(title, color = if (tint == IosSystemRed) IosSystemRed else InkText, fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
-            Text(subtitle, color = MutedText, fontSize = 12.sp)
+            Icon(icon, contentDescription = null, tint = Rk.Ink)
         }
     }
 }

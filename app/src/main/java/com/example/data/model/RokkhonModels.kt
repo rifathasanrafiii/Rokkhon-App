@@ -997,50 +997,6 @@ data class RokkhonNotificationItem(
     val isRead: Boolean = false
 )
 
-data class RewardTier(
-    val id: String,
-    val titleBn: String,
-    val titleEn: String,
-    val subtitleBn: String,
-    val subtitleEn: String,
-    val requiredPoints: Int,
-    val badgeLabel: String
-)
-
-/**
- * Recognition badges unlocked by points. They are badges only: the old copy promised free lab tests
- * and priority ambulances that no partner actually provides.
- */
-val GUARDIAN_REWARD_TIERS = listOf(
-    RewardTier(
-        id = "tier_bronze",
-        titleBn = "ব্রোঞ্জ গার্ডিয়ান",
-        titleEn = "Bronze Guardian",
-        subtitleBn = "নিয়মিত চেক-ইন ও প্রথম সাড়া",
-        subtitleEn = "Regular check-ins and your first response",
-        requiredPoints = 300,
-        badgeLabel = "300"
-    ),
-    RewardTier(
-        id = "tier_silver",
-        titleBn = "সিলভার গার্ডিয়ান",
-        titleEn = "Silver Guardian",
-        subtitleBn = "একাধিক রক্তদান বা SOS-এ সাড়া",
-        subtitleEn = "Several donation pledges or SOS responses",
-        requiredPoints = 500,
-        badgeLabel = "500"
-    ),
-    RewardTier(
-        id = "tier_gold",
-        titleBn = "গোল্ড গার্ডিয়ান",
-        titleEn = "Gold Guardian",
-        subtitleBn = "কমিউনিটির নির্ভরযোগ্য রক্ষক",
-        subtitleEn = "A trusted protector of your community",
-        requiredPoints = 1000,
-        badgeLabel = "1000"
-    )
-)
-
 @IgnoreExtraProperties
 data class DonorNode(
     @DocumentId val id: String = "",
@@ -1191,7 +1147,13 @@ data class BleSosBeacon(
     val timestampMillis: Long,
     val packetKind: String = "SOS_1KM",
     val districtAreaKey: String = "mirpur",
-    val unitsNeeded: Int = 1
+    val unitsNeeded: Int = 1,
+    /** Random id chosen by the sender; identical on every relayed copy of the same alert. */
+    val packetId: Int = 0,
+    /** How many phones relayed this copy (0 = heard straight from the sender). */
+    val hops: Int = 0,
+    /** Receiver's distance to where the alert started, when the receiver knows its own location. */
+    val distanceFromOriginKm: Double? = null
 )
 
 

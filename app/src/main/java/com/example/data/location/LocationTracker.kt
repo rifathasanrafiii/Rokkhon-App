@@ -48,13 +48,20 @@ class LocationTracker(context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    fun startLiveUpdates(onLocation: (lat: Double, lng: Double) -> Unit): Boolean {
+    fun startLiveUpdates(
+        intervalMillis: Long = 5_000L,
+        highAccuracy: Boolean = true,
+        onLocation: (lat: Double, lng: Double) -> Unit
+    ): Boolean {
         if (!hasPermission()) return false
         stopLiveUpdates()
         return try {
-            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L)
-                .setMinUpdateIntervalMillis(3_000L)
-                .setMinUpdateDistanceMeters(5f)
+            val request = LocationRequest.Builder(
+                if (highAccuracy) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                intervalMillis
+            )
+                .setMinUpdateIntervalMillis(intervalMillis * 3 / 5)
+                .setMinUpdateDistanceMeters(if (highAccuracy) 5f else 50f)
                 .build()
             val callback = object : LocationCallback() {
                 override fun onLocationResult(result: LocationResult) {
