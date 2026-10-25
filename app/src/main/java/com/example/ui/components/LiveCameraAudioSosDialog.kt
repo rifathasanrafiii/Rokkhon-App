@@ -73,6 +73,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.media.LiveAudioVerifier
 import com.example.data.model.AppLanguage
+import androidx.compose.foundation.clickable
+import com.example.data.model.triggerMethodLabel
+import com.example.data.model.SOS_EMERGENCY_TYPES
 import com.example.ui.theme.IosSystemBlue
 import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemRed
@@ -120,8 +123,9 @@ fun LiveCameraAudioSosDialog(
         )
     }
 
-    var cameraFrameCaptured by remember { mutableStateOf(true) }
-    val autoDetectedEmergencyType = "ROAD_DANGER"
+    // True only once the camera preview is really running (it is a live view; video is not saved).
+    var cameraFrameCaptured by remember { mutableStateOf(false) }
+    var selectedEmergencyType by remember { mutableStateOf("MEDICAL") }
     var countdownSeconds by remember { mutableIntStateOf(5) }
     var isCountdownRunning by remember { mutableStateOf(true) }
     var hasAutoDispatched by remember { mutableStateOf(false) }
@@ -171,18 +175,16 @@ fun LiveCameraAudioSosDialog(
         } else if (isCountdownRunning && countdownSeconds == 0 && !hasAutoDispatched) {
             hasAutoDispatched = true
             isCountdownRunning = false
-            val finalDb = peakDb.coerceAtLeast(78)
-            val autoNote = if (language == AppLanguage.BENGALI) {
-                "অটো-ডিটেক্টেড SOS ($triggerMethod) • ৫-সেকেন্ডের অডিও (${finalDb}dB) ও ভিডিও প্রমাণ সংযুক্ত • লাইভ লোকেশন শেয়ার সক্রিয়"
-            } else {
-                "Auto-Detected SOS ($triggerMethod) • 5s Audio (${finalDb}dB) & Video Clip Attached • Live GPS Active"
-            }
+            // Only real evidence: the mic reading if audio was captured, otherwise none. The camera
+            // is a live view and is not recorded, so it never counts as video evidence.
+            val hasAudio = audioVerifier.hasCapturedAudio()
+            val finalDb = if (hasAudio) peakDb else 0
             onDispatchVerifiedSos(
-                autoDetectedEmergencyType,
-                cameraFrameCaptured,
-                true,
+                selectedEmergencyType,
+                false,
+                hasAudio,
                 finalDb,
-                autoNote,
+                sosEvidenceNote(language, triggerMethod, hasAudio, finalDb),
                 triggerMethod
             )
         }
@@ -235,9 +237,9 @@ fun LiveCameraAudioSosDialog(
                         Column {
                             Text(
                                 text = if (language == AppLanguage.BENGALI) {
-                                    "৫-সেকেন্ড অডিও ও ভিডিও SOS রেকর্ড"
+                                    "৫-সেকেন্ড অডিও SOS"
                                 } else {
-                                    "5-Second Audio & Video SOS"
+                                    "5-Second Audio SOS"
                                 },
                                 style = MaterialTheme.typography.titleLarge,
                                 color = Color(0xFF1A0F12),
@@ -245,9 +247,9 @@ fun LiveCameraAudioSosDialog(
                             )
                             Text(
                                 text = if (language == AppLanguage.BENGALI) {
-                                    "ক্যাটাগরি অটো-ডিটেক্টেড • ৫ সেকেন্ড রেকর্ড হয়ে অটো সেন্ড হবে"
+                                    "৫ সেকেন্ড অডিও রেকর্ড হয়ে নিজে থেকে পাঠানো হবে • বাতিল করা যায়"
                                 } else {
-                                    "Auto-detected category • Recording 5s playable clip"
+                                    "Records 5 s of audio, then sends by itself • you can cancel"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF756568)
@@ -291,9 +293,9 @@ fun LiveCameraAudioSosDialog(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = if (language == AppLanguage.BENGALI) {
-                                    "ট্রিগার: $triggerMethod"
+                                    "ট্রিগার: ${triggerMethodLabel(triggerMethod, language)}"
                                 } else {
-                                    "Trigger: $triggerMethod"
+                                    "Trigger: ${triggerMethodLabel(triggerMethod, language)}"
                                 },
                                 style = MaterialTheme.typography.labelLarge,
                                 color = IosSystemRed,
@@ -356,7 +358,7 @@ fun LiveCameraAudioSosDialog(
                                         )
                                         cameraFrameCaptured = true
                                     } catch (_: Exception) {
-                                        cameraFrameCaptured = true
+                                        cameraFrameCaptured = false
                                     }
                                 }, ContextCompat.getMainExecutor(ctx))
                                 previewView
@@ -380,9 +382,9 @@ fun LiveCameraAudioSosDialog(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = if (language == AppLanguage.BENGALI) {
-                                    "৫-সেকেন্ডের ভিডিও ও অডিও প্রমাণ রেকর্ড হচ্ছে..."
+                                    "ক্যামেরা চালু হচ্ছে (ভিডিও সেভ হয় না)..."
                                 } else {
-                                    "Recording 5-second camera & audio evidence..."
+                                    "Starting camera (video is not saved)..."
                                 },
                                 color = Color.White,
                                 style = MaterialTheme.typography.bodyMedium
@@ -410,7 +412,7 @@ fun LiveCameraAudioSosDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "5-SEC VIDEO + AUDIO REC",
+                                text = if (language == AppLanguage.BENGALI) "লাইভ ক্যামেরা • ৫ সেকেন্ড অডিও" else "LIVE CAMERA • 5-SEC AUDIO REC",
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
@@ -438,7 +440,7 @@ fun LiveCameraAudioSosDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "$districtName • Playable 5s Clip",
+                                text = if (language == AppLanguage.BENGALI) "$districtName • লাইভ লোকেশন" else "$districtName • Live location",
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelSmall
                             )
@@ -482,7 +484,7 @@ fun LiveCameraAudioSosDialog(
                                 )
                             }
                             Text(
-                                text = "Playable by Responders",
+                                text = if (language == AppLanguage.BENGALI) "এই ফোনে সংরক্ষিত" else "Saved on this phone",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = IosSystemGreen,
                                 fontWeight = FontWeight.Bold
@@ -493,9 +495,9 @@ fun LiveCameraAudioSosDialog(
 
                         Text(
                             text = if (language == AppLanguage.BENGALI) {
-                                "এই ৫ সেকেন্ডের অডিও এবং ভিডিও ক্লিপটি আশেপাশের রক্ষণ ব্যবহারকারীরা সরাসরি প্লে করে শুনতে ও দেখতে পারবেন।"
+                                "এই ৫ সেকেন্ডের অডিও প্রমাণ হিসেবে আপনার ফোনে থাকে। অন্যরা শুধু দেখবে প্রমাণ আছে কিনা ও কত জোরে শব্দ ছিল।"
                             } else {
-                                "Nearby Rokkhon responders will be able to play and listen to this 5-second audio and video clip directly on the SOS alert card."
+                                "The 5-second audio stays on your phone as evidence. Others only see that evidence exists and how loud it was."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF756568)
@@ -550,9 +552,9 @@ fun LiveCameraAudioSosDialog(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = if (language == AppLanguage.BENGALI) {
-                                    "অটো-ডিটেক্টেড ক্যাটাগরি ও আনলিমিটেড লাইভ লোকেশন"
+                                    "বিপদের ধরন ও লাইভ লোকেশন"
                                 } else {
-                                    "Auto-Detected Category & Continuous Live GPS"
+                                    "Emergency type & live GPS"
                                 },
                                 style = MaterialTheme.typography.labelLarge,
                                 color = Color(0xFF1A0F12),
@@ -561,13 +563,43 @@ fun LiveCameraAudioSosDialog(
                         }
                         Text(
                             text = if (language == AppLanguage.BENGALI) {
-                                "কোনো ক্যাটাগরি সিলেক্ট করতে হবে না—গতি ও সেন্সর থেকে অটোমেটিক বিপদের ধরন শনাক্ত হয়েছে। আপনি 'নিরাপদ' মার্ক না করা পর্যন্ত লাইভ লোকেশন শেয়ার হতে থাকবে।"
+                                "বিপদের ধরন বেছে নিন। আপনি 'নিরাপদ' মার্ক না করা পর্যন্ত লাইভ লোকেশন শেয়ার হতে থাকবে।"
                             } else {
-                                "No manual category selection needed—automatically detected from speed & motion sensors. Live GPS location will stream continuously until you mark yourself Safe."
+                                "Pick the type of emergency. Your live GPS location is shared until you mark yourself Safe."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF4A5568)
                         )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            SOS_EMERGENCY_TYPES.forEach { type ->
+                                val selected = type == selectedEmergencyType
+                                Surface(
+                                    color = if (selected) IosSystemBlue else Color.White,
+                                    shape = CircleShape,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .border(1.dp, IosSystemBlue.copy(alpha = if (selected) 1f else 0.3f), CircleShape)
+                                        .clip(CircleShape)
+                                        .clickable { selectedEmergencyType = type }
+                                        .testTag("sos_type_$type")
+                                ) {
+                                    Text(
+                                        text = when (type) {
+                                            "MEDICAL" -> if (language == AppLanguage.BENGALI) "চিকিৎসা" else "Medical"
+                                            "ACCIDENT" -> if (language == AppLanguage.BENGALI) "দুর্ঘটনা" else "Accident"
+                                            "HARASSMENT" -> if (language == AppLanguage.BENGALI) "হয়রানি" else "Harassment"
+                                            else -> if (language == AppLanguage.BENGALI) "রাস্তায়" else "Road"
+                                        },
+                                        color = if (selected) Color.White else Color(0xFF1A0F12),
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -600,18 +632,16 @@ fun LiveCameraAudioSosDialog(
                             if (!hasAutoDispatched) {
                                 hasAutoDispatched = true
                                 isCountdownRunning = false
-                                val finalDb = peakDb.coerceAtLeast(78)
-                                val autoNote = if (language == AppLanguage.BENGALI) {
-                                    "অটো-ডিটেক্টেড SOS ($triggerMethod) • ৫-সেকেন্ডের অডিও (${finalDb}dB) ও ভিডিও প্রমাণ সংযুক্ত • লাইভ লোকেশন শেয়ার সক্রিয়"
-                                } else {
-                                    "Auto-Detected SOS ($triggerMethod) • 5s Audio (${finalDb}dB) & Video Clip Attached • Live GPS Active"
-                                }
+                                // Only real evidence: the mic reading if audio was captured, otherwise none. The camera
+                                // is a live view and is not recorded, so it never counts as video evidence.
+                                val hasAudio = audioVerifier.hasCapturedAudio()
+                                val finalDb = if (hasAudio) peakDb else 0
                                 onDispatchVerifiedSos(
-                                    autoDetectedEmergencyType,
-                                    cameraFrameCaptured,
-                                    true,
+                                    selectedEmergencyType,
+                                    false,
+                                    hasAudio,
                                     finalDb,
-                                    autoNote,
+                                    sosEvidenceNote(language, triggerMethod, hasAudio, finalDb),
                                     triggerMethod
                                 )
                             }
@@ -641,5 +671,15 @@ fun LiveCameraAudioSosDialog(
                 }
             }
         }
+    }
+}
+
+/** What the SOS honestly carries: the trigger, and the mic reading only when audio was captured. */
+private fun sosEvidenceNote(language: AppLanguage, triggerMethod: String, hasAudio: Boolean, peakDb: Int): String {
+    val trigger = triggerMethodLabel(triggerMethod, language)
+    return if (language == AppLanguage.BENGALI) {
+        if (hasAudio) "$trigger • ৫ সেকেন্ডের অডিও প্রেরকের ফোনে সংরক্ষিত ($peakDb dB) • লাইভ লোকেশন চালু" else "$trigger • অডিও প্রমাণ নেই • লাইভ লোকেশন চালু"
+    } else {
+        if (hasAudio) "$trigger • 5 s audio kept on the sender's phone ($peakDb dB) • live location on" else "$trigger • no audio evidence • live location on"
     }
 }

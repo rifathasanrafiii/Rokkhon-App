@@ -1,8 +1,9 @@
 package com.example
 
 import android.Manifest
-import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -11,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,12 +34,13 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,20 +62,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.ble.BleSosMeshManager
 import com.example.data.hardware.HardwareSosDetector
+import com.example.data.location.LocationTracker
 import com.example.data.model.AppLanguage
 import com.example.data.notification.RokkhonNotificationHelper
 import com.example.data.repository.RokkhonRepository
+import com.example.ui.components.HardwareSosCountdownOverlay
 import com.example.ui.components.LiveCameraAudioSosDialog
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.DonorProfileScreen
@@ -83,13 +87,12 @@ import com.example.ui.screens.RokkhonSplashScreen
 import com.example.ui.screens.RokkhonTutorialScreen
 import com.example.ui.screens.SosGuardianAndBleScreen
 import com.example.ui.screens.signOutRokkhon
-import com.example.ui.theme.IosSystemRed
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.RokkhonTab
 import com.example.ui.viewmodel.RokkhonViewModel
 import com.example.ui.viewmodel.UiState
-import com.google.android.gms.location.LocationServices
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
@@ -158,73 +161,161 @@ internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
     awaitClose { removeAuthStateListener(listener) }
 }
 
+/** Without google-services.json Firebase is not initialised; the app then runs in demo mode instead of crashing. */
+internal fun isFirebaseConfigured(context: Context): Boolean =
+    try {
+        FirebaseApp.getApps(context).isNotEmpty()
+    } catch (_: Exception) {
+        false
+    }
+
+private const val KEY_TUTORIAL_DONE = "tutorial_done"
+private const val KEY_GUEST_MODE = "guest_mode_chosen"
+internal const val KEY_OTP_VERIFIED_PHONE = "otp_verified_phone"
+internal const val KEY_OTP_VERIFIED_NAME = "otp_verified_name"
+
 @Composable
 fun RokkhonAppRoot(
-    auth: FirebaseAuth = Firebase.auth,
     hardwareTriggerMethod: String? = null,
     recentPowerTaps: Int = 0,
     onConsumeHardwareTrigger: () -> Unit = {},
     onSimulatePowerTap: () -> Unit = {}
 ) {
-    val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
-    var showSplash by rememberSaveable { mutableStateOf(false) }
-    var showTutorial by rememberSaveable { mutableStateOf(false) }
-    var isGuestSkipped by rememberSaveable { mutableStateOf(true) }
-    val user = currentUser
+    val context = LocalContext.current
+    val appPrefs = remember { context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE) }
+    val firebaseReady = remember { isFirebaseConfigured(context) }
+    val auth: FirebaseAuth? = remember { if (firebaseReady) Firebase.auth else null }
+    // Remember the flow: creating a new flow on every recomposition re-registers the listener each time.
+    val authFlow = remember(auth) { auth?.authStateFlow() }
+    val noAuthFlow = remember { MutableStateFlow<FirebaseUser?>(null) }
+    val currentUser by (authFlow ?: noAuthFlow).collectAsStateWithLifecycle(initialValue = auth?.currentUser)
 
-    LaunchedEffect(hardwareTriggerMethod) {
-        if (hardwareTriggerMethod != null) {
-            showSplash = false
-            showTutorial = false
-            if (user == null && !isGuestSkipped) {
-                isGuestSkipped = true
+    var showSplash by rememberSaveable { mutableStateOf(true) }
+    var showTutorial by rememberSaveable { mutableStateOf(!appPrefs.getBoolean(KEY_TUTORIAL_DONE, false)) }
+    var otpVerifiedPhone by rememberSaveable {
+        mutableStateOf(appPrefs.getString(KEY_OTP_VERIFIED_PHONE, "") ?: "")
+    }
+    var otpVerifiedName by rememberSaveable {
+        mutableStateOf(appPrefs.getString(KEY_OTP_VERIFIED_NAME, "") ?: "")
+    }
+    // The old code started with "guest = true", so the sign-in screen was never shown.
+    var isGuestChosen by rememberSaveable {
+        mutableStateOf(!firebaseReady || appPrefs.getBoolean(KEY_GUEST_MODE, false))
+    }
+    val user = currentUser
+    val isOtpAuthenticated = otpVerifiedPhone.isNotBlank()
+
+    // Request all permissions (Camera, Voice/Microphone, Location, Bluetooth, Notifications) upfront right at app entry.
+    val upfrontPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ -> }
+
+    LaunchedEffect(showSplash) {
+        if (!showSplash) {
+            val missingPerms = runtimePermissionsToAsk().filter { perm ->
+                ContextCompat.checkSelfPermission(context, perm) != PackageManager.PERMISSION_GRANTED
+            }
+            if (missingPerms.isNotEmpty()) {
+                upfrontPermissionLauncher.launch(missingPerms.toTypedArray())
             }
         }
     }
 
+    LaunchedEffect(hardwareTriggerMethod) {
+        // An emergency press skips splash/tutorial/sign-in and goes straight to the SOS flow.
+        if (hardwareTriggerMethod != null) {
+            showSplash = false
+            showTutorial = false
+            if (user == null && !isOtpAuthenticated) isGuestChosen = true
+        }
+    }
+
     when {
-        showSplash -> {
-            RokkhonSplashScreen(
-                onSplashFinished = { showSplash = false }
-            )
-        }
-        showTutorial -> {
-            RokkhonTutorialScreen(
-                onFinishTutorial = { showTutorial = false }
-            )
-        }
-        user == null && !isGuestSkipped -> {
-            AuthScreen(
-                onAuthSuccess = { isGuestSkipped = false },
-                onSkipSignIn = { isGuestSkipped = true }
-            )
-        }
+        showSplash -> RokkhonSplashScreen(onSplashFinished = { showSplash = false })
+        showTutorial -> RokkhonTutorialScreen(
+            onFinishTutorial = {
+                appPrefs.edit().putBoolean(KEY_TUTORIAL_DONE, true).apply()
+                showTutorial = false
+            }
+        )
+        user == null && !isOtpAuthenticated && !isGuestChosen -> AuthScreen(
+            onAuthSuccess = {
+                otpVerifiedPhone = appPrefs.getString(KEY_OTP_VERIFIED_PHONE, "") ?: ""
+                otpVerifiedName = appPrefs.getString(KEY_OTP_VERIFIED_NAME, "") ?: ""
+                appPrefs.edit().putBoolean(KEY_GUEST_MODE, false).apply()
+                isGuestChosen = false
+            },
+            onSkipSignIn = {
+                appPrefs.edit().putBoolean(KEY_GUEST_MODE, true).apply()
+                isGuestChosen = true
+            }
+        )
         else -> {
+            val resolvedUserId = when {
+                user != null -> user.uid
+                isOtpAuthenticated -> "bd_otp_${otpVerifiedPhone.filter { it.isDigit() }.takeLast(11)}"
+                else -> "guest_rokkhon_bd"
+            }
+            val resolvedUserName = when {
+                user != null -> user.displayName?.takeIf { it.isNotBlank() }
+                    ?: user.phoneNumber?.takeIf { it.isNotBlank() }
+                    ?: user.email?.substringBefore("@")
+                    ?: "Rokkhon User"
+                isOtpAuthenticated -> otpVerifiedName.ifBlank { otpVerifiedPhone }
+                firebaseReady -> "Guest"
+                else -> "Demo User"
+            }
             RokkhonAuthenticatedShell(
-                currentUserId = user?.uid ?: "guest_rokkhon_bd",
-                currentUserName = user?.displayName
-                    ?: user?.email?.substringBefore("@")
-                    ?: "Rifat R.",
-                isGuestSession = (user == null),
+                currentUserId = resolvedUserId,
+                currentUserName = resolvedUserName,
+                isGuestSession = user == null && !isOtpAuthenticated,
+                useCloud = firebaseReady && user != null,
+                canSignIn = firebaseReady,
                 hardwareTriggerMethod = hardwareTriggerMethod,
                 recentPowerTaps = recentPowerTaps,
                 onConsumeHardwareTrigger = onConsumeHardwareTrigger,
                 onSimulatePowerTap = onSimulatePowerTap,
                 onOpenTutorial = { showTutorial = true },
                 onExitGuestOrSignOut = {
-                    isGuestSkipped = false
+                    appPrefs.edit()
+                        .putBoolean(KEY_GUEST_MODE, false)
+                        .remove(KEY_OTP_VERIFIED_PHONE)
+                        .remove(KEY_OTP_VERIFIED_NAME)
+                        .apply()
+                    otpVerifiedPhone = ""
+                    otpVerifiedName = ""
+                    isGuestChosen = !firebaseReady
                 }
             )
         }
     }
 }
 
-@SuppressLint("MissingPermission")
+private fun runtimePermissionsToAsk(): Array<String> {
+    val perms = mutableListOf(
+        Manifest.permission.CAMERA,
+        Manifest.permission.RECORD_AUDIO,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        perms += Manifest.permission.BLUETOOTH_SCAN
+        perms += Manifest.permission.BLUETOOTH_ADVERTISE
+        perms += Manifest.permission.BLUETOOTH_CONNECT
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        perms += Manifest.permission.POST_NOTIFICATIONS
+    }
+    return perms.toTypedArray()
+}
+
 @Composable
 fun RokkhonAuthenticatedShell(
     currentUserId: String,
     currentUserName: String,
     isGuestSession: Boolean = false,
+    useCloud: Boolean = false,
+    canSignIn: Boolean = true,
     hardwareTriggerMethod: String? = null,
     recentPowerTaps: Int = 0,
     onConsumeHardwareTrigger: () -> Unit = {},
@@ -233,24 +324,27 @@ fun RokkhonAuthenticatedShell(
     onExitGuestOrSignOut: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val appContext = context.applicationContext
     val coroutineScope = rememberCoroutineScope()
 
     val viewModel: RokkhonViewModel = viewModel(
-        key = "${currentUserId}_${isGuestSession}",
+        key = "${currentUserId}_${isGuestSession}_$useCloud",
         factory = viewModelFactory {
             initializer {
-                val app = checkNotNull(this[APPLICATION_KEY]) {
-                    "APPLICATION_KEY missing from CreationExtras"
+                val repository = if (useCloud) {
+                    val databaseId = appContext.getString(R.string.firestore_database_id)
+                    RokkhonRepository(FirebaseFirestore.getInstance(databaseId))
+                } else {
+                    null
                 }
-                val databaseId = app.getString(R.string.firestore_database_id)
-                val db = FirebaseFirestore.getInstance(databaseId)
                 RokkhonViewModel(
-                    repository = RokkhonRepository(db),
-                    bleMeshManager = BleSosMeshManager(app),
-                    appContext = app,
+                    repository = repository,
+                    bleMeshManager = BleSosMeshManager.get(appContext),
+                    appContext = appContext,
                     currentUserId = currentUserId,
                     currentUserName = currentUserName,
-                    isGuestSession = isGuestSession
+                    isGuestSession = isGuestSession,
+                    locationTracker = LocationTracker(appContext)
                 )
             }
         }
@@ -261,66 +355,35 @@ fun RokkhonAuthenticatedShell(
     val selectedDistrict by viewModel.selectedDistrict.collectAsStateWithLifecycle()
     val toastBanner by viewModel.toastBanner.collectAsStateWithLifecycle()
     val donorsState by viewModel.donorNodesState.collectAsStateWithLifecycle()
+    val pendingHardwareSos by viewModel.pendingHardwareSos.collectAsStateWithLifecycle()
+    val liveDb by viewModel.audioVerifier.currentDecibels.collectAsStateWithLifecycle()
 
     val myDonor = (donorsState as? UiState.Success)?.data?.firstOrNull { it.userId == currentUserId }
 
     var showSosVerificationDialog by remember { mutableStateOf(false) }
-    var activeSosTriggerMethod by remember { mutableStateOf("ONE_TAP_SOS") }
     var showPostBloodRequestDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(hardwareTriggerMethod) {
         if (hardwareTriggerMethod != null) {
-            activeSosTriggerMethod = hardwareTriggerMethod
-            val (autoCategory, autoNote) = viewModel.autoDetectEmergencyCategory(hardwareTriggerMethod)
-            viewModel.audioVerifier.startLiveMonitoring(coroutineScope)
-            viewModel.triggerVerifiedEmergencySos(
-                bloodGroup = myDonor?.bloodGroup ?: "O+",
-                emergencyType = autoCategory,
-                district = selectedDistrict.nameEn,
-                hasLiveCamera = true,
-                hasLiveAudio = true,
-                peakDecibels = 84,
-                verificationNote = "$autoNote ($hardwareTriggerMethod)",
-                triggerMethod = hardwareTriggerMethod
-            )
-            viewModel.selectTab(RokkhonTab.SOS_GUARDIAN)
+            viewModel.startHardwareSosCountdown(hardwareTriggerMethod)
             onConsumeHardwareTrigger()
         }
     }
 
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
+    // Ensure Camera, Voice/Mic, Location, Bluetooth, and Notification permissions are granted and refresh BLE/GPS.
+    val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { perms ->
-        val granted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) {
-            try {
-                LocationServices.getFusedLocationProviderClient(context).lastLocation
-                    .addOnSuccessListener { loc ->
-                        if (loc != null && loc.latitude in 20.5..26.7 && loc.longitude in 88.0..92.7) {
-                            viewModel.autoSelectAreaFromPermission(loc.latitude, loc.longitude, notifyUser = true)
-                        }
-                    }
-            } catch (_: Exception) {
-            }
-        }
+    ) { _ ->
+        viewModel.onPermissionsChanged()
     }
-
     LaunchedEffect(Unit) {
-        val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        if (hasFine || hasCoarse) {
-            try {
-                LocationServices.getFusedLocationProviderClient(context).lastLocation
-                    .addOnSuccessListener { loc ->
-                        if (loc != null && loc.latitude in 20.5..26.7 && loc.longitude in 88.0..92.7) {
-                            viewModel.autoSelectAreaFromPermission(loc.latitude, loc.longitude, notifyUser = false)
-                        }
-                    }
-            } catch (_: Exception) {
-            }
+        val prefs = context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE)
+        val missingPerms = runtimePermissionsToAsk().filter { perm ->
+            ContextCompat.checkSelfPermission(context, perm) != PackageManager.PERMISSION_GRANTED
+        }
+        if (!prefs.getBoolean("startup_all_permissions_asked_v2", false) || missingPerms.isNotEmpty()) {
+            prefs.edit().putBoolean("startup_all_permissions_asked_v2", true).apply()
+            permissionLauncher.launch(runtimePermissionsToAsk())
         }
     }
 
@@ -354,30 +417,19 @@ fun RokkhonAuthenticatedShell(
                     recentPowerTaps = recentPowerTaps,
                     onSimulatePowerTap = onSimulatePowerTap,
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true },
-                    onOpenSosVerification = {
-                        activeSosTriggerMethod = "ONE_TAP_SOS"
-                        showSosVerificationDialog = true
-                    },
+                    onOpenSosVerification = { showSosVerificationDialog = true },
                     onOpenTutorial = onOpenTutorial
                 )
                 RokkhonTab.RADAR_MAP -> RadarMapHubScreen(
                     viewModel = viewModel,
-                    recentPowerTaps = recentPowerTaps,
-                    onSimulatePowerTap = onSimulatePowerTap,
-                    onOpenSosVerification = {
-                        activeSosTriggerMethod = "ONE_TAP_SOS"
-                        showSosVerificationDialog = true
-                    },
+                    onOpenSosVerification = { showSosVerificationDialog = true },
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true }
                 )
                 RokkhonTab.SOS_GUARDIAN -> SosGuardianAndBleScreen(
                     viewModel = viewModel,
                     recentPowerTaps = recentPowerTaps,
                     onSimulatePowerTap = onSimulatePowerTap,
-                    onOpenSosVerification = {
-                        activeSosTriggerMethod = "ONE_TAP_SOS"
-                        showSosVerificationDialog = true
-                    }
+                    onOpenSosVerification = { showSosVerificationDialog = true }
                 )
                 RokkhonTab.DONOR_PROFILE -> Column(
                     modifier = Modifier
@@ -401,7 +453,7 @@ fun RokkhonAuthenticatedShell(
                 }
             }
 
-            // Floating Toast Notification Banner at Top
+            // Top banner: neutral dark for info so it is not confused with an SOS alarm.
             AnimatedVisibility(
                 visible = toastBanner != null,
                 modifier = Modifier
@@ -410,13 +462,15 @@ fun RokkhonAuthenticatedShell(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Surface(
-                    color = IosSystemRed,
+                    color = Color(0xFF231A1C),
                     shape = RoundedCornerShape(16.dp),
                     shadowElevation = 6.dp,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("toast_banner")
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -426,15 +480,12 @@ fun RokkhonAuthenticatedShell(
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.weight(1f)
                         )
-                        IconButton(
-                            onClick = { viewModel.dismissToastBanner() },
-                            modifier = Modifier.size(24.dp)
-                        ) {
+                        IconButton(onClick = { viewModel.dismissToastBanner() }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Dismiss",
+                                contentDescription = if (language == AppLanguage.BENGALI) "বন্ধ করুন" else "Dismiss",
                                 tint = Color.White,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -443,12 +494,22 @@ fun RokkhonAuthenticatedShell(
         }
     }
 
+    pendingHardwareSos?.let { pending ->
+        HardwareSosCountdownOverlay(
+            language = language,
+            pending = pending,
+            liveDecibels = liveDb,
+            onCancel = { viewModel.cancelHardwareSosCountdown() },
+            onSendNow = { viewModel.sendHardwareSosNow() }
+        )
+    }
+
     if (showSosVerificationDialog) {
         LiveCameraAudioSosDialog(
             language = language,
             userBloodGroup = myDonor?.bloodGroup ?: "O+",
             districtName = selectedDistrict.nameEn,
-            triggerMethod = activeSosTriggerMethod,
+            triggerMethod = "ONE_TAP_SOS",
             audioVerifier = viewModel.audioVerifier,
             onDismiss = { showSosVerificationDialog = false },
             onDispatchVerifiedSos = { emergencyType, hasCam, hasAudio, peakDb, note, triggerMethod ->
@@ -500,6 +561,7 @@ private fun RokkhonFloatingBottomBar(
     onSelectTab: (RokkhonTab) -> Unit,
     onPlusClick: () -> Unit
 ) {
+    val isBn = language == AppLanguage.BENGALI
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -525,24 +587,24 @@ private fun RokkhonFloatingBottomBar(
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.HOME_MATCH,
                     icon = Icons.Default.Home,
-                    label = if (language == AppLanguage.BENGALI) "হোম" else "Home",
+                    label = if (isBn) "হোম" else "Home",
                     onClick = { onSelectTab(RokkhonTab.HOME_MATCH) },
                     modifier = Modifier
-                        .weight(1.1f)
+                        .weight(1f)
                         .testTag("nav_tab_home")
                 )
 
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.RADAR_MAP,
                     icon = Icons.Default.Search,
-                    label = if (language == AppLanguage.BENGALI) "খুঁজুন" else "Find",
+                    label = if (isBn) "খুঁজুন" else "Find",
                     onClick = { onSelectTab(RokkhonTab.RADAR_MAP) },
                     modifier = Modifier
                         .weight(1f)
                         .testTag("nav_tab_map")
                 )
 
-                // Center Crimson '+' Circle Action Button
+                // Centre "+" = post a blood request
                 Box(
                     modifier = Modifier.weight(0.95f),
                     contentAlignment = Alignment.Center
@@ -554,13 +616,14 @@ private fun RokkhonFloatingBottomBar(
                         modifier = Modifier
                             .offset(y = (-6).dp)
                             .size(52.dp)
-                            .clickable { onPlusClick() }
+                            .clip(CircleShape)
+                            .clickable(role = Role.Button) { onPlusClick() }
                             .testTag("nav_center_plus_button")
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Add,
-                                contentDescription = "New Request",
+                                contentDescription = if (isBn) "রক্তের আবেদন করুন" else "Request blood",
                                 tint = Color.White,
                                 modifier = Modifier.size(26.dp)
                             )
@@ -570,7 +633,7 @@ private fun RokkhonFloatingBottomBar(
 
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.SOS_GUARDIAN,
-                    icon = Icons.Default.ChatBubbleOutline,
+                    icon = Icons.Outlined.ChatBubbleOutline,
                     label = "SOS + BLE",
                     onClick = { onSelectTab(RokkhonTab.SOS_GUARDIAN) },
                     modifier = Modifier
@@ -581,7 +644,7 @@ private fun RokkhonFloatingBottomBar(
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.DONOR_PROFILE,
                     icon = Icons.Default.PersonOutline,
-                    label = if (language == AppLanguage.BENGALI) "প্রোফাইল" else "Profile",
+                    label = if (isBn) "প্রোফাইল" else "Profile",
                     onClick = { onSelectTab(RokkhonTab.DONOR_PROFILE) },
                     modifier = Modifier
                         .weight(1f)
@@ -608,7 +671,7 @@ private fun RokkhonBottomNavItem(
         modifier = modifier
             .height(54.dp)
             .clip(RoundedCornerShape(28.dp))
-            .clickable { onClick() }
+            .clickable(role = Role.Tab) { onClick() }
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -617,7 +680,7 @@ private fun RokkhonBottomNavItem(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = label,
+                contentDescription = null,
                 tint = if (selected) activeRed else inactiveGray,
                 modifier = Modifier.size(22.dp)
             )
@@ -626,9 +689,9 @@ private fun RokkhonBottomNavItem(
                 text = label,
                 fontSize = 11.5.sp,
                 color = if (selected) activeRed else inactiveGray,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1
             )
         }
     }
 }
-

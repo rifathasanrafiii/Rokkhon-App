@@ -33,6 +33,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -53,6 +55,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AppLanguage
+import com.example.data.model.parseDonationDateMillis
+import com.example.data.model.isValidBangladeshMobile
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.GUARDIAN_REWARD_TIERS
 import com.example.ui.components.BangladeshAreaPickerDialog
@@ -84,8 +88,12 @@ fun DonorProfileScreen(
     var bloodGroup by remember { mutableStateOf(myDonor?.bloodGroup ?: "O+") }
     var isAvailableDonor by remember { mutableStateOf(myDonor?.isAvailableDonor ?: true) }
     var district by remember { mutableStateOf(myDonor?.district ?: selectedDistrict.nameEn) }
-    var contactPhone by remember { mutableStateOf(myDonor?.contactPhone ?: "+8801711000000") }
-    var lastDonationDate by remember { mutableStateOf(myDonor?.lastDonationDate ?: "Available now") }
+    // No sample number or text: whatever is saved here is shown to patients' families.
+    var contactPhone by remember { mutableStateOf(myDonor?.contactPhone.orEmpty()) }
+    var lastDonationDate by remember { mutableStateOf(myDonor?.lastDonationDate.orEmpty()) }
+    var showErrors by remember { mutableStateOf(false) }
+    val phoneInvalid = !isValidBangladeshMobile(contactPhone)
+    val dateInvalid = lastDonationDate.isNotBlank() && parseDonationDateMillis(lastDonationDate) == null
 
     LaunchedEffect(myDonor) {
         if (myDonor != null) {
@@ -151,7 +159,7 @@ fun DonorProfileScreen(
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = displayName.ifBlank { "Rokkhon Guardian" },
+                                text = displayName.ifBlank { if (language == AppLanguage.BENGALI) "রক্ষণ গার্ডিয়ান" else "Rokkhon Guardian" },
                                 style = MaterialTheme.typography.titleLarge,
                                 color = Color.White,
                                 fontWeight = FontWeight.ExtraBold
@@ -165,7 +173,7 @@ fun DonorProfileScreen(
                             )
                         }
                         Text(
-                            text = "Trust Score: ${myDonor?.trustScore ?: 100}% • $district",
+                            text = if (language == AppLanguage.BENGALI) "ট্রাস্ট স্কোর: ${myDonor?.trustScore ?: 100}% • $district" else "Trust Score: ${myDonor?.trustScore ?: 100}% • $district",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.78f)
                         )
@@ -198,13 +206,13 @@ fun DonorProfileScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "$dailyStreakCount Days Streak",
+                                text = if (language == AppLanguage.BENGALI) "$dailyStreakCount দিনের স্ট্রিক" else "$dailyStreakCount Days Streak",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
-                                text = if (checkedInToday) "Checked in today" else "Tap to check in",
+                                text = if (checkedInToday) { if (language == AppLanguage.BENGALI) "আজ চেক-ইন হয়েছে" else "Checked in today" } else { if (language == AppLanguage.BENGALI) "চেক-ইন করতে ট্যাপ করুন" else "Tap to check in" },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White.copy(alpha = 0.72f)
                             )
@@ -230,13 +238,13 @@ fun DonorProfileScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "$guardianPoints Points",
+                                text = if (language == AppLanguage.BENGALI) "$guardianPoints পয়েন্ট" else "$guardianPoints Points",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
-                                text = "Guardian Rewards",
+                                text = if (language == AppLanguage.BENGALI) "গার্ডিয়ান রিওয়ার্ড" else "Guardian Rewards",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White.copy(alpha = 0.72f)
                             )
@@ -607,8 +615,16 @@ fun DonorProfileScreen(
 
                 OutlinedTextField(
                     value = contactPhone,
-                    onValueChange = { contactPhone = it },
-                    label = { Text(if (language == AppLanguage.BENGALI) "জরুরি মোবাইল নম্বর (Phone)" else "Emergency Contact Phone") },
+                    onValueChange = { contactPhone = it.filter { ch -> ch.isDigit() || ch == '+' }.take(14) },
+                    label = { Text(if (language == AppLanguage.BENGALI) "জরুরি মোবাইল নম্বর (Phone) *" else "Emergency Contact Phone *") },
+                    placeholder = { Text("01XXXXXXXXX") },
+                    isError = showErrors && phoneInvalid,
+                    supportingText = if (showErrors && phoneInvalid) {
+                        { Text(if (language == AppLanguage.BENGALI) "সঠিক বাংলাদেশি মোবাইল নম্বর দিন" else "Enter a valid Bangladeshi mobile number") }
+                    } else {
+                        null
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     singleLine = true
@@ -617,7 +633,19 @@ fun DonorProfileScreen(
                 OutlinedTextField(
                     value = lastDonationDate,
                     onValueChange = { lastDonationDate = it },
-                    label = { Text(if (language == AppLanguage.BENGALI) "সর্বশেষ রক্তদানের তথ্য" else "Availability / Last Donation") },
+                    label = { Text(if (language == AppLanguage.BENGALI) "শেষ রক্তদানের তারিখ" else "Last donation date") },
+                    placeholder = { Text("YYYY-MM-DD") },
+                    isError = showErrors && dateInvalid,
+                    // The 90-day rule needs a real date; blank means never / not sure.
+                    supportingText = {
+                        Text(
+                            if (showErrors && dateInvalid) {
+                                if (language == AppLanguage.BENGALI) "তারিখ এভাবে লিখুন: 2025-01-31" else "Write the date like 2025-01-31"
+                            } else {
+                                if (language == AppLanguage.BENGALI) "রক্ত দেওয়ার পর ৯০ দিন আপনাকে 'উপলব্ধ' দেখানো হবে না" else "For 90 days after donating you aren't listed as available"
+                            }
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     singleLine = true
@@ -625,6 +653,10 @@ fun DonorProfileScreen(
 
                 Button(
                     onClick = {
+                        if (phoneInvalid || dateInvalid) {
+                            showErrors = true
+                            return@Button
+                        }
                         viewModel.saveDonorProfile(
                             displayName = displayName,
                             bloodGroup = bloodGroup,

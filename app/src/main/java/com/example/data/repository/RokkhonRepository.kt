@@ -7,6 +7,7 @@ import com.example.data.model.DonorNode
 import com.example.data.model.SosAlert
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -76,6 +77,10 @@ class RokkhonRepository(
             }
     }
 
+    /**
+     * Creates the donor document on first save, afterwards only updates the fields the user owns.
+     * Trust score and verified-SOS count are never written by the client after creation.
+     */
     suspend fun saveOrUpdateDonorNode(
         displayName: String,
         bloodGroup: String,
@@ -84,14 +89,14 @@ class RokkhonRepository(
         contactPhone: String,
         latitude: Double,
         longitude: Double,
-        lastDonationDate: String,
-        trustScore: Long = 100L,
-        verifiedSosCount: Long = 0L
+        lastDonationDate: String
     ): Result<Unit> = runCatching {
         val uid = requireUserId()
         val docRef = db.collection("donor_nodes").document(uid)
         val existingSnap = try {
             docRef.get().await()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             null
         }
@@ -106,61 +111,40 @@ class RokkhonRepository(
                 "latitude" to latitude,
                 "longitude" to longitude,
                 "lastDonationDate" to lastDonationDate.take(40),
-                "trustScore" to trustScore.coerceIn(0L, 100L),
-                "verifiedSosCount" to verifiedSosCount.coerceAtLeast(0L),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
-            try {
-                docRef.update(updateMap).await()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-                throw e
-            }
+            write(docRef, OperationType.UPDATE) { docRef.update(updateMap).await() }
         } else {
             val createMap = mapOf(
                 "userId" to uid,
-                "displayName" to displayName.ifBlank { "Rokkhon Guardian" }.take(80),
+                "displayName" to displayName.ifBlank { "Rokkhon Donor" }.take(80),
                 "bloodGroup" to bloodGroup,
                 "isAvailableDonor" to isAvailableDonor,
-                "district" to district.ifBlank { "Dhanmondi, Dhaka" }.take(80),
-                "contactPhone" to contactPhone.ifBlank { "+8801700000000" }.take(24),
+                "district" to district.take(80),
+                "contactPhone" to contactPhone.take(24),
                 "latitude" to latitude,
                 "longitude" to longitude,
-                "lastDonationDate" to lastDonationDate.ifBlank { "Ready to Donate" }.take(40),
-                "trustScore" to trustScore.coerceIn(0L, 100L),
-                "verifiedSosCount" to verifiedSosCount.coerceAtLeast(0L),
+                "lastDonationDate" to lastDonationDate.take(40),
+                "trustScore" to 100,
+                "verifiedSosCount" to 0,
                 "networkKey" to "BD_ROKKHON",
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
-            try {
-                docRef.set(createMap).await()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                handleFirestoreError(e, OperationType.CREATE, docRef.path)
-                throw e
-            }
+            write(docRef, OperationType.CREATE) { docRef.set(createMap).await() }
         }
     }
 
     suspend fun toggleDonorAvailability(isAvailable: Boolean): Result<Unit> = runCatching {
         val uid = requireUserId()
         val docRef = db.collection("donor_nodes").document(uid)
-        try {
+        write(docRef, OperationType.UPDATE) {
             docRef.update(
                 mapOf(
                     "isAvailableDonor" to isAvailable,
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-            throw e
         }
     }
 
@@ -186,16 +170,16 @@ class RokkhonRepository(
         val payload = mapOf(
             "userId" to uid,
             "requesterName" to requesterName.ifBlank { "Rokkhon Member" }.take(80),
-            "patientName" to patientName.ifBlank { "Emergency Patient" }.take(100),
+            "patientName" to patientName.ifBlank { "Patient" }.take(100),
             "bloodGroup" to bloodGroup,
             "unitsNeeded" to unitsNeeded.coerceIn(1, 10),
-            "hemoglobinLevel" to hemoglobinLevel.ifBlank { "6.8 g/dL" }.take(40),
-            "patientProblem" to patientProblem.ifBlank { "Emergency Surgery / Anemia" }.take(160),
-            "hospitalName" to hospitalName.ifBlank { "Dhaka Medical College Hospital" }.take(120),
-            "wardCabinNumber" to wardCabinNumber.ifBlank { "Emergency Ward" }.take(80),
-            "neededDateTime" to neededDateTime.ifBlank { "আজ জরুরি (Within 2 Hours)" }.take(80),
-            "district" to district.ifBlank { "Dhanmondi, Dhaka" }.take(80),
-            "contactPhone" to contactPhone.ifBlank { "+8801700000000" }.take(24),
+            "hemoglobinLevel" to hemoglobinLevel.ifBlank { "-" }.take(40),
+            "patientProblem" to patientProblem.ifBlank { "-" }.take(160),
+            "hospitalName" to hospitalName.take(120),
+            "wardCabinNumber" to wardCabinNumber.ifBlank { "-" }.take(80),
+            "neededDateTime" to neededDateTime.ifBlank { "-" }.take(80),
+            "district" to district.take(80),
+            "contactPhone" to contactPhone.take(24),
             "urgencyLevel" to urgencyLevel,
             "latitude" to latitude,
             "longitude" to longitude,
@@ -205,50 +189,44 @@ class RokkhonRepository(
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
         )
-        try {
-            docRef.set(payload).await()
-            requestId
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.CREATE, docRef.path)
-            throw e
-        }
+        write(docRef, OperationType.CREATE) { docRef.set(payload).await() }
+        requestId
     }
 
+    /**
+     * One pledge per account is enforced on the server: the pledge marker document
+     * `blood_requests/{id}/pledges/{uid}` and the counter increment are committed together,
+     * and the security rules reject the batch if the marker already exists.
+     */
     suspend fun pledgeBloodResponse(request: BloodRequest): Result<Unit> = runCatching {
-        requireUserId()
+        val uid = requireUserId()
         val docRef = db.collection("blood_requests").document(request.id)
-        try {
-            docRef.update(
-                mapOf(
-                    "respondersCount" to (request.respondersCount + 1L),
-                    "updatedAt" to FieldValue.serverTimestamp()
+        val markerRef = docRef.collection("pledges").document(uid)
+        write(docRef, OperationType.UPDATE) {
+            db.batch()
+                .set(markerRef, mapOf("userId" to uid, "createdAt" to FieldValue.serverTimestamp()))
+                .update(
+                    docRef,
+                    mapOf(
+                        "respondersCount" to FieldValue.increment(1L),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
                 )
-            ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-            throw e
+                .commit()
+                .await()
         }
     }
 
     suspend fun markBloodRequestFulfilled(requestId: String): Result<Unit> = runCatching {
         requireUserId()
         val docRef = db.collection("blood_requests").document(requestId)
-        try {
+        write(docRef, OperationType.UPDATE) {
             docRef.update(
                 mapOf(
                     "status" to "FULFILLED",
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-            throw e
         }
     }
 
@@ -266,10 +244,9 @@ class RokkhonRepository(
         verificationNote: String,
         bleBeaconHash: String
     ): Result<String> = runCatching {
+        // An SOS is never blocked for missing evidence: a victim without mic/camera permission
+        // still needs help. Evidence flags only change how the alert is labelled.
         val uid = requireUserId()
-        require(hasLiveCameraVerification || hasLiveAudioVerification) {
-            "Silent 3s Camera or Audio Blackbox proof is required to prevent false alarms."
-        }
         val alertId = "sos_${UUID.randomUUID().toString().replace("-", "").take(16)}"
         val docRef = db.collection("sos_alerts").document(alertId)
         val payload = mapOf(
@@ -277,14 +254,14 @@ class RokkhonRepository(
             "senderName" to senderName.ifBlank { "Rokkhon Citizen" }.take(80),
             "bloodGroup" to bloodGroup,
             "emergencyType" to emergencyType,
-            "district" to district.ifBlank { "Dhaka" }.take(80),
+            "district" to district.ifBlank { "Bangladesh" }.take(80),
             "latitude" to latitude,
             "longitude" to longitude,
             "hasLiveCameraVerification" to hasLiveCameraVerification,
             "hasLiveAudioVerification" to hasLiveAudioVerification,
             "peakAudioDecibels" to peakAudioDecibels.coerceIn(0, 140),
-            "triggerMethod" to triggerMethod.ifBlank { "3X_POWER_BUTTON" }.take(40),
-            "verificationNote" to verificationNote.ifBlank { "Auto 3s Silent Cam + Audio Blackbox Attached" }.take(300),
+            "triggerMethod" to triggerMethod.ifBlank { "ONE_TAP_SOS" }.take(40),
+            "verificationNote" to verificationNote.ifBlank { "SOS" }.take(300),
             "bleBeaconHash" to bleBeaconHash.ifBlank { "BLE-BD" }.take(64),
             "status" to "ACTIVE",
             "responderCount" to 0,
@@ -293,32 +270,36 @@ class RokkhonRepository(
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
         )
-        try {
-            docRef.set(payload).await()
-            alertId
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.CREATE, docRef.path)
-            throw e
-        }
+        write(docRef, OperationType.CREATE) { docRef.set(payload).await() }
+        alertId
     }
 
-    suspend fun respondToSosAlert(alert: SosAlert): Result<Unit> = runCatching {
-        requireUserId()
+    suspend fun respondToSosAlert(alert: SosAlert): Result<Unit> =
+        voteOnSos(alert, markerCollection = "responders", counterField = "responderCount")
+
+    suspend fun reportFalseAlarm(alert: SosAlert): Result<Unit> =
+        voteOnSos(alert, markerCollection = "false_reports", counterField = "falseAlarmReports")
+
+    private suspend fun voteOnSos(
+        alert: SosAlert,
+        markerCollection: String,
+        counterField: String
+    ): Result<Unit> = runCatching {
+        val uid = requireUserId()
         val docRef = db.collection("sos_alerts").document(alert.id)
-        try {
-            docRef.update(
-                mapOf(
-                    "responderCount" to (alert.responderCount + 1L),
-                    "updatedAt" to FieldValue.serverTimestamp()
+        val markerRef = docRef.collection(markerCollection).document(uid)
+        write(docRef, OperationType.UPDATE) {
+            db.batch()
+                .set(markerRef, mapOf("userId" to uid, "createdAt" to FieldValue.serverTimestamp()))
+                .update(
+                    docRef,
+                    mapOf(
+                        counterField to FieldValue.increment(1L),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
                 )
-            ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-            throw e
+                .commit()
+                .await()
         }
     }
 
@@ -329,7 +310,7 @@ class RokkhonRepository(
     ): Result<Unit> = runCatching {
         requireUserId()
         val docRef = db.collection("sos_alerts").document(alertId)
-        try {
+        write(docRef, OperationType.UPDATE) {
             docRef.update(
                 mapOf(
                     "latitude" to latitude,
@@ -337,50 +318,34 @@ class RokkhonRepository(
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-            throw e
         }
     }
 
     suspend fun resolveOwnSosAlert(alertId: String): Result<Unit> = runCatching {
         requireUserId()
         val docRef = db.collection("sos_alerts").document(alertId)
-        try {
+        write(docRef, OperationType.UPDATE) {
             docRef.update(
                 mapOf(
                     "status" to "RESOLVED",
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-            throw e
         }
     }
 
-    suspend fun reportFalseAlarm(alert: SosAlert): Result<Unit> = runCatching {
-        requireUserId()
-        val docRef = db.collection("sos_alerts").document(alert.id)
-        val newReports = alert.falseAlarmReports + 1L
+    private suspend inline fun write(
+        docRef: DocumentReference,
+        operation: OperationType,
+        block: () -> Unit
+    ) {
         try {
-            docRef.update(
-                mapOf(
-                    "falseAlarmReports" to newReports,
-                    "status" to alert.status.ifBlank { "ACTIVE" },
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
+            block()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            handleFirestoreError(e, operation, docRef.path)
             throw e
         }
     }
 }
-

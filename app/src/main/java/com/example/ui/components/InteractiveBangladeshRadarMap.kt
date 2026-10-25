@@ -1,11 +1,6 @@
 package com.example.ui.components
 
 import android.annotation.SuppressLint
-import android.graphics.Color as AndroidColor
-import android.webkit.JavascriptInterface
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -69,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.BleSosBeacon
+import com.example.data.model.canDonateTo
 import com.example.data.model.BloodRequest
 import com.example.data.model.DonorNode
 import com.example.data.model.SosAlert
@@ -79,8 +75,6 @@ import com.example.ui.theme.PinCrimsonRed
 import com.example.ui.theme.RadarGlassCard
 import com.example.ui.theme.RadarObsidianBg
 import com.example.ui.viewmodel.MapLayerFilter
-import org.json.JSONArray
-import org.json.JSONObject
 import kotlin.math.hypot
 
 sealed interface SelectedMapPin {
@@ -96,7 +90,6 @@ sealed interface SelectedMapPin {
  * - Highlights the selected Bangladesh area radius and updates pins in real time.
  * - Uses 100% vector graphics and SVG markers with zero emojis.
  */
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun InteractiveBangladeshRadarMap(
     centerLat: Double,
@@ -111,12 +104,16 @@ fun InteractiveBangladeshRadarMap(
     showLiveFloatingCard: Boolean = true,
     isLiveLocationActive: Boolean = false,
     selectedAreaName: String = "Dhanmondi, Dhaka",
+    /** The user's real GPS position, or null when there is no fix yet. */
+    userLat: Double? = null,
+    userLng: Double? = null,
+    bengali: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var zoomLevel by remember { mutableFloatStateOf(1.15f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
     var useOsmRealTiles by remember { mutableStateOf(true) }
-    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    val mapController = remember { RokkhonMapController() }
     val textMeasurer = rememberTextMeasurer()
 
     val infiniteTransition = rememberInfiniteTransition(label = "real_map_pulse")
@@ -134,7 +131,7 @@ fun InteractiveBangladeshRadarMap(
         if (layerFilter != MapLayerFilter.ALL && layerFilter != MapLayerFilter.DONORS_ONLY) {
             emptyList()
         } else {
-            donors.filter { it.isAvailableDonor && (selectedBloodGroup == null || it.bloodGroup == selectedBloodGroup) }
+            donors.filter { it.isEligibleNow && (selectedBloodGroup == null || canDonateTo(it.bloodGroup, selectedBloodGroup)) }
         }
     }
 
@@ -146,28 +143,12 @@ fun InteractiveBangladeshRadarMap(
         }
     }
 
-    // Active SOS alerts are visible on the live map and disappear immediately when marked Safe or when falseAlarmReports >= 3
+    // Active SOS alerts stay on the map until the sender marks Safe or 24 hours pass (same rule as the lists).
     val filteredSos = remember(sosAlerts) {
-        sosAlerts.filter { it.status == "ACTIVE" && it.falseAlarmReports < 3L }
+        sosAlerts.filter { it.status == "ACTIVE" && !it.isExpiredAfter24Hours() }
     }
 
-    // Sync pins & center to OpenStreetMap WebView whenever data or filter changes
-    val markersJson = remember(centerLat, centerLng, filteredDonors, filteredRequests, filteredSos, isLiveLocationActive) {
-        buildMapPayloadJson(
-            centerLat = centerLat,
-            centerLng = centerLng,
-            donors = filteredDonors,
-            requests = filteredRequests,
-            sosAlerts = filteredSos,
-            isLiveLocationActive = isLiveLocationActive
-        )
-    }
 
-    LaunchedEffect(markersJson, webViewRef, useOsmRealTiles) {
-        if (useOsmRealTiles) {
-            webViewRef?.evaluateJavascript("window.updateRokkhonMap && window.updateRokkhonMap($markersJson);", null)
-        }
-    }
 
     Box(
         modifier = modifier
@@ -478,55 +459,20 @@ fun InteractiveBangladeshRadarMap(
             )
         }
 
-        // 2. Real OpenStreetMap Leaflet Street Tile Layer (Interactive Real Map of Bangladesh)
+        // 2. Real OpenStreetMap street map (native osmdroid tiles + pins). The drawn map above stays
+        //    underneath as the offline fallback and for the layer toggle button.
         if (useOsmRealTiles) {
-            AndroidView(
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        setBackgroundColor(AndroidColor.TRANSPARENT)
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.cacheMode = WebSettings.LOAD_DEFAULT
-                        addJavascriptInterface(
-                            object {
-                                @JavascriptInterface
-                                fun onMarkerTapped(kind: String, id: String) {
-                                    post {
-                                        when (kind) {
-                                            "donor" -> filteredDonors.firstOrNull { (it.id.ifBlank { it.userId }) == id }
-                                                ?.let { onPinSelected(SelectedMapPin.DonorPin(it)) }
-                                            "request" -> filteredRequests.firstOrNull { it.id == id }
-                                                ?.let { onPinSelected(SelectedMapPin.RequestPin(it)) }
-                                            "sos" -> filteredSos.firstOrNull { it.id == id }
-                                                ?.let { onPinSelected(SelectedMapPin.SosPin(it)) }
-                                        }
-                                    }
-                                }
-                            },
-                            "RokkhonBridge"
-                        )
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                super.onPageFinished(view, url)
-                                view?.evaluateJavascript(
-                                    "window.updateRokkhonMap && window.updateRokkhonMap($markersJson);",
-                                    null
-                                )
-                            }
-                        }
-                        loadDataWithBaseURL(
-                            "https://openstreetmap.org",
-                            LEAFLET_OSM_HTML,
-                            "text/html",
-                            "UTF-8",
-                            null
-                        )
-                        webViewRef = this
-                    }
-                },
-                update = { view ->
-                    webViewRef = view
-                },
+            RokkhonMap(
+                centerLat = centerLat,
+                centerLng = centerLng,
+                donors = filteredDonors,
+                requests = filteredRequests,
+                sosAlerts = filteredSos,
+                userLat = userLat ?: centerLat,
+                userLng = userLng ?: centerLng,
+                showUser = userLat != null && userLng != null,
+                onPinSelected = onPinSelected,
+                controller = mapController,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -546,7 +492,7 @@ fun InteractiveBangladeshRadarMap(
                 IconButton(
                     onClick = {
                         zoomLevel = (zoomLevel * 1.25f).coerceAtMost(3.2f)
-                        webViewRef?.evaluateJavascript("window.rokkhonZoom && window.rokkhonZoom(1);", null)
+                        mapController.zoomIn()
                     },
                     modifier = Modifier
                         .size(38.dp)
@@ -563,7 +509,7 @@ fun InteractiveBangladeshRadarMap(
                 IconButton(
                     onClick = {
                         zoomLevel = (zoomLevel / 1.25f).coerceAtLeast(0.6f)
-                        webViewRef?.evaluateJavascript("window.rokkhonZoom && window.rokkhonZoom(-1);", null)
+                        mapController.zoomOut()
                     },
                     modifier = Modifier
                         .size(38.dp)
@@ -581,7 +527,7 @@ fun InteractiveBangladeshRadarMap(
                     onClick = {
                         panOffset = Offset.Zero
                         zoomLevel = 1.15f
-                        webViewRef?.evaluateJavascript("window.rokkhonRecenter && window.rokkhonRecenter($centerLat, $centerLng);", null)
+                        mapController.animateTo(userLat ?: centerLat, userLng ?: centerLng, 15.0)
                     },
                     modifier = Modifier
                         .size(38.dp)
@@ -639,9 +585,9 @@ fun InteractiveBangladeshRadarMap(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (isLiveLocationActive) {
-                                    "LIVE SOS GPS STREAMING • $selectedAreaName"
+                                    if (bengali) "লাইভ SOS লোকেশন • $selectedAreaName" else "LIVE SOS GPS STREAMING • $selectedAreaName"
                                 } else {
-                                    "REAL-TIME AREA MAP • $selectedAreaName"
+                                    if (bengali) "রিয়েল-টাইম এলাকা ম্যাপ • $selectedAreaName" else "REAL-TIME AREA MAP • $selectedAreaName"
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White.copy(alpha = 0.82f),
@@ -649,11 +595,20 @@ fun InteractiveBangladeshRadarMap(
                             )
                         }
                         Spacer(modifier = Modifier.height(3.dp))
-                        val headlineText = when (layerFilter) {
-                            MapLayerFilter.DONORS_ONLY -> "${filteredDonors.size} Available Donors in Area"
-                            MapLayerFilter.BLOOD_REQUESTS_ONLY -> "${filteredRequests.size} Patient Blood Requests in Area"
-                            MapLayerFilter.SOS_ALERTS_ONLY -> "${filteredSos.size} Active Emergency SOS Alerts"
-                            MapLayerFilter.ALL -> "${filteredDonors.size} Donors • ${filteredRequests.size} Requests"
+                        val headlineText = if (bengali) {
+                            when (layerFilter) {
+                                MapLayerFilter.DONORS_ONLY -> "এলাকায় ${filteredDonors.size} জন উপলব্ধ ডোনার"
+                                MapLayerFilter.BLOOD_REQUESTS_ONLY -> "এলাকায় ${filteredRequests.size}টি রক্তের আবেদন"
+                                MapLayerFilter.SOS_ALERTS_ONLY -> "${filteredSos.size}টি সক্রিয় SOS"
+                                MapLayerFilter.ALL -> "${filteredDonors.size} ডোনার • ${filteredRequests.size} আবেদন"
+                            }
+                        } else {
+                            when (layerFilter) {
+                                MapLayerFilter.DONORS_ONLY -> "${filteredDonors.size} Available Donors in Area"
+                                MapLayerFilter.BLOOD_REQUESTS_ONLY -> "${filteredRequests.size} Patient Blood Requests in Area"
+                                MapLayerFilter.SOS_ALERTS_ONLY -> "${filteredSos.size} Active Emergency SOS Alerts"
+                                MapLayerFilter.ALL -> "${filteredDonors.size} Donors • ${filteredRequests.size} Requests"
+                            }
                         }
                         Text(
                             text = headlineText,
@@ -663,12 +618,28 @@ fun InteractiveBangladeshRadarMap(
                         )
                     }
 
-                    OverlappingDonorAvatarRow(
-                        initials = listOf("TA", "FT", "MH"),
-                        extraCount = (filteredDonors.size + 4).coerceAtLeast(3)
-                    )
+                    if (filteredDonors.isNotEmpty()) {
+                        OverlappingDonorAvatarRow(
+                            initials = filteredDonors.take(3).map { com.example.ui.screens.donorInitials(it.displayName) },
+                            extraCount = (filteredDonors.size - 3).coerceAtLeast(0)
+                        )
+                    }
                 }
             }
+        }
+
+        // OpenStreetMap's licence requires visible credit; the map's own credit sits under the card.
+        if (useOsmRealTiles) {
+            Text(
+                text = "© OpenStreetMap contributors",
+                fontSize = 9.sp,
+                color = Color(0xFF3A3A3A),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp, bottom = if (showLiveFloatingCard) 92.dp else 8.dp)
+                    .background(Color.White.copy(alpha = 0.75f), RoundedCornerShape(5.dp))
+                    .padding(horizontal = 5.dp, vertical = 1.dp)
+            )
         }
     }
 }
@@ -685,7 +656,7 @@ fun OverlappingDonorAvatarRow(
         Color(0xFF0F6E56),
         Color(0xFF7C2D12)
     )
-    val totalWidth = (initials.size * 21 + 32).dp
+    val totalWidth = (initials.size * 21 + if (extraCount > 0) 32 else 11).dp
     Box(
         modifier = modifier.width(totalWidth),
         contentAlignment = Alignment.CenterStart
@@ -708,7 +679,7 @@ fun OverlappingDonorAvatarRow(
                 )
             }
         }
-        Box(
+        if (extraCount > 0) Box(
             modifier = Modifier
                 .offset(x = (initials.size * 21).dp)
                 .size(32.dp)
@@ -726,183 +697,3 @@ fun OverlappingDonorAvatarRow(
         }
     }
 }
-
-private fun buildMapPayloadJson(
-    centerLat: Double,
-    centerLng: Double,
-    donors: List<DonorNode>,
-    requests: List<BloodRequest>,
-    sosAlerts: List<SosAlert>,
-    isLiveLocationActive: Boolean
-): String {
-    val root = JSONObject()
-    root.put("centerLat", centerLat)
-    root.put("centerLng", centerLng)
-    root.put("liveGps", isLiveLocationActive)
-
-    val donorArr = JSONArray()
-    donors.forEach { d ->
-        val obj = JSONObject()
-        obj.put("id", d.id.ifBlank { d.userId })
-        obj.put("name", d.displayName)
-        obj.put("bg", d.bloodGroup)
-        obj.put("lat", d.latitude)
-        obj.put("lng", d.longitude)
-        donorArr.put(obj)
-    }
-    root.put("donors", donorArr)
-
-    val reqArr = JSONArray()
-    requests.forEach { r ->
-        val obj = JSONObject()
-        obj.put("id", r.id)
-        obj.put("patient", r.patientName)
-        obj.put("bg", r.bloodGroup)
-        obj.put("bags", r.unitsNeeded)
-        obj.put("hb", r.hemoglobinLevel)
-        obj.put("hospital", r.hospitalName)
-        obj.put("lat", r.latitude)
-        obj.put("lng", r.longitude)
-        reqArr.put(obj)
-    }
-    root.put("requests", reqArr)
-
-    val sosArr = JSONArray()
-    sosAlerts.forEach { s ->
-        val obj = JSONObject()
-        obj.put("id", s.id)
-        obj.put("sender", s.senderName)
-        obj.put("type", s.emergencyType)
-        obj.put("lat", s.latitude)
-        obj.put("lng", s.longitude)
-        sosArr.put(obj)
-    }
-    root.put("sos", sosArr)
-    return root.toString()
-}
-
-private const val LEAFLET_OSM_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; font-family: sans-serif; }
-  #map { width: 100%; height: 100%; background: transparent; }
-  .leaflet-control-attribution, .leaflet-control-zoom { display: none !important; }
-  .donor-pin {
-    background: #D92338; color: #FFFFFF; border: 2px solid #FFFFFF;
-    border-radius: 16px; padding: 3px 8px; font-weight: 800; font-size: 11px;
-    box-shadow: 0 3px 8px rgba(0,0,0,0.32); text-align: center; white-space: nowrap;
-  }
-  .req-pin {
-    background: #1A0F12; color: #FFFFFF; border: 2px solid #D92338;
-    border-radius: 16px; padding: 3px 8px; font-weight: 800; font-size: 11px;
-    box-shadow: 0 3px 10px rgba(217,35,56,0.45); text-align: center; white-space: nowrap;
-  }
-  .sos-pin {
-    background: #E11D48; color: #FFFFFF; border: 2px solid #FFFFFF;
-    border-radius: 18px; padding: 4px 10px; font-weight: 900; font-size: 11px;
-    box-shadow: 0 0 14px rgba(225,29,72,0.85); text-align: center; white-space: nowrap;
-  }
-  .user-gps {
-    width: 14px; height: 14px; border-radius: 50%; background: #007AFF;
-    border: 3px solid #FFFFFF; box-shadow: 0 0 12px rgba(0,122,255,0.7);
-  }
-</style>
-</head>
-<body>
-<div id="map"></div>
-<script>
-  var map = null;
-  var layerGroup = null;
-  var areaCircle = null;
-  var lastCenterLat = 23.7461;
-  var lastCenterLng = 90.3742;
-
-  function initMapIfNeeded(lat, lng) {
-    if (map || typeof L === 'undefined') return;
-    map = L.map('map', { zoomControl: false, attributionControl: false }).setView([lat, lng], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
-    layerGroup = L.layerGroup().addTo(map);
-  }
-
-  window.rokkhonZoom = function(delta) {
-    if (map) map.setZoom(map.getZoom() + delta);
-  };
-
-  window.rokkhonRecenter = function(lat, lng) {
-    if (map) map.setView([lat, lng], 14, { animate: true });
-  };
-
-  window.updateRokkhonMap = function(data) {
-    if (!data) return;
-    initMapIfNeeded(data.centerLat || 23.7461, data.centerLng || 90.3742);
-    if (!map || !layerGroup) return;
-
-    if (Math.abs(data.centerLat - lastCenterLat) > 0.004 || Math.abs(data.centerLng - lastCenterLng) > 0.004) {
-      lastCenterLat = data.centerLat;
-      lastCenterLng = data.centerLng;
-      map.setView([data.centerLat, data.centerLng], 14, { animate: true });
-    }
-
-    layerGroup.clearLayers();
-
-    L.circle([data.centerLat, data.centerLng], {
-      color: '#D92338',
-      fillColor: '#D92338',
-      fillOpacity: 0.08,
-      weight: 1.5,
-      radius: 1400
-    }).addTo(layerGroup);
-
-    var gpsIcon = L.divIcon({ className: '', html: '<div class="user-gps"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
-    L.marker([data.centerLat, data.centerLng], { icon: gpsIcon }).addTo(layerGroup);
-
-    (data.donors || []).forEach(function(d) {
-      var icon = L.divIcon({
-        className: '',
-        html: '<div class="donor-pin">' + d.bg + ' Donor</div>',
-        iconSize: [68, 26],
-        iconAnchor: [34, 13]
-      });
-      var m = L.marker([d.lat, d.lng], { icon: icon }).addTo(layerGroup);
-      m.on('click', function() {
-        if (window.RokkhonBridge) window.RokkhonBridge.onMarkerTapped('donor', d.id);
-      });
-    });
-
-    (data.requests || []).forEach(function(r) {
-      var icon = L.divIcon({
-        className: '',
-        html: '<div class="req-pin">[H] ' + r.bg + ' • ' + r.bags + 'B</div>',
-        iconSize: [82, 26],
-        iconAnchor: [41, 13]
-      });
-      var m = L.marker([r.lat, r.lng], { icon: icon }).addTo(layerGroup);
-      m.on('click', function() {
-        if (window.RokkhonBridge) window.RokkhonBridge.onMarkerTapped('request', r.id);
-      });
-    });
-
-    (data.sos || []).forEach(function(s) {
-      var icon = L.divIcon({
-        className: '',
-        html: '<div class="sos-pin">SOS • 5s Clip</div>',
-        iconSize: [86, 28],
-        iconAnchor: [43, 14]
-      });
-      var m = L.marker([s.lat, s.lng], { icon: icon }).addTo(layerGroup);
-      m.on('click', function() {
-        if (window.RokkhonBridge) window.RokkhonBridge.onMarkerTapped('sos', s.id);
-      });
-    });
-  };
-</script>
-</body>
-</html>
-"""

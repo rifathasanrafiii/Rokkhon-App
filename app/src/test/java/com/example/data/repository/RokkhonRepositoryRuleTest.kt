@@ -98,6 +98,57 @@ class RokkhonRepositoryRuleTest : FirestoreEmulatorTestBase() {
     }
 
     @Test
+    fun pledgeAndSosVotes_areLimitedToOnePerAccount() = runBlocking {
+        signInTestUser(ALICE_EMAIL)
+        val aliceRepo = RokkhonRepository(firestore)
+        val requestId = withTimeout(DEFAULT_TIMEOUT_MS) {
+            aliceRepo.createBloodRequest(
+                requesterName = "Alice",
+                patientName = "Patient",
+                bloodGroup = "A+",
+                unitsNeeded = 1,
+                hemoglobinLevel = "",
+                patientProblem = "",
+                hospitalName = "DMCH",
+                wardCabinNumber = "",
+                neededDateTime = "",
+                district = "Shahbagh, Dhaka",
+                contactPhone = "01712345678",
+                urgencyLevel = "URGENT",
+                latitude = 23.7389,
+                longitude = 90.3948
+            ).getOrThrow()
+        }
+        val alertId = withTimeout(DEFAULT_TIMEOUT_MS) {
+            aliceRepo.createVerifiedSosAlert(
+                senderName = "Alice",
+                bloodGroup = "A+",
+                emergencyType = "MEDICAL",
+                district = "Shahbagh, Dhaka",
+                latitude = 23.7389,
+                longitude = 90.3948,
+                hasLiveCameraVerification = false,
+                hasLiveAudioVerification = false,
+                peakAudioDecibels = 0,
+                triggerMethod = "ONE_TAP_SOS",
+                verificationNote = "No audio evidence",
+                bleBeaconHash = "BLE-T1"
+            ).getOrThrow()
+        }
+
+        signInTestUser(BOB_EMAIL)
+        val bobRepo = RokkhonRepository(firestore)
+        val request = com.example.data.model.BloodRequest(id = requestId)
+        val alert = com.example.data.model.SosAlert(id = alertId)
+        assertTrue(withTimeout(DEFAULT_TIMEOUT_MS) { bobRepo.pledgeBloodResponse(request) }.isSuccess)
+        assertTrue(withTimeout(DEFAULT_TIMEOUT_MS) { bobRepo.pledgeBloodResponse(request) }.isFailure)
+        assertTrue(withTimeout(DEFAULT_TIMEOUT_MS) { bobRepo.respondToSosAlert(alert) }.isSuccess)
+        assertTrue(withTimeout(DEFAULT_TIMEOUT_MS) { bobRepo.respondToSosAlert(alert) }.isFailure)
+        assertTrue(withTimeout(DEFAULT_TIMEOUT_MS) { bobRepo.reportFalseAlarm(alert) }.isSuccess)
+        assertTrue(withTimeout(DEFAULT_TIMEOUT_MS) { bobRepo.reportFalseAlarm(alert) }.isFailure)
+    }
+
+    @Test
     fun crossUserDonorNodeUpdate_failsWithPermissionDenied() = runBlocking {
         val aliceUid = signInTestUser(ALICE_EMAIL)
         val aliceRepo = RokkhonRepository(firestore)

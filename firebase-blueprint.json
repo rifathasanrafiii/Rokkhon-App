@@ -160,6 +160,16 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "VoteMarker": {
+      "title": "VoteMarker",
+      "description": "One-per-account marker for blood request pledges, SOS responders, and SOS false alarm reports.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated Firebase UID of the voter/responder." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": ["userId", "createdAt"]
     }
   },
   "firestore": {
@@ -171,9 +181,21 @@
       "schema": { "$ref": "#/entities/BloodRequest" },
       "description": "Urgent clinical blood donation requests across Bangladesh."
     },
+    "/blood_requests/{requestId}/pledges/{voterId}": {
+      "schema": { "$ref": "#/entities/VoteMarker" },
+      "description": "One-per-account donor pledge markers for a blood request."
+    },
     "/sos_alerts/{alertId}": {
       "schema": { "$ref": "#/entities/SosAlert" },
       "description": "Emergency SOS alerts with 3s silent camera/audio blackbox verification."
+    },
+    "/sos_alerts/{alertId}/responders/{voterId}": {
+      "schema": { "$ref": "#/entities/VoteMarker" },
+      "description": "One-per-account responder markers for an SOS alert."
+    },
+    "/sos_alerts/{alertId}/false_reports/{voterId}": {
+      "schema": { "$ref": "#/entities/VoteMarker" },
+      "description": "One-per-account false alarm report markers for an SOS alert."
     }
   }
 }

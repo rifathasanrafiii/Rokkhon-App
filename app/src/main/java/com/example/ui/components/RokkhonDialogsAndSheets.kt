@@ -257,7 +257,7 @@ fun BangladeshAreaPickerDialog(
                                 Column {
                                     Text(
                                         text = if (language == AppLanguage.BENGALI) {
-                                            "অটো জিপিএস লোকেশন (Auto-Detect Nearest Area)"
+                                            "জিপিএস দিয়ে কাছের এলাকা বেছে নিন"
                                         } else {
                                             "Auto-Detect Nearest Area via GPS"
                                         },
@@ -475,9 +475,9 @@ fun RokkhonNotificationCenterDialog(
                             Column {
                                 Text(
                                     text = if (language == AppLanguage.BENGALI) {
-                                        "নোটিফিকেশন ও অ্যালার্ট সেন্টার ($unreadCount নতুন)"
+                                        "নোটিফিকেশন"
                                     } else {
-                                        "Notifications & Alerts ($unreadCount unread)"
+                                        "Notifications"
                                     },
                                     style = MaterialTheme.typography.titleMedium,
                                     color = Color(0xFF1A0F12),
@@ -485,9 +485,9 @@ fun RokkhonNotificationCenterDialog(
                                 )
                                 Text(
                                     text = if (language == AppLanguage.BENGALI) {
-                                        "লাইভ SOS, জরুরি রক্তের আবেদন, রেসপন্ডার আপডেট ও ওয়ার্নিং"
+                                        if (unreadCount > 0) "$unreadCount টি নতুন" else "সব পড়া হয়েছে"
                                     } else {
-                                        "Live SOS alerts, blood requests, responder updates & warnings"
+                                        if (unreadCount > 0) "$unreadCount unread" else "All caught up"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF756568)
@@ -645,9 +645,9 @@ fun RokkhonNotificationCenterDialog(
                                             )
                                             Text(
                                                 text = when (item.kind) {
-                                                    NotificationKind.SOS_ALERT -> if (language == AppLanguage.BENGALI) "Find ম্যাপে SOS দেখুন ->" else "Open in Find SOS ->"
-                                                    NotificationKind.BLOOD_REQUEST -> if (language == AppLanguage.BENGALI) "রোগীর পোস্ট দেখুন ->" else "View Blood Request ->"
-                                                    else -> if (language == AppLanguage.BENGALI) "বিস্তারিত দেখুন ->" else "Tap to View ->"
+                                                    NotificationKind.SOS_ALERT -> if (language == AppLanguage.BENGALI) "SOS দেখুন →" else "View SOS →"
+                                                    NotificationKind.BLOOD_REQUEST -> if (language == AppLanguage.BENGALI) "আবেদন দেখুন →" else "View request →"
+                                                    else -> if (language == AppLanguage.BENGALI) "বিস্তারিত →" else "Details →"
                                                 },
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = IosSystemBlue,
@@ -708,9 +708,9 @@ fun FalseSosAccountWarningBanner(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (language == AppLanguage.BENGALI) {
-                        "সতর্কবার্তা: ভুয়া রিপোর্ট শিল্ড ও ২৪ ঘণ্টা পলিসি • পেনাল্টি: $penaltyCount"
+                        if (penaltyCount > 0) "আপনার $penaltyCount টি SOS 'বিতর্কিত' হয়েছে" else "ভুয়া রিপোর্ট নীতি"
                     } else {
-                        "Anti-Fake-Report Shield & 24h SOS Policy • Penalties: $penaltyCount"
+                        if (penaltyCount > 0) "$penaltyCount of your SOS alerts were disputed" else "False-report policy"
                     },
                     style = MaterialTheme.typography.titleSmall,
                     color = Color(0xFF92400E),
@@ -719,9 +719,9 @@ fun FalseSosAccountWarningBanner(
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = warningMessage ?: if (language == AppLanguage.BENGALI) {
-                        "প্রতি অ্যাকাউন্ট থেকে সর্বোচ্চ ১টি False ভোট দেওয়া যাবে। ৩+ False রিপোর্টেও SOS মুছে যাবে না (২৪ ঘণ্টা পর অটো-রিমুভ হবে)। ৫-সেকেন্ড অডিও/ভিডিও প্রমাণ বা ১ জন সাহায্যকারী থাকলে ভিক্টিমের ট্রাস্ট পয়েন্ট ১০০% সুরক্ষিত থাকবে।"
+                        "প্রতি অ্যাকাউন্ট একটি SOS-এ একবারই 'ভুয়া' রিপোর্ট করতে পারে। রিপোর্ট বেশি হলেও SOS মুছে যায় না (২৪ ঘণ্টা পর অটো-রিমুভ)। অডিও প্রমাণ বা অন্তত ১ জন রেসপন্ডার থাকলে প্রেরক সুরক্ষিত থাকেন। শুধু সত্যিকারের বিপদে SOS পাঠান।"
                     } else {
-                        "Only 1 False vote is allowed per account. Reaching 3+ False reports does NOT immediately delete an SOS (it auto-expires after 24 hours). Verified 5s audio/video evidence or 1+ responder 100% shields the victim's Trust Points."
+                        "Each account can report an SOS as false once. Reports never delete an SOS (it expires after 24h). Audio evidence or at least one responder protects the sender. Only send SOS in a real emergency."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF78350F)

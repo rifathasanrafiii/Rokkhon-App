@@ -74,55 +74,165 @@ test("Authenticated user can create clinical blood_request with hemoglobin, prob
   );
 });
 
-test("3x Hardware SOS Alert requires silent camera/audio blackbox attachment", async () => {
-  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+function sosDoc(uid, overrides = {}) {
   const now = new Date();
+  return {
+    userId: uid,
+    senderName: "Rahim Uddin",
+    bloodGroup: "O+",
+    emergencyType: "ROAD_DANGER",
+    district: "Mirpur 10, Dhaka",
+    latitude: 23.8069,
+    longitude: 90.3687,
+    hasLiveCameraVerification: false,
+    hasLiveAudioVerification: true,
+    peakAudioDecibels: 74,
+    triggerMethod: "3X_POWER_BUTTON",
+    verificationNote: "Mic audio attached (74 dB peak)",
+    bleBeaconHash: "BLE-98AF",
+    status: "ACTIVE",
+    responderCount: 0,
+    falseAlarmReports: 0,
+    networkKey: "BD_ROKKHON",
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
 
+function bloodRequestDoc(uid, overrides = {}) {
+  const now = new Date();
+  return {
+    userId: uid,
+    requesterName: "Nadia Islam",
+    patientName: "Tahmid Hasan",
+    bloodGroup: "O-",
+    unitsNeeded: 2,
+    hemoglobinLevel: "6.5 g/dL",
+    patientProblem: "Dengue",
+    hospitalName: "Dhaka Medical College Hospital",
+    wardCabinNumber: "Ward 14, Bed 09",
+    neededDateTime: "Now",
+    district: "Shahbagh, Dhaka",
+    contactPhone: "+8801711000000",
+    urgencyLevel: "CRITICAL",
+    latitude: 23.7389,
+    longitude: 90.3948,
+    status: "OPEN",
+    respondersCount: 0,
+    networkKey: "BD_ROKKHON",
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+async function seed(path, data) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(path).set(data);
+  });
+}
+
+function vote(db, parentPath, markerCollection, voterUid, counterField, nextCount = 1) {
+  const now = new Date();
+  const batch = db.batch();
+  batch.set(db.doc(`${parentPath}/${markerCollection}/${voterUid}`), {
+    userId: voterUid,
+    createdAt: now,
+  });
+  batch.update(db.doc(parentPath), {
+    [counterField]: nextCount,
+    updatedAt: now,
+  });
+  return batch.commit();
+}
+
+test("SOS can be sent without mic/camera evidence (victims without permission still need help)", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  await assertSucceeds(
+    aliceDb.collection("sos_alerts").doc("sos_no_evidence").set(
+      sosDoc(ALICE_UID, { hasLiveAudioVerification: false, peakAudioDecibels: 0, verificationNote: "No audio evidence" })
+    )
+  );
+  await assertSucceeds(aliceDb.collection("sos_alerts").doc("sos_with_audio").set(sosDoc(ALICE_UID)));
+});
+
+test("SOS responder and false votes: one per account, never by the sender", async () => {
+  await seed("sos_alerts/sos_vote_1", sosDoc(ALICE_UID));
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+
+  // A bare counter bump without a marker is rejected.
   await assertFails(
-    aliceDb.collection("sos_alerts").doc("sos_unverified_1").set({
-      userId: ALICE_UID,
-      senderName: "Rahim Uddin",
-      bloodGroup: "O+",
-      emergencyType: "ROAD_DANGER",
-      district: "Mirpur 10, Dhaka",
-      latitude: 23.8069,
-      longitude: 90.3687,
-      hasLiveCameraVerification: false,
-      hasLiveAudioVerification: false,
-      peakAudioDecibels: 0,
-      triggerMethod: "3X_POWER_BUTTON",
-      verificationNote: "Unverified tap",
-      bleBeaconHash: "BLE-98AF",
-      status: "ACTIVE",
-      responderCount: 0,
-      falseAlarmReports: 0,
-      networkKey: "BD_ROKKHON",
-      createdAt: now,
-      updatedAt: now,
+    bobDb.doc("sos_alerts/sos_vote_1").update({
+      responderCount: 1,
+      updatedAt: new Date(),
     })
   );
+  await assertSucceeds(vote(bobDb, "sos_alerts/sos_vote_1", "responders", BOB_UID, "responderCount", 1));
+  // Second vote from the same account is rejected.
+  await assertFails(vote(bobDb, "sos_alerts/sos_vote_1", "responders", BOB_UID, "responderCount", 2));
+  await assertSucceeds(vote(bobDb, "sos_alerts/sos_vote_1", "false_reports", BOB_UID, "falseAlarmReports", 1));
+  await assertFails(vote(bobDb, "sos_alerts/sos_vote_1", "false_reports", BOB_UID, "falseAlarmReports", 2));
+  // The sender cannot vote on their own SOS.
+  await assertFails(vote(aliceDb, "sos_alerts/sos_vote_1", "responders", ALICE_UID, "responderCount", 2));
+  // Nobody can write a marker for someone else.
+  await assertFails(vote(bobDb, "sos_alerts/sos_vote_1", "responders", "carol_789", "responderCount", 2));
+});
 
+test("Blood pledge: one per account, requester cannot inflate the count", async () => {
+  await seed("blood_requests/req_pledge_1", bloodRequestDoc(ALICE_UID));
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+
+  await assertSucceeds(vote(bobDb, "blood_requests/req_pledge_1", "pledges", BOB_UID, "respondersCount", 1));
+  await assertFails(vote(bobDb, "blood_requests/req_pledge_1", "pledges", BOB_UID, "respondersCount", 2));
+  await assertFails(
+    aliceDb.doc("blood_requests/req_pledge_1").update({
+      respondersCount: 50,
+      updatedAt: new Date(),
+    })
+  );
+  // Requester can still close the request.
   await assertSucceeds(
-    aliceDb.collection("sos_alerts").doc("sos_verified_1").set({
-      userId: ALICE_UID,
-      senderName: "Rahim Uddin",
-      bloodGroup: "O+",
-      emergencyType: "ROAD_DANGER",
-      district: "Mirpur 10, Dhaka",
-      latitude: 23.8069,
-      longitude: 90.3687,
-      hasLiveCameraVerification: true,
-      hasLiveAudioVerification: true,
-      peakAudioDecibels: 74,
-      triggerMethod: "3X_POWER_BUTTON",
-      verificationNote: "Auto 3s Silent Cam + Audio Blackbox Attached",
-      bleBeaconHash: "BLE-98AF",
-      status: "ACTIVE",
-      responderCount: 0,
-      falseAlarmReports: 0,
-      networkKey: "BD_ROKKHON",
-      createdAt: now,
-      updatedAt: now,
+    aliceDb.doc("blood_requests/req_pledge_1").update({
+      status: "FULFILLED",
+      updatedAt: new Date(),
+    })
+  );
+});
+
+test("Donors cannot set or raise their own trust score", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const now = new Date();
+  const base = {
+    userId: ALICE_UID,
+    displayName: "Alice",
+    bloodGroup: "A+",
+    isAvailableDonor: true,
+    district: "Uttara, Dhaka",
+    contactPhone: "01711111111",
+    latitude: 23.87,
+    longitude: 90.39,
+    lastDonationDate: "",
+    trustScore: 100,
+    verifiedSosCount: 0,
+    networkKey: "BD_ROKKHON",
+    createdAt: now,
+    updatedAt: now,
+  };
+  await assertFails(aliceDb.doc(`donor_nodes/${ALICE_UID}`).set({ ...base, verifiedSosCount: 50 }));
+  await assertSucceeds(aliceDb.doc(`donor_nodes/${ALICE_UID}`).set(base));
+  await assertFails(
+    aliceDb.doc(`donor_nodes/${ALICE_UID}`).update({
+      verifiedSosCount: 9,
+      updatedAt: new Date(),
+    })
+  );
+  await assertSucceeds(
+    aliceDb.doc(`donor_nodes/${ALICE_UID}`).update({
+      isAvailableDonor: false,
+      updatedAt: new Date(),
     })
   );
 });

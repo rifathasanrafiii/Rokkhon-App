@@ -9,23 +9,23 @@ import android.media.MediaRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.log10
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * 5-Second Audio & Video Blackbox Recorder and Player for Rokkhon SOS.
- * - Captures 5 seconds of real microphone PCM audio + decibel waveform bars during SOS trigger.
- * - Plays back the 5-second audio clip via Android AudioTrack alongside synchronized 5-second
- *   video frame progress so nearby responders can listen to and inspect the 5-second evidence.
+ * 5-second microphone "blackbox" for Rokkhon SOS.
+ * - Records real microphone PCM while an SOS is being prepared and reports the measured level.
+ * - Never invents evidence: when the mic is unavailable or permission is denied,
+ *   [isAudioVerified] stays false and the level stays 0.
+ * - Clips live only on the sender's device (they are not uploaded), so playback is only
+ *   possible for alerts recorded on this phone; [hasLocalClip] tells the UI which ones.
  */
 class LiveAudioVerifier {
 
@@ -44,12 +44,11 @@ class LiveAudioVerifier {
     private val _playbackProgressSeconds = MutableStateFlow(0f)
     val playbackProgressSeconds: StateFlow<Float> = _playbackProgressSeconds.asStateFlow()
 
-    private val _waveformSamples = MutableStateFlow(
-        listOf(58, 66, 74, 82, 88, 79, 85, 91, 76, 84, 72, 80, 89, 77, 68, 75, 83, 86, 78, 71)
-    )
+    private val _waveformSamples = MutableStateFlow<List<Int>>(emptyList())
     val waveformSamples: StateFlow<List<Int>> = _waveformSamples.asStateFlow()
 
     private val recordedPcmByAlertId = ConcurrentHashMap<String, ShortArray>()
+    @Volatile
     private var latestFiveSecondBuffer: ShortArray? = null
 
     private var recordingJob: Job? = null
@@ -61,80 +60,75 @@ class LiveAudioVerifier {
     fun startLiveMonitoring(scope: CoroutineScope) {
         stopLiveMonitoring()
         _peakDecibels.value = 0
+        _currentDecibels.value = 0
         _isAudioVerified.value = false
+        _waveformSamples.value = emptyList()
+        latestFiveSecondBuffer = null
 
         recordingJob = scope.launch(Dispatchers.IO) {
-            val sampleRate = SAMPLE_RATE
-            val totalFiveSecSamples = sampleRate * 5
+            val totalFiveSecSamples = SAMPLE_RATE * 5
             val fiveSecCapture = ShortArray(totalFiveSecSamples)
             var writeCursor = 0
-            val dynamicBars = mutableListOf<Int>()
+            val dynamicBars = ArrayDeque<Int>()
 
             val bufferSize = AudioRecord.getMinBufferSize(
-                sampleRate,
+                SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT
-            ).coerceAtLeast(1024)
+            ).coerceAtLeast(SAMPLE_RATE / 10)
 
             try {
                 val recorder = AudioRecord(
                     MediaRecorder.AudioSource.MIC,
-                    sampleRate,
+                    SAMPLE_RATE,
                     AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,
-                    bufferSize
+                    bufferSize * 2
                 )
-
-                if (recorder.state == AudioRecord.STATE_INITIALIZED) {
-                    audioRecord = recorder
-                    recorder.startRecording()
-                    val buffer = ShortArray(bufferSize)
-
-                    while (isActive) {
-                        val readCount = recorder.read(buffer, 0, buffer.size)
-                        if (readCount > 0) {
-                            var sum = 0.0
-                            for (i in 0 until readCount) {
-                                val sample = buffer[i]
-                                sum += sample * sample
-                                if (writeCursor < totalFiveSecSamples) {
-                                    fiveSecCapture[writeCursor++] = sample
-                                }
-                            }
-                            val rms = sqrt(sum / readCount)
-                            val db = if (rms > 1.0) {
-                                (20 * log10(rms)).toInt().coerceIn(42, 118)
-                            } else {
-                                68
-                            }
-                            _currentDecibels.value = db
-                            if (db > _peakDecibels.value) {
-                                _peakDecibels.value = db
-                            }
-                            _isAudioVerified.value = true
-
-                            if (dynamicBars.size < 20) {
-                                dynamicBars.add(db)
-                            } else {
-                                dynamicBars.removeAt(0)
-                                dynamicBars.add(db)
-                            }
-                            _waveformSamples.value = dynamicBars.toList()
-                            latestFiveSecondBuffer = fiveSecCapture
-                        }
-                        delay(100L)
-                    }
-                } else {
-                    _currentDecibels.value = 74
-                    _peakDecibels.value = 84
-                    _isAudioVerified.value = true
+                if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+                    recorder.release()
+                    return@launch
                 }
+                audioRecord = recorder
+                recorder.startRecording()
+                // ~100 ms per read; read() blocks, so no extra delay is needed (a delay would drop audio).
+                val buffer = ShortArray(SAMPLE_RATE / 10)
+
+                while (isActive) {
+                    val readCount = recorder.read(buffer, 0, buffer.size)
+                    if (readCount <= 0) continue
+                    var sum = 0.0
+                    for (i in 0 until readCount) {
+                        val sample = buffer[i]
+                        sum += sample.toDouble() * sample
+                        if (writeCursor < totalFiveSecSamples) {
+                            fiveSecCapture[writeCursor++] = sample
+                        }
+                    }
+                    val rms = sqrt(sum / readCount)
+                    // dB relative to 1 LSB of 16-bit PCM (0..~90). Not calibrated SPL, but real and comparable.
+                    val db = if (rms > 1.0) (20 * log10(rms)).toInt().coerceIn(0, 120) else 0
+                    _currentDecibels.value = db
+                    if (db > _peakDecibels.value) _peakDecibels.value = db
+                    _isAudioVerified.value = true
+
+                    dynamicBars.addLast(db)
+                    if (dynamicBars.size > 20) dynamicBars.removeFirst()
+                    _waveformSamples.value = dynamicBars.toList()
+                    latestFiveSecondBuffer = fiveSecCapture.copyOf(writeCursor)
+                }
+            } catch (_: SecurityException) {
+                // Microphone permission denied: leave evidence flags false.
             } catch (_: Exception) {
-                _currentDecibels.value = 72
-                _peakDecibels.value = 82
-                _isAudioVerified.value = true
+                // Microphone busy/unavailable: leave evidence flags false.
             }
         }
+    }
+
+    /** True when real microphone samples with audible content were captured. */
+    fun hasCapturedAudio(): Boolean {
+        val buf = latestFiveSecondBuffer ?: return false
+        return buf.count { abs(it.toInt()) > 200 } > 200
     }
 
     fun attachLatestFiveSecondClipToAlert(alertId: String) {
@@ -144,39 +138,33 @@ class LiveAudioVerifier {
         }
     }
 
+    fun moveClip(fromAlertId: String, toAlertId: String) {
+        recordedPcmByAlertId.remove(fromAlertId)?.let { recordedPcmByAlertId[toAlertId] = it }
+    }
+
+    fun hasLocalClip(alertId: String): Boolean = recordedPcmByAlertId.containsKey(alertId)
+
     /**
-     * Plays the 5-second recorded audio and video frame timeline for the given SOS alert.
+     * Plays the real 5-second clip for [alertId] if it was recorded on this device.
+     * Returns false (and plays nothing) when no clip exists.
      */
     fun togglePlayFiveSecondClip(
         scope: CoroutineScope,
-        alertId: String,
-        peakDb: Int = 82
-    ) {
+        alertId: String
+    ): Boolean {
         if (_activePlaybackAlertId.value == alertId) {
             stopPlayback()
-            return
+            return true
         }
+        val pcmToPlay = recordedPcmByAlertId[alertId] ?: return false
         stopPlayback()
         _activePlaybackAlertId.value = alertId
         _playbackProgressSeconds.value = 0f
 
         playbackJob = scope.launch(Dispatchers.IO) {
-            val sampleRate = SAMPLE_RATE
-            val durationSeconds = 5
-            val totalSamples = sampleRate * durationSeconds
-            val storedPcm = recordedPcmByAlertId[alertId]
-
-            // Check if stored PCM has audible signal; otherwise synthesize audible 5s emergency blackbox audio
-            val hasAudibleSignal = storedPcm != null && storedPcm.count { kotlin.math.abs(it.toInt()) > 200 } > 500
-            val pcmToPlay = if (hasAudibleSignal && storedPcm != null) {
-                storedPcm
-            } else {
-                buildAudibleFiveSecondBlackboxPcm(sampleRate, durationSeconds, peakDb)
-            }
-
             try {
                 val minBuf = AudioTrack.getMinBufferSize(
-                    sampleRate,
+                    SAMPLE_RATE,
                     AudioFormat.CHANNEL_OUT_MONO,
                     AudioFormat.ENCODING_PCM_16BIT
                 ).coerceAtLeast(2048)
@@ -191,7 +179,7 @@ class LiveAudioVerifier {
                     .setAudioFormat(
                         AudioFormat.Builder()
                             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(sampleRate)
+                            .setSampleRate(SAMPLE_RATE)
                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                             .build()
                     )
@@ -202,27 +190,21 @@ class LiveAudioVerifier {
                 audioTrack = track
                 track.play()
 
-                val chunkSize = sampleRate / 10 // 100ms chunks (50 steps for 5.0 seconds)
+                val chunkSize = SAMPLE_RATE / 10
                 var offset = 0
-                var step = 0
-                while (isActive && offset < totalSamples && offset < pcmToPlay.size) {
+                while (isActive && offset < pcmToPlay.size) {
                     val count = minOf(chunkSize, pcmToPlay.size - offset)
                     track.write(pcmToPlay, offset, count)
                     offset += count
-                    step += 1
-                    _playbackProgressSeconds.value = (step * 0.1f).coerceAtMost(5.0f)
+                    _playbackProgressSeconds.value = (offset.toFloat() / SAMPLE_RATE).coerceAtMost(5.0f)
                 }
             } catch (_: Exception) {
-                // Fallback timer in case AudioTrack isn't available in headless environment
-                for (step in 1..50) {
-                    if (!isActive) break
-                    delay(100L)
-                    _playbackProgressSeconds.value = (step * 0.1f).coerceAtMost(5.0f)
-                }
+                // Audio output unavailable; nothing to play.
             } finally {
                 stopPlayback()
             }
         }
+        return true
     }
 
     fun stopPlayback() {
@@ -236,26 +218,6 @@ class LiveAudioVerifier {
         audioTrack = null
         _activePlaybackAlertId.value = null
         _playbackProgressSeconds.value = 0f
-    }
-
-    private fun buildAudibleFiveSecondBlackboxPcm(
-        sampleRate: Int,
-        durationSeconds: Int,
-        peakDb: Int
-    ): ShortArray {
-        val total = sampleRate * durationSeconds
-        val out = ShortArray(total)
-        val gain = (peakDb.coerceIn(60, 100) / 100.0) * 6500.0
-        for (i in 0 until total) {
-            val t = i.toDouble() / sampleRate
-            // Realistic emergency blackbox telemetry pulse + ambient street harmonic
-            val beaconGate = if ((t * 2.0).toInt() % 2 == 0) 1.0 else 0.35
-            val carrier = sin(2.0 * PI * 520.0 * t) * 0.55 +
-                sin(2.0 * PI * 780.0 * t) * 0.30 +
-                sin(2.0 * PI * 195.0 * t) * 0.15
-            out[i] = (carrier * gain * beaconGate).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
-        }
-        return out
     }
 
     fun stopLiveMonitoring() {
