@@ -7,16 +7,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -40,8 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.AppLanguage
 import com.example.data.model.NotificationKind
 import com.example.data.model.RokkhonNotificationItem
@@ -76,15 +70,11 @@ fun RokkhonNotificationCenterDialog(
     val fresh = shown.filter { !it.isRead }
     val earlier = shown.filter { it.isRead }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-    ) {
+    FullScreenDialog(onDismiss = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.White)
-                .windowInsetsPadding(WindowInsets.statusBars)
                 .testTag("notification_center_dialog")
         ) {
             Row(
@@ -126,7 +116,7 @@ fun RokkhonNotificationCenterDialog(
             )
             LazyColumn(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-                modifier = Modifier.weight(1f).navigationBarsPadding()
+                modifier = Modifier.weight(1f)
             ) {
                 if (falseSosPenaltyCount > 0 || falseSosWarningBanner != null) {
                     item(key = "warning") {

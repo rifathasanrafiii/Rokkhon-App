@@ -55,6 +55,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.runtime.SideEffect
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -66,6 +72,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.RokkhonPalette
 import kotlinx.coroutines.delay
 
@@ -466,17 +473,20 @@ fun RokkhonBottomSheet(
         },
         modifier = Modifier.testTag(testTag)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, bottom = 18.dp)
-        ) {
-            if (title != null) {
-                Text(text = title, fontSize = 22.sp, color = RokkhonPalette.Ink, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(14.dp))
+        // The sheet is its own window, which resets density: re-apply the app's compact scale.
+        MyApplicationTheme {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, bottom = 18.dp)
+            ) {
+                if (title != null) {
+                    Text(text = title, fontSize = 20.sp, color = RokkhonPalette.Ink, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                content()
             }
-            content()
         }
     }
 }
@@ -503,6 +513,30 @@ fun BloodGroupGrid(selected: String?, onSelect: (String) -> Unit, modifier: Modi
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * A full-screen page in its own window (area picker, request form, notifications). The window sits
+ * between the status bar and the navigation bar on every phone, so nothing ends up behind the
+ * gesture bar, and it resizes for the keyboard. No dim: the page covers the screen anyway.
+ */
+@Composable
+fun FullScreenDialog(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true)
+    ) {
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect {
+            window?.setDimAmount(0f)
+            @Suppress("DEPRECATION")
+            window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+        // A dialog window resets density: re-apply the app's compact scale and font cap.
+        MyApplicationTheme {
+            Box(modifier = Modifier.fillMaxSize().background(Color.White)) { content() }
         }
     }
 }

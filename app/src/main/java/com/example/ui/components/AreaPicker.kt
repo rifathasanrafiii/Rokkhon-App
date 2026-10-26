@@ -21,16 +21,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -64,8 +60,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.example.data.model.AppLanguage
 import com.example.data.model.AreaDetect
@@ -150,16 +144,12 @@ fun BangladeshAreaPickerDialog(
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-    ) {
+    FullScreenDialog(onDismiss = onDismiss) {
         BackHandler { back() }
         Column(
             Modifier
                 .fillMaxSize()
                 .background(Color.White)
-                .windowInsetsPadding(WindowInsets.statusBars)
                 .testTag("bangladesh_area_picker_dialog")
         ) {
             Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -337,7 +327,7 @@ private fun DivisionGrid(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.navigationBarsPadding()
+        modifier = Modifier
     ) {
         item(span = { GridItemSpan(2) }) {
             Row(Modifier.padding(top = 6.dp, bottom = 2.dp, start = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -380,7 +370,7 @@ private fun DivisionGrid(
 private fun DistrictList(bn: Boolean, division: AreaDivision, selectedDistrict: AreaDistrict?, onOpen: (AreaDistrict) -> Unit) {
     LazyColumn(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
-        modifier = Modifier.navigationBarsPadding()
+        modifier = Modifier
     ) {
         item { GroupLabel(if (bn) "জেলা" else "Districts") }
         itemsIndexed(division.districts, key = { _, d -> d.nameEn }) { i, d ->
@@ -424,7 +414,7 @@ private fun DistrictList(bn: Boolean, division: AreaDivision, selectedDistrict: 
 private fun PlaceList(bn: Boolean, district: AreaDistrict, selected: BangladeshDistrict, onPick: (BangladeshDistrict) -> Unit) {
     LazyColumn(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
-        modifier = Modifier.navigationBarsPadding()
+        modifier = Modifier
     ) {
         item {
             PlaceRow(
@@ -468,7 +458,7 @@ private fun SearchResults(bn: Boolean, query: String, selected: BangladeshDistri
     val results = remember(query) { BANGLADESH_AREAS.filter { it.matchesSearch(query) }.take(80) }
     LazyColumn(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
-        modifier = Modifier.navigationBarsPadding()
+        modifier = Modifier
     ) {
         if (results.isEmpty()) {
             item {

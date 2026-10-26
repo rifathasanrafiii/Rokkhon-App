@@ -8,6 +8,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -67,9 +68,16 @@ val IosShapes = Shapes(
 /**
  * The design mockup is drawn denser than default Android sizing: every card, pill and caption
  * is about 0.86x (like Android's "small" display size). Scaling once here gives every screen
- * the same proportions; the user's own font-size setting still applies on top.
+ * the same proportions.
+ *
+ * Phones differ a lot: some ship with a large "display size" (fewer dp across) or a big font
+ * setting, which broke rows and pushed buttons off screen. So the scale also guarantees at least
+ * [DESIGN_WIDTH_DP] of layout width, and the font setting is honoured only up to [MAX_FONT_SCALE].
  */
 private const val ROKKHON_UI_SCALE = 0.86f
+private const val DESIGN_WIDTH_DP = 400f
+private const val MIN_FONT_SCALE = 0.9f
+private const val MAX_FONT_SCALE = 1.1f
 
 @Composable
 fun MyApplicationTheme(
@@ -79,9 +87,14 @@ fun MyApplicationTheme(
 ) {
     val colorScheme = if (darkTheme) IosDarkColorScheme else IosLightColorScheme
     val baseDensity = LocalDensity.current
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp.toFloat()
+    val scale = if (screenWidthDp > 0f) minOf(ROKKHON_UI_SCALE, screenWidthDp / DESIGN_WIDTH_DP).coerceAtLeast(0.7f) else ROKKHON_UI_SCALE
 
     CompositionLocalProvider(
-        LocalDensity provides Density(baseDensity.density * ROKKHON_UI_SCALE, baseDensity.fontScale)
+        LocalDensity provides Density(
+            baseDensity.density * scale,
+            baseDensity.fontScale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)
+        )
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

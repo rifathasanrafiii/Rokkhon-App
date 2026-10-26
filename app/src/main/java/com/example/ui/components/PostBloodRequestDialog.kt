@@ -9,17 +9,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,8 +41,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.AppLanguage
 import com.example.data.model.AreaDetect
 import com.example.data.model.BANGLADESH_AREAS
@@ -125,17 +118,12 @@ fun PostBloodRequestDialog(
         )
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-    ) {
+    FullScreenDialog(onDismiss = onDismiss) {
         BackHandler(onBack = onDismiss)
         Column(
             Modifier
                 .fillMaxSize()
                 .background(Color.White)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .imePadding()
         ) {
             Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 RoundIconButton(icon = UIcons.Close, onClick = onDismiss, contentDescription = if (bn) "বন্ধ" else "Close", testTag = "blood_request_close")
@@ -144,7 +132,7 @@ fun PostBloodRequestDialog(
                     Text(if (bn) "রক্তের আবেদন" else "Request blood", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
                     Text(
                         if (bn) "মিলে যাওয়া ডোনাররা সাথে সাথে জানবেন" else "Matching donors nearby are told right away",
-                        fontSize = 12.sp, color = RokkhonPalette.Muted
+                        fontSize = 12.sp, color = RokkhonPalette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -173,6 +161,7 @@ fun PostBloodRequestDialog(
                             Text(
                                 if (bn) "${bnDigits(unitsNeeded)} ব্যাগ" else "$unitsNeeded bag" + if (unitsNeeded > 1) "s" else "",
                                 fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink,
+                                maxLines = 1, softWrap = false,
                                 modifier = Modifier.weight(1f).testTag("bags_value"),
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
@@ -291,7 +280,7 @@ fun PostBloodRequestDialog(
             }
 
             // Summary + send, always in reach.
-            Column(Modifier.fillMaxWidth().background(Color.White).navigationBarsPadding()) {
+            Column(Modifier.fillMaxWidth().background(Color.White)) {
                 Box(Modifier.fillMaxWidth().height(1.dp).background(RokkhonPalette.Divider))
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -304,7 +293,7 @@ fun PostBloodRequestDialog(
                             }
                             Text(
                                 (if (bn) "${bnDigits(unitsNeeded)} ব্যাগ" else "$unitsNeeded bag" + if (unitsNeeded > 1) "s" else "") + " · " + urgencies[urgency].first,
-                                fontSize = 13.sp, color = RokkhonPalette.Muted
+                                fontSize = 13.sp, color = RokkhonPalette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis
                             )
                         }
                         Text(if (bn) area.nameBn else area.nameEn, fontSize = 12.sp, color = RokkhonPalette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
