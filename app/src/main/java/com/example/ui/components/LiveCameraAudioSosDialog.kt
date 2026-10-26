@@ -12,6 +12,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,9 +78,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.media.LiveAudioVerifier
 import com.example.data.model.AppLanguage
-import androidx.compose.foundation.clickable
-import com.example.data.model.triggerMethodLabel
 import com.example.data.model.SOS_EMERGENCY_TYPES
+import com.example.data.model.triggerMethodLabel
 import com.example.ui.theme.IosSystemBlue
 import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemRed
