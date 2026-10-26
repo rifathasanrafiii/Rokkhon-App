@@ -32,16 +32,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -80,6 +70,7 @@ import com.example.data.media.LiveAudioVerifier
 import com.example.data.model.AppLanguage
 import com.example.data.model.SOS_EMERGENCY_TYPES
 import com.example.data.model.triggerMethodLabel
+import com.example.ui.icons.UIcons
 import com.example.ui.theme.IosSystemBlue
 import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemRed
@@ -234,7 +225,7 @@ fun LiveCameraAudioSosDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Warning,
+                                imageVector = UIcons.Warning,
                                 contentDescription = "5s Blackbox SOS",
                                 tint = IosSystemRed
                             )
@@ -248,7 +239,7 @@ fun LiveCameraAudioSosDialog(
                                     "5-Second Audio SOS"
                                 },
                                 style = MaterialTheme.typography.titleLarge,
-                                color = Color(0xFF1A0F12),
+                                color = Color(0xFF000000),
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
@@ -258,7 +249,7 @@ fun LiveCameraAudioSosDialog(
                                     "Records 5 s of audio, then sends by itself • you can cancel"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF756568)
+                                color = Color(0xFF5E5E5E)
                             )
                         }
                     }
@@ -270,7 +261,7 @@ fun LiveCameraAudioSosDialog(
                         },
                         modifier = Modifier.testTag("close_sos_dialog_button")
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF1A0F12))
+                        Icon(UIcons.Close, contentDescription = "Close", tint = Color(0xFF000000))
                     }
                 }
 
@@ -291,7 +282,7 @@ fun LiveCameraAudioSosDialog(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.FlashOn,
+                                imageVector = UIcons.FlashOn,
                                 contentDescription = null,
                                 tint = IosSystemRed,
                                 modifier = Modifier.size(18.dp)
@@ -380,7 +371,7 @@ fun LiveCameraAudioSosDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
-                                imageVector = Icons.Default.CameraAlt,
+                                imageVector = UIcons.CameraAlt,
                                 contentDescription = "Camera Feed",
                                 tint = Color.White,
                                 modifier = Modifier.size(36.dp)
@@ -411,7 +402,7 @@ fun LiveCameraAudioSosDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Videocam,
+                                imageVector = UIcons.Videocam,
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(14.dp)
@@ -439,7 +430,7 @@ fun LiveCameraAudioSosDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.CheckCircle,
+                                imageVector = UIcons.CheckCircle,
                                 contentDescription = "Verified",
                                 tint = IosSystemGreen,
                                 modifier = Modifier.size(16.dp)
@@ -458,11 +449,11 @@ fun LiveCameraAudioSosDialog(
 
                 // 5-Second Ambient Audio Blackbox Recorder Card
                 Surface(
-                    color = Color(0xFFFAF6F6),
+                    color = Color(0xFFF6F6F6),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(18.dp))
+                        .border(1.dp, Color(0xFFE8E8E8), RoundedCornerShape(18.dp))
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(
@@ -472,7 +463,7 @@ fun LiveCameraAudioSosDialog(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Default.Mic,
+                                    imageVector = UIcons.Mic,
                                     contentDescription = "5s Audio Recorder",
                                     tint = IosSystemGreen,
                                     modifier = Modifier.size(20.dp)
@@ -485,7 +476,7 @@ fun LiveCameraAudioSosDialog(
                                         "5-Second Audio Capture (${currentDb} dB)"
                                     },
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = Color(0xFF1A0F12),
+                                    color = Color(0xFF000000),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -506,7 +497,7 @@ fun LiveCameraAudioSosDialog(
                                 "The 5-second audio stays on your phone as evidence. Others only see that evidence exists and how loud it was."
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF756568)
+                            color = Color(0xFF5E5E5E)
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -521,7 +512,7 @@ fun LiveCameraAudioSosDialog(
                                 .height(10.dp)
                         ) {
                             drawRoundRect(
-                                color = Color(0xFFE2D5D7),
+                                color = Color(0xFFE2E2E2),
                                 size = size,
                                 cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
                             )
@@ -550,7 +541,7 @@ fun LiveCameraAudioSosDialog(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.LocationOn,
+                                imageVector = UIcons.LocationOn,
                                 contentDescription = null,
                                 tint = IosSystemBlue,
                                 modifier = Modifier.size(18.dp)
@@ -563,7 +554,7 @@ fun LiveCameraAudioSosDialog(
                                     "Emergency type & live GPS"
                                 },
                                 style = MaterialTheme.typography.labelLarge,
-                                color = Color(0xFF1A0F12),
+                                color = Color(0xFF000000),
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -596,7 +587,7 @@ fun LiveCameraAudioSosDialog(
                                             "HARASSMENT" -> if (language == AppLanguage.BENGALI) "হয়রানি" else "Harassment"
                                             else -> if (language == AppLanguage.BENGALI) "রাস্তায়" else "Road"
                                         },
-                                        color = if (selected) Color.White else Color(0xFF1A0F12),
+                                        color = if (selected) Color.White else Color(0xFF000000),
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         maxLines = 1,
@@ -629,7 +620,7 @@ fun LiveCameraAudioSosDialog(
                         Text(
                             text = if (language == AppLanguage.BENGALI) "বাতিল করুন" else "Cancel",
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1A0F12)
+                            color = Color(0xFF000000)
                         )
                     }
 
@@ -662,7 +653,7 @@ fun LiveCameraAudioSosDialog(
                             .height(54.dp)
                             .testTag("confirm_dispatch_sos_button")
                     ) {
-                        Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Icon(UIcons.Shield, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = if (countdownSeconds > 0) {

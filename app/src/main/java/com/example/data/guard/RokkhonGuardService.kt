@@ -13,14 +13,15 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.example.FeatureFlags
 import com.example.MainActivity
 import com.example.R
 import com.example.data.ble.BleSosMeshManager
 import com.example.data.location.LocationTracker
+import com.example.data.model.AppLanguage
 import com.example.data.model.SOS_NOTIFICATION_RADIUS_KM
 import com.example.data.model.calculateDistanceKm
 import com.example.data.model.emergencyTypeLabel
-import com.example.data.model.AppLanguage
 import com.example.data.notification.RokkhonNotificationHelper
 import com.example.data.repository.RokkhonRepository
 import com.google.firebase.FirebaseApp
@@ -61,7 +62,7 @@ class RokkhonGuardService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (!GuardPrefs.isEnabled(this) || !promoteToForeground()) {
+        if (!FeatureFlags.SOS_ENABLED || !GuardPrefs.isEnabled(this) || !promoteToForeground()) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -197,7 +198,7 @@ class RokkhonGuardService : Service() {
             BleSosMeshManager.hasBlePermissions(context) || LocationTracker(context).hasPermission()
 
         fun start(context: Context) {
-            if (!GuardPrefs.isEnabled(context) || !canRun(context)) return
+            if (!FeatureFlags.SOS_ENABLED || !GuardPrefs.isEnabled(context) || !canRun(context)) return
             try {
                 context.startService(Intent(context, RokkhonGuardService::class.java))
             } catch (e: Exception) {

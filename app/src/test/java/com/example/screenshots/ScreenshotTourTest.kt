@@ -44,7 +44,7 @@ import java.io.FileOutputStream
  * Renders every main page of the app with Robolectric's native graphics and writes PNGs.
  * Opt-in: set ROKKHON_SCREENSHOTS=/path/to/output/dir, e.g.
  *   ROKKHON_SCREENSHOTS=$PWD/screenshots ./gradlew testDebugUnitTest --tests '*ScreenshotTourTest*'
- * Without Firebase config the app runs in demo mode, so the shots show the sample community.
+ * Without Firebase config there is no data source, so lists show their empty states.
  * The street map is a WebView and cannot render here; the built-in vector map underneath is shown instead.
  */
 @RunWith(RobolectricTestRunner::class)

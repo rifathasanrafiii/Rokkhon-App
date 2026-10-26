@@ -3,8 +3,8 @@
 
     <!-- Android 12+ system splash: the logo badge on the same crimson as the app's own splash. -->
     <style name="Theme.MyApplication.Launch">
-        <item name="android:windowBackground">@color/rokkhon_crimson</item>
-        <item name="android:windowSplashScreenBackground">@color/rokkhon_crimson</item>
+        <item name="android:windowBackground">@color/rokkhon_splash</item>
+        <item name="android:windowSplashScreenBackground">@color/rokkhon_splash</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
     </style>
 </resources>

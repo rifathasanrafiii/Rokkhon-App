@@ -1,11 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -30,20 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.Gavel
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -64,10 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -98,10 +76,9 @@ import com.example.ui.components.StatTile
 import com.example.ui.components.compassDirectionLabel
 import com.example.ui.components.enterOnce
 import com.example.ui.components.springClick
-import com.example.ui.theme.IosSystemBlue
+import com.example.ui.icons.UIcons
 import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemRed
-import com.example.ui.theme.PinCrimsonRed
 import com.example.ui.theme.RokkhonPalette
 import com.example.ui.viewmodel.MapLayerFilter
 import com.example.ui.viewmodel.RokkhonTab
@@ -194,36 +171,25 @@ fun SosGuardianAndBleScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color(0xFF8B1124), Color(0xFF4B0A15), RokkhonPalette.HeroBottom)
-                        )
-                    )
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 30.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 22.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Shield, contentDescription = null, tint = Color(0xFFFFB3C0), modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (bn) "জরুরি SOS" else "Emergency SOS",
-                            color = Color.White,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
+                    Text(
+                        text = if (bn) "নিরাপত্তা" else "Safety",
+                        color = RokkhonPalette.Ink,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.14f))
-                            .border(0.8.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                            .background(RokkhonPalette.Subtle)
                             .springClick {
                                 viewModel.setMapLayerFilter(MapLayerFilter.SOS_ALERTS_ONLY)
                                 viewModel.selectTab(RokkhonTab.RADAR_MAP)
@@ -231,67 +197,93 @@ fun SosGuardianAndBleScreen(
                             .testTag("open_find_sos_tab_button"),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Map, contentDescription = if (bn) "ম্যাপে সবার SOS" else "All SOS on map", tint = Color.White, modifier = Modifier.size(18.dp))
+                        Icon(UIcons.Map, contentDescription = if (bn) "ম্যাপে সবার SOS" else "All SOS on map", tint = RokkhonPalette.Ink, modifier = Modifier.size(20.dp))
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                SosPulseButton(language = language, live = sosLive, onClick = onOpenSosVerification)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatusDot(ok = guardEnabled && networkOk)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = (if (guardEnabled) (if (bn) "১ কি.মি. নেটওয়ার্ক চালু" else "1 km network on") else (if (bn) "নেটওয়ার্ক বন্ধ" else "Network off")) + "  ·  " + dirText,
+                        color = RokkhonPalette.Muted,
+                        fontSize = 14.sp,
+                        modifier = Modifier.springClick(pressedScale = 0.98f) { showNetworkSheet = true }
+                    )
+                }
 
-                // Status chips: GPS direction and the Bluetooth network, at a glance
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeroStatusChip(
-                        icon = Icons.Default.MyLocation,
-                        text = dirText,
-                        ok = true,
-                        onClick = { showLocationSheet = true }
-                    )
-                    HeroStatusChip(
-                        icon = Icons.Default.Bluetooth,
-                        text = if (guardEnabled) (if (bn) "নেটওয়ার্ক চালু" else "Network on") else (if (bn) "নেটওয়ার্ক বন্ধ" else "Network off"),
-                        ok = guardEnabled && networkOk,
-                        onClick = { showNetworkSheet = true }
-                    )
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // The one red thing on the page
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(RokkhonPalette.Sos)
+                        .springClick(pressedScale = 0.97f, onClick = onOpenSosVerification)
+                        .padding(horizontal = 20.dp, vertical = 22.dp)
+                        .testTag("sos_guardian_main_button"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(UIcons.FlashOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (sosLive) (if (bn) "SOS চালু আছে" else "SOS is live") else (if (bn) "SOS পাঠান" else "Send SOS"),
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (bn) "৫ সেকেন্ডের অডিও প্রমাণসহ" else "With 5-second audio proof",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 13.sp
+                        )
+                    }
+                    Icon(UIcons.ArrowForward, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                 }
 
                 AnimatedVisibility(visible = sosLive) {
-                    Surface(
-                        color = IosSystemGreen,
-                        shape = CircleShape,
+                    Row(
                         modifier = Modifier
-                            .padding(top = 16.dp)
+                            .padding(top = 10.dp)
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.Black)
                             .springClick { viewModel.resolveOwnSos(myActiveSos?.id ?: activeUserSosId ?: "") }
-                            .testTag("turn_off_my_sos_button")
+                            .testTag("turn_off_my_sos_button"),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(19.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (bn) "আমি নিরাপদ — SOS বন্ধ করুন" else "I'm safe — stop SOS",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
+                        Icon(UIcons.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (bn) "আমি নিরাপদ — SOS বন্ধ করুন" else "I'm safe — stop SOS", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(22.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     QuickAction(
-                        icon = Icons.Default.Call,
+                        icon = UIcons.Call,
                         label = if (bn) "৯৯৯" else "999",
                         onClick = { RokkhonIntents.dial(context, BD_NATIONAL_EMERGENCY_NUMBER, language) },
                         modifier = Modifier.weight(1f),
                         testTag = "call_999_button"
                     )
                     QuickAction(
-                        icon = Icons.Default.Sms,
+                        icon = UIcons.Sms,
                         label = if (bn) "পরিবারকে SMS" else "SMS family",
                         onClick = {
                             if (trustedContacts.isEmpty()) {
@@ -304,14 +296,14 @@ fun SosGuardianAndBleScreen(
                         testTag = "sms_trusted_contacts_button"
                     )
                     QuickAction(
-                        icon = Icons.Default.Share,
+                        icon = UIcons.Share,
                         label = if (bn) "লোকেশন" else "Location",
                         onClick = { RokkhonIntents.shareLocation(context, viewModel.currentUserName, userLat, userLng, language) },
                         modifier = Modifier.weight(1f),
                         testTag = "share_location_button"
                     )
                     QuickAction(
-                        icon = Icons.Default.People,
+                        icon = UIcons.People,
                         label = if (bn) "কন্টাক্ট" else "Contacts",
                         onClick = { showContactsEditor = true },
                         modifier = Modifier.weight(1f),
@@ -322,20 +314,14 @@ fun SosGuardianAndBleScreen(
         }
 
         item(key = "sos_sheet") {
-            Box(modifier = Modifier.fillMaxWidth().background(RokkhonPalette.HeroBottom)) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                        .background(RokkhonPalette.Background)
-                        .padding(start = 16.dp, end = 16.dp, top = 18.dp)
-                ) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         StatTile(
-                            icon = Icons.Default.Shield,
+                            icon = UIcons.Shield,
                             value = bleBeacons.size,
                             label = if (bn) "১ কি.মি. নেটওয়ার্ক" else "1 km network",
-                            accent = if (guardEnabled) IosSystemGreen else RokkhonPalette.Crimson,
+                            accent = RokkhonPalette.Ink,
                             onClick = { showNetworkSheet = true },
                             modifier = Modifier.weight(1f).enterOnce(0),
                             testTag = "sos_network_tile",
@@ -343,7 +329,7 @@ fun SosGuardianAndBleScreen(
                                 Switch(
                                     checked = guardEnabled,
                                     onCheckedChange = { viewModel.setGuardNetworkEnabled(it) },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = IosSystemGreen),
+                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color.Black),
                                     modifier = Modifier
                                         .scale(0.78f)
                                         .height(30.dp)
@@ -352,11 +338,11 @@ fun SosGuardianAndBleScreen(
                             }
                         )
                         StatTile(
-                            icon = Icons.Default.People,
+                            icon = UIcons.People,
                             value = trustedContacts.size,
                             valueSuffix = "/3",
                             label = if (bn) "বিশ্বস্ত কন্টাক্ট" else "Trusted contacts",
-                            accent = RokkhonPalette.Crimson,
+                            accent = RokkhonPalette.Primary,
                             onClick = { showContactsEditor = true },
                             modifier = Modifier.weight(1f).enterOnce(1),
                             testTag = "trusted_contacts_card"
@@ -365,20 +351,20 @@ fun SosGuardianAndBleScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         StatTile(
-                            icon = Icons.Default.MyLocation,
+                            icon = UIcons.MyLocation,
                             value = 0,
                             valueText = dirText,
                             label = if (sosLive) (if (bn) "লাইভ শেয়ার হচ্ছে" else "Sharing live") else (if (bn) "লাইভ লোকেশন" else "Live location"),
-                            accent = if (sosLive) PinCrimsonRed else IosSystemBlue,
+                            accent = if (sosLive) RokkhonPalette.Sos else RokkhonPalette.Ink,
                             onClick = { showLocationSheet = true },
                             modifier = Modifier.weight(1f).enterOnce(2),
                             testTag = "sos_location_tile"
                         )
                         StatTile(
-                            icon = Icons.Default.Gavel,
+                            icon = UIcons.Gavel,
                             value = falseSosPenaltyCount,
                             label = if (bn) "ভুয়া রিপোর্ট নীতি" else "False report policy",
-                            accent = RokkhonPalette.Amber,
+                            accent = RokkhonPalette.Ink,
                             onClick = { showPolicySheet = true },
                             modifier = Modifier.weight(1f).enterOnce(3),
                             testTag = "sos_policy_tile"
@@ -440,7 +426,7 @@ fun SosGuardianAndBleScreen(
             item(key = "history_empty") {
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                     RokkhonEmptyState(
-                        icon = Icons.Default.History,
+                        icon = UIcons.History,
                         title = if (bn) "এখনো কোনো SOS পাঠাননি" else "No SOS sent yet",
                         body = if (bn) "আপনার পাঠানো সব SOS এখানে থাকবে।" else "Every SOS you send is kept here.",
                         testTag = "sos_empty_history"
@@ -482,7 +468,7 @@ fun SosGuardianAndBleScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier.size(10.dp).clip(CircleShape)
-                        .background(if (guardEnabled && networkOk) IosSystemGreen else RokkhonPalette.Crimson)
+                        .background(if (guardEnabled && networkOk) IosSystemGreen else RokkhonPalette.Primary)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -495,7 +481,7 @@ fun SosGuardianAndBleScreen(
                 Switch(
                     checked = guardEnabled,
                     onCheckedChange = { viewModel.setGuardNetworkEnabled(it) },
-                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = IosSystemGreen)
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color.Black)
                 )
             }
             Spacer(modifier = Modifier.height(14.dp))
@@ -561,8 +547,8 @@ fun SosGuardianAndBleScreen(
             }
             Spacer(modifier = Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SheetAction(Icons.Default.Refresh, if (bn) "রিফ্রেশ" else "Refresh", Modifier.weight(1f)) { viewModel.refreshGpsLocation() }
-                SheetAction(Icons.Default.Share, if (bn) "শেয়ার" else "Share", Modifier.weight(1f)) {
+                SheetAction(UIcons.Refresh, if (bn) "রিফ্রেশ" else "Refresh", Modifier.weight(1f)) { viewModel.refreshGpsLocation() }
+                SheetAction(UIcons.Share, if (bn) "শেয়ার" else "Share", Modifier.weight(1f)) {
                     RokkhonIntents.shareLocation(context, viewModel.currentUserName, userLat, userLng, language)
                 }
             }
@@ -645,10 +631,10 @@ private fun TrustedContactsEditorDialog(
                     .verticalScroll(rememberScrollState())
                     .padding(20.dp)
             ) {
-                Text(if (bn) "বিশ্বস্ত কন্টাক্ট (সর্বোচ্চ ৩)" else "Trusted contacts (up to 3)", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A0F12))
+                Text(if (bn) "বিশ্বস্ত কন্টাক্ট (সর্বোচ্চ ৩)" else "Trusted contacts (up to 3)", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF000000))
                 Text(
                     text = if (bn) "এই নম্বরগুলো শুধু আপনার ফোনে থাকে, কোথাও আপলোড হয় না।" else "Stored only on this phone, never uploaded.",
-                    color = Color(0xFF756568),
+                    color = Color(0xFF5E5E5E),
                     fontSize = 12.5.sp
                 )
                 for (i in 0 until RokkhonViewModel.MAX_TRUSTED_CONTACTS) {
@@ -678,7 +664,7 @@ private fun TrustedContactsEditorDialog(
                 Spacer(modifier = Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(onClick = onDismiss, shape = CircleShape, modifier = Modifier.weight(1f)) {
-                        Text(if (bn) "বাতিল" else "Cancel", color = Color(0xFF1A0F12))
+                        Text(if (bn) "বাতিল" else "Cancel", color = Color(0xFF000000))
                     }
                     Button(
                         onClick = {
@@ -699,75 +685,14 @@ private fun TrustedContactsEditorDialog(
 }
 
 
-/** The big round SOS button with two soft rings pulsing out of it. */
 @Composable
-private fun SosPulseButton(language: AppLanguage, live: Boolean, onClick: () -> Unit) {
-    val bn = language == AppLanguage.BENGALI
-    val pulse = rememberInfiniteTransition(label = "sos_pulse")
-    val p by pulse.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(durationMillis = 2000, easing = LinearEasing)),
-        label = "sos_pulse_phase"
-    )
-    val ringColor = if (live) Color(0xFFFF6B7D) else Color.White
+private fun StatusDot(ok: Boolean) {
     Box(
         modifier = Modifier
-            .size(230.dp)
-            .drawBehind {
-                val base = 84.dp.toPx()
-                listOf(p, (p + 0.5f) % 1f).forEach { phase ->
-                    drawCircle(
-                        color = ringColor.copy(alpha = (1f - phase) * 0.22f),
-                        radius = base + phase * 30.dp.toPx(),
-                        center = center
-                    )
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(168.dp)
-                .shadow(18.dp, CircleShape, ambientColor = PinCrimsonRed, spotColor = PinCrimsonRed)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Color(0xFFFF3B52), Color(0xFFD0142C))))
-                .border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                .springClick(pressedScale = 0.92f, onClick = onClick)
-                .testTag("sos_guardian_main_button"),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.FlashOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
-                Text("SOS", color = Color.White, fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.ExtraBold)
-                Text(
-                    text = if (live) (if (bn) "লাইভ চালু" else "Live") else (if (bn) "চাপ দিন" else "Tap"),
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeroStatusChip(icon: ImageVector, text: String, ok: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
+            .size(8.dp)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.12f))
-            .border(1.dp, Color.White.copy(alpha = 0.16f), CircleShape)
-            .springClick(onClick = onClick)
-            .padding(horizontal = 11.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(if (ok) Color(0xFF4ADE80) else Color(0xFFFBBF24)))
-        Spacer(modifier = Modifier.width(6.dp))
-        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-    }
+            .background(if (ok) RokkhonPalette.Positive else RokkhonPalette.Faint)
+    )
 }
 
 @Composable
@@ -775,7 +700,7 @@ private fun SheetStat(value: Int, label: String, modifier: Modifier = Modifier) 
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(RokkhonPalette.Background)
+            .background(RokkhonPalette.Subtle)
             .padding(14.dp)
     ) {
         RollingNumber(value = value, fontSize = 24.sp, color = RokkhonPalette.Ink)
@@ -788,7 +713,7 @@ private fun SheetStatText(value: String, label: String, modifier: Modifier = Mod
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(RokkhonPalette.Background)
+            .background(RokkhonPalette.Subtle)
             .padding(14.dp)
     ) {
         Text(value, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = RokkhonPalette.Ink, maxLines = 1)
@@ -802,13 +727,13 @@ private fun SheetAction(icon: ImageVector, label: String, modifier: Modifier = M
         modifier = modifier
             .height(48.dp)
             .clip(CircleShape)
-            .background(RokkhonPalette.BlushSoft)
+            .background(RokkhonPalette.Subtle)
             .springClick(onClick = onClick),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = RokkhonPalette.Crimson, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = RokkhonPalette.Primary, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text(label, color = RokkhonPalette.Crimson, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = RokkhonPalette.Primary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }

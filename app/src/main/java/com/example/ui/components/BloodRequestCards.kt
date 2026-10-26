@@ -16,21 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bloodtype
-import androidx.compose.material.icons.filled.BluetoothConnected
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.LocalHospital
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MedicalServices
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -59,12 +44,12 @@ import com.example.data.model.daysUntilEligible
 import com.example.data.model.triggerMethodLabel
 import com.example.ui.components.RokkhonIntents
 import com.example.ui.components.SelectedMapPin
+import com.example.ui.icons.UIcons
 import com.example.ui.theme.IosSystemBlue
 import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemOrange
 import com.example.ui.theme.IosSystemRed
 import com.example.ui.theme.LifelineBlush
-import com.example.ui.theme.PinCrimsonRed
 
 /**
  * Available Donor Card using clean vector icons (Zero Emojis).
@@ -90,7 +75,7 @@ fun LifelineResponderCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(22.dp))
+            .border(1.dp, Color(0xFFE8E8E8), RoundedCornerShape(22.dp))
     ) {
         Row(
             modifier = Modifier
@@ -130,12 +115,12 @@ fun LifelineResponderCard(
                     Text(
                         text = donor.displayName,
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF1A0F12),
+                        color = Color(0xFF000000),
                         fontWeight = FontWeight.ExtraBold
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Icon(
-                        imageVector = Icons.Default.Verified,
+                        imageVector = UIcons.Verified,
                         contentDescription = "Verified Donor",
                         tint = IosSystemRed,
                         modifier = Modifier.size(17.dp)
@@ -145,21 +130,21 @@ fun LifelineResponderCard(
                 Text(
                     text = "${donor.bloodGroup} Blood Group • Trust ${donor.trustScore}%",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF5A4A4E),
+                    color = Color(0xFF545454),
                     fontWeight = FontWeight.SemiBold
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.LocationOn,
+                        imageVector = UIcons.LocationOn,
                         contentDescription = null,
-                        tint = Color(0xFF756568),
+                        tint = Color(0xFF5E5E5E),
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = donor.district,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF756568)
+                        color = Color(0xFF5E5E5E)
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -192,7 +177,7 @@ fun LifelineResponderCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Call,
+                        imageVector = UIcons.Call,
                         contentDescription = "Contact",
                         tint = IosSystemRed,
                         modifier = Modifier.size(15.dp)
@@ -231,7 +216,7 @@ fun ClinicalBloodRequestCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(22.dp))
+            .border(1.dp, Color(0xFFE8E8E8), RoundedCornerShape(22.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -273,13 +258,13 @@ fun ClinicalBloodRequestCard(
                                 "Patient: ${req.patientName}"
                             },
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color(0xFF1A0F12),
+                            color = Color(0xFF000000),
                             fontWeight = FontWeight.ExtraBold
                         )
                         Text(
                             text = "${req.hospitalName} • ${req.district}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF5A4A4E),
+                            color = Color(0xFF545454),
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -303,11 +288,11 @@ fun ClinicalBloodRequestCard(
 
             // Clinical Metrics Box (Hemoglobin, Bags, Problem, Ward/Cabin)
             Surface(
-                color = Color(0xFFFAF6F6),
+                color = Color(0xFFF6F6F6),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(0.8.dp, Color(0xFFEDE2E4), RoundedCornerShape(16.dp))
+                    .border(0.8.dp, Color(0xFFE8E8E8), RoundedCornerShape(16.dp))
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
@@ -321,7 +306,7 @@ fun ClinicalBloodRequestCard(
                             Text(
                                 text = if (language == AppLanguage.BENGALI) "হিমোগ্লোবিন (Hb)" else "Hemoglobin (Hb)",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF756568)
+                                color = Color(0xFF5E5E5E)
                             )
                             Text(
                                 text = req.hemoglobinLevel.ifBlank { "6.5 g/dL" },
@@ -334,12 +319,12 @@ fun ClinicalBloodRequestCard(
                             Text(
                                 text = if (language == AppLanguage.BENGALI) "রক্তের পরিমাণ" else "Blood Bags",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF756568)
+                                color = Color(0xFF5E5E5E)
                             )
                             Text(
                                 text = "${req.unitsNeeded} ব্যাগ (Bags)",
                                 style = MaterialTheme.typography.titleSmall,
-                                color = Color(0xFF1A0F12),
+                                color = Color(0xFF000000),
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
@@ -347,22 +332,22 @@ fun ClinicalBloodRequestCard(
                             Text(
                                 text = if (language == AppLanguage.BENGALI) "ওয়ার্ড / কেবিন" else "Ward / Cabin",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF756568)
+                                color = Color(0xFF5E5E5E)
                             )
                             Text(
                                 text = req.wardCabinNumber.ifBlank { "Emergency Ward" },
                                 style = MaterialTheme.typography.titleSmall,
-                                color = Color(0xFF1A0F12),
+                                color = Color(0xFF000000),
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
-                    HorizontalDivider(thickness = 0.5.dp, color = Color(0xFFEDE2E4))
+                    HorizontalDivider(thickness = 0.5.dp, color = Color(0xFFE8E8E8))
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.MedicalServices,
+                            imageVector = UIcons.MedicalServices,
                             contentDescription = null,
                             tint = IosSystemRed,
                             modifier = Modifier.size(15.dp)
@@ -375,7 +360,7 @@ fun ClinicalBloodRequestCard(
                                 "Diagnosis: ${req.patientProblem}"
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF1A0F12),
+                            color = Color(0xFF000000),
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -404,7 +389,7 @@ fun ClinicalBloodRequestCard(
                         .testTag("donate_blood_button_${req.id}")
                 ) {
                     Icon(
-                        imageVector = if (hasPledged) Icons.Default.CheckCircle else Icons.Default.Bloodtype,
+                        imageVector = if (hasPledged) UIcons.CheckCircle else UIcons.Bloodtype,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
@@ -432,7 +417,7 @@ fun ClinicalBloodRequestCard(
                     onClick = onCallClick,
                     shape = CircleShape
                 ) {
-                    Icon(Icons.Default.Call, contentDescription = "Call", modifier = Modifier.size(16.dp), tint = IosSystemRed)
+                    Icon(UIcons.Call, contentDescription = "Call", modifier = Modifier.size(16.dp), tint = IosSystemRed)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(if (language == AppLanguage.BENGALI) "কল" else "Call", color = IosSystemRed, fontWeight = FontWeight.Bold)
                 }
@@ -446,7 +431,7 @@ fun ClinicalBloodRequestCard(
                         .testTag("share_blood_request_button_${req.id}")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Share,
+                        imageVector = UIcons.Share,
                         contentDescription = if (language == AppLanguage.BENGALI) "শেয়ার করুন" else "Share",
                         tint = IosSystemRed,
                         modifier = Modifier.size(16.dp)
@@ -460,15 +445,15 @@ fun ClinicalBloodRequestCard(
                         modifier = Modifier.testTag("delete_fulfilled_request_button_${req.id}")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.DeleteOutline,
+                            imageVector = UIcons.DeleteOutline,
                             contentDescription = "Remove Post",
-                            tint = Color(0xFF4A0E17),
+                            tint = Color(0xFF1F1F1F),
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (language == AppLanguage.BENGALI) "ম্যানেজড" else "Managed",
-                            color = Color(0xFF4A0E17),
+                            color = Color(0xFF1F1F1F),
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -512,15 +497,15 @@ internal fun MapPinDetailOverlayCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     val iconVec = when (pin) {
-                        is SelectedMapPin.DonorPin -> Icons.Default.Bloodtype
-                        is SelectedMapPin.RequestPin -> Icons.Default.LocalHospital
-                        is SelectedMapPin.SosPin -> Icons.Default.Shield
-                        is SelectedMapPin.BlePin -> Icons.Default.BluetoothConnected
+                        is SelectedMapPin.DonorPin -> UIcons.Bloodtype
+                        is SelectedMapPin.RequestPin -> UIcons.LocalHospital
+                        is SelectedMapPin.SosPin -> UIcons.Shield
+                        is SelectedMapPin.BlePin -> UIcons.BluetoothConnected
                     }
                     Icon(
                         imageVector = iconVec,
                         contentDescription = null,
-                        tint = Color(0xFFFFB3C0),
+                        tint = Color(0xFFDDDDDD),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -537,7 +522,7 @@ internal fun MapPinDetailOverlayCard(
                             Text(
                                 text = "${pin.request.bloodGroup} • ${pin.request.unitsNeeded} ব্যাগ (Hb: ${pin.request.hemoglobinLevel})",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = Color(0xFFFFB3C0),
+                                color = Color(0xFFDDDDDD),
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -545,7 +530,7 @@ internal fun MapPinDetailOverlayCard(
                             Text(
                                 text = "SOS: ${pin.alert.senderName} (${triggerMethodLabel(pin.alert.triggerMethod, language)})",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = Color(0xFFFFB3C0),
+                                color = Color(0xFFDDDDDD),
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -560,7 +545,7 @@ internal fun MapPinDetailOverlayCard(
                     }
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(UIcons.Close, contentDescription = "Dismiss", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
 
@@ -577,10 +562,10 @@ internal fun MapPinDetailOverlayCard(
                             RokkhonIntents.dial(context, pin.donor.contactPhone, language)
                         },
                         shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = PinCrimsonRed),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(UIcons.Call, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Call Donor (${pin.donor.contactPhone})")
                     }
@@ -597,7 +582,7 @@ internal fun MapPinDetailOverlayCard(
                         enabled = !hasPledged,
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = PinCrimsonRed,
+                            containerColor = Color.Black,
                             disabledContainerColor = IosSystemGreen.copy(alpha = 0.25f),
                             disabledContentColor = Color.White
                         ),
@@ -630,7 +615,7 @@ internal fun MapPinDetailOverlayCard(
                             colors = ButtonDefaults.buttonColors(containerColor = IosSystemBlue),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Icon(UIcons.Videocam, contentDescription = null, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(if (language == AppLanguage.BENGALI) "অডিও" else "5s Audio")
                         }
@@ -642,7 +627,7 @@ internal fun MapPinDetailOverlayCard(
                                 colors = ButtonDefaults.buttonColors(containerColor = IosSystemGreen),
                                 modifier = Modifier.weight(1.2f)
                             ) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Icon(UIcons.CheckCircle, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(if (language == AppLanguage.BENGALI) "নিরাপদ" else "Mark Safe")
                             }

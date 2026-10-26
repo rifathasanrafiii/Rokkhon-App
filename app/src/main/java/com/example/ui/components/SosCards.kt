@@ -17,20 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.DirectionsRun
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.ReportProblem
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -63,6 +49,7 @@ import com.example.data.model.SosAlert
 import com.example.data.model.emergencyTypeLabel
 import com.example.data.model.triggerMethodLabel
 import com.example.ui.components.RokkhonIntents
+import com.example.ui.icons.UIcons
 import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemOrange
 import com.example.ui.theme.IosSystemRed
@@ -104,7 +91,7 @@ fun SosPostCardItem(
         colors = CardDefaults.cardColors(
             containerColor = when {
                 isDisputedSos && !isShieldedVictim -> Color(0xFFFFF3E0)
-                isHistoryItem -> Color(0xFFFAF7F8)
+                isHistoryItem -> Color(0xFFF6F6F6)
                 else -> Color.White
             }
         ),
@@ -117,7 +104,7 @@ fun SosPostCardItem(
                     isDisputedSos && !isShieldedVictim -> IosSystemOrange
                     isMySos && !isHistoryItem -> IosSystemRed.copy(alpha = 0.45f)
                     alert.falseAlarmReports > 0L -> IosSystemOrange.copy(alpha = 0.6f)
-                    else -> Color(0xFFEDE2E4)
+                    else -> Color(0xFFE8E8E8)
                 },
                 shape = RoundedCornerShape(22.dp)
             )
@@ -149,9 +136,9 @@ fun SosPostCardItem(
                     ) {
                         Icon(
                             imageVector = when {
-                                isDisputedSos && !isShieldedVictim -> Icons.Default.ReportProblem
-                                isHistoryItem -> Icons.Default.CheckCircle
-                                else -> Icons.Default.Shield
+                                isDisputedSos && !isShieldedVictim -> UIcons.ReportProblem
+                                isHistoryItem -> UIcons.CheckCircle
+                                else -> UIcons.Shield
                             },
                             contentDescription = null,
                             tint = when {
@@ -168,7 +155,7 @@ fun SosPostCardItem(
                             text = "${alert.senderName} • ${emergencyTypeLabel(alert.emergencyType, language)}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
-                            color = if (isHistoryItem) Color(0xFF1A0F12) else IosSystemRed
+                            color = if (isHistoryItem) Color(0xFF000000) else IosSystemRed
                         )
                         val distLabel = if (distanceKm != null) {
                             val zoneTag = if (distanceKm <= SOS_NOTIFICATION_RADIUS_KM) "1km Alert Zone" else "Area Map"
@@ -179,7 +166,7 @@ fun SosPostCardItem(
                         Text(
                             text = "${alert.district} • ${triggerMethodLabel(alert.triggerMethod, language)}$distLabel",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF756568)
+                            color = Color(0xFF5E5E5E)
                         )
                     }
                 }
@@ -198,7 +185,7 @@ fun SosPostCardItem(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = if (isDisputedSos && isShieldedVictim) Icons.Default.Verified else Icons.Default.Videocam,
+                            imageVector = if (isDisputedSos && isShieldedVictim) UIcons.Verified else UIcons.Videocam,
                             contentDescription = null,
                             tint = when {
                                 isDisputedSos && isShieldedVictim -> IosSystemGreen
@@ -235,7 +222,7 @@ fun SosPostCardItem(
             Text(
                 text = alert.verificationNote,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF1A0F12)
+                color = Color(0xFF000000)
             )
 
             // Live status strip showing Nearby responders count, False report count & 24h auto-remove status
@@ -263,7 +250,7 @@ fun SosPostCardItem(
                 }
 
                 Surface(
-                    color = if (alert.falseAlarmReports > 0L) IosSystemOrange.copy(alpha = 0.18f) else Color(0xFFF5ECEE),
+                    color = if (alert.falseAlarmReports > 0L) IosSystemOrange.copy(alpha = 0.18f) else Color(0xFFF3F3F3),
                     shape = CircleShape
                 ) {
                     Text(
@@ -273,7 +260,7 @@ fun SosPostCardItem(
                             "False Count: ${alert.falseAlarmReports}"
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (alert.falseAlarmReports > 0L) Color(0xFFB45309) else Color(0xFF5A4A4E),
+                        color = if (alert.falseAlarmReports > 0L) Color(0xFFB45309) else Color(0xFF545454),
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
@@ -281,7 +268,7 @@ fun SosPostCardItem(
 
                 if (!isHistoryItem) {
                     Surface(
-                        color = Color(0xFFF3EDF7),
+                        color = Color(0xFFF3F3F3),
                         shape = CircleShape
                     ) {
                         Text(
@@ -291,7 +278,7 @@ fun SosPostCardItem(
                                 "Auto-expires: ${hoursRemaining}h"
                             },
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF4A0E17),
+                            color = Color(0xFF1F1F1F),
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
@@ -355,7 +342,7 @@ fun SosPostCardItem(
                             .fillMaxWidth()
                             .testTag("resolve_sos_safe_button_${alert.id}")
                     ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(UIcons.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (language == AppLanguage.BENGALI) {
@@ -388,7 +375,7 @@ fun SosPostCardItem(
                                 .testTag("sos_nearby_respond_button_${alert.id}")
                         ) {
                             Icon(
-                                imageVector = if (hasRespondedNearby) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.DirectionsRun,
+                                imageVector = if (hasRespondedNearby) UIcons.CheckCircle else UIcons.DirectionsRun,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -421,7 +408,7 @@ fun SosPostCardItem(
                                 .testTag("sos_false_report_button_${alert.id}")
                         ) {
                             Icon(
-                                imageVector = if (hasReportedFalse) Icons.Default.CheckCircle else Icons.Default.ReportProblem,
+                                imageVector = if (hasReportedFalse) UIcons.CheckCircle else UIcons.ReportProblem,
                                 contentDescription = "Report False SOS",
                                 tint = if (hasReportedFalse) Color(0xFF9CA3AF) else IosSystemOrange,
                                 modifier = Modifier.size(16.dp)
@@ -461,7 +448,7 @@ fun SosPostCardItem(
                                 .weight(1f)
                                 .testTag("sos_directions_button_${alert.id}")
                         ) {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = IosSystemRed, modifier = Modifier.size(15.dp))
+                            Icon(UIcons.LocationOn, contentDescription = null, tint = IosSystemRed, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = if (language == AppLanguage.BENGALI) "ম্যাপ ডিরেকশন" else "Directions",
@@ -477,11 +464,11 @@ fun SosPostCardItem(
                                 .weight(1f)
                                 .testTag("sos_share_button_${alert.id}")
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = null, tint = Color(0xFF1A0F12), modifier = Modifier.size(15.dp))
+                            Icon(UIcons.Share, contentDescription = null, tint = Color(0xFF000000), modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = if (language == AppLanguage.BENGALI) "শেয়ার SOS" else "Share SOS",
-                                color = Color(0xFF1A0F12),
+                                color = Color(0xFF000000),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -496,7 +483,7 @@ fun SosPostCardItem(
                             "Note: 1 False vote per account. Alerts stay active for 24h even with 3+ False reports, and verified 5s evidence shields the sender's Trust Points."
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF756568)
+                        color = Color(0xFF5E5E5E)
                     )
                 }
             }
@@ -533,7 +520,7 @@ fun FiveSecondEvidencePlayerCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Mic,
+                        imageVector = UIcons.Mic,
                         contentDescription = null,
                         tint = IosSystemGreen,
                         modifier = Modifier.size(16.dp)
@@ -563,7 +550,7 @@ fun FiveSecondEvidencePlayerCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                            imageVector = if (isPlaying) UIcons.Stop else UIcons.PlayArrow,
                             contentDescription = "Play 5s audio",
                             tint = Color.White,
                             modifier = Modifier.size(16.dp)
@@ -665,7 +652,7 @@ fun FiveSecondEvidencePlayerCard(
                         val barColor = if (isPlaying && frac <= activeFraction) {
                             IosSystemGreen
                         } else {
-                            Color(0xFFFFB3C0).copy(alpha = 0.55f)
+                            Color(0xFFDDDDDD).copy(alpha = 0.55f)
                         }
                         drawRoundRect(
                             color = barColor,
@@ -697,7 +684,7 @@ fun FiveSecondEvidencePlayerCard(
                         "TAP FOR SOS DETAILS"
                     },
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isPlaying) IosSystemGreen else Color(0xFFFFB3C0),
+                    color = if (isPlaying) IosSystemGreen else Color(0xFFDDDDDD),
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -734,7 +721,7 @@ fun SosVideoAudioInspectorDialog(
         ) {
             Card(
                 shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A0F12)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF000000)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(28.dp))
@@ -758,7 +745,7 @@ fun SosVideoAudioInspectorDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Videocam,
+                                    imageVector = UIcons.Videocam,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
@@ -779,7 +766,7 @@ fun SosVideoAudioInspectorDialog(
                                 Text(
                                     text = "${alert.senderName} • ${alert.district} (${triggerMethodLabel(alert.triggerMethod, language)})",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFFFFB3C0)
+                                    color = Color(0xFFDDDDDD)
                                 )
                             }
                         }
@@ -791,7 +778,7 @@ fun SosVideoAudioInspectorDialog(
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.12f))
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
+                            Icon(UIcons.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
                         }
                     }
 
@@ -820,13 +807,13 @@ fun SosVideoAudioInspectorDialog(
                                 strokeWidth = 1.5.dp.toPx()
                             )
                             drawLine(
-                                color = Color(0xFF3D222B),
+                                color = Color(0xFF333333),
                                 start = Offset(w * 0.5f, h * 0.62f),
                                 end = Offset(w * 0.12f, h),
                                 strokeWidth = 2.dp.toPx()
                             )
                             drawLine(
-                                color = Color(0xFF3D222B),
+                                color = Color(0xFF333333),
                                 start = Offset(w * 0.5f, h * 0.62f),
                                 end = Offset(w * 0.88f, h),
                                 strokeWidth = 2.dp.toPx()
@@ -913,7 +900,7 @@ fun SosVideoAudioInspectorDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                    imageVector = if (isPlaying) UIcons.Stop else UIcons.PlayArrow,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
@@ -955,7 +942,7 @@ fun SosVideoAudioInspectorDialog(
                                 colors = ButtonDefaults.buttonColors(containerColor = IosSystemGreen),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(UIcons.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (language == AppLanguage.BENGALI) {
@@ -973,7 +960,7 @@ fun SosVideoAudioInspectorDialog(
                                 colors = ButtonDefaults.buttonColors(containerColor = IosSystemGreen),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.DirectionsRun, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(UIcons.DirectionsRun, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (language == AppLanguage.BENGALI) {

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.RokkhonPalette
 
 /**
  * What a list shows when Firestore has nothing for it yet. Real data only means lists really are
@@ -50,7 +51,7 @@ fun RokkhonEmptyState(
         shape = RoundedCornerShape(22.dp),
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFFEEE6E8), RoundedCornerShape(22.dp))
+            .border(1.dp, RokkhonPalette.Border, RoundedCornerShape(22.dp))
             .testTag(testTag)
     ) {
         Column(
@@ -63,22 +64,22 @@ fun RokkhonEmptyState(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFFDF0F1))
-                    .border(1.dp, Color(0xFFF5D8DC), CircleShape),
+                    .background(RokkhonPalette.Subtle)
+                    .border(1.dp, Color.Transparent, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFF5DDE0)),
+                        .background(RokkhonPalette.Chip),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = Color(0xFFB80F24),
-                        modifier = Modifier.size(21.dp)
+                        tint = RokkhonPalette.Ink,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -86,8 +87,8 @@ fun RokkhonEmptyState(
             Text(
                 text = title,
                 fontSize = 15.5.sp,
-                color = Color(0xFF1A1113),
-                fontWeight = FontWeight.ExtraBold,
+                color = RokkhonPalette.Ink,
+                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -95,13 +96,13 @@ fun RokkhonEmptyState(
                 text = body,
                 fontSize = 12.5.sp,
                 lineHeight = 18.sp,
-                color = Color(0xFF7B6F72),
+                color = RokkhonPalette.Muted,
                 textAlign = TextAlign.Center
             )
             if (actionLabel != null && onAction != null) {
                 Spacer(modifier = Modifier.height(14.dp))
                 Surface(
-                    color = Color(0xFFB80F24),
+                    color = RokkhonPalette.Primary,
                     shape = CircleShape,
                     modifier = Modifier
                         .clip(CircleShape)

@@ -5,6 +5,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.FeatureFlags
 import com.example.data.ble.BleSosMeshManager
 import com.example.data.guard.GuardPrefs
 import com.example.data.guard.MeshAlertNotifier
@@ -29,6 +30,11 @@ import com.example.data.model.isValidBangladeshMobile
 import com.example.data.notification.RokkhonNotificationHelper
 import com.example.data.repository.RokkhonRepository
 import com.google.firebase.Timestamp
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -44,11 +50,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
-import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -426,6 +427,7 @@ class RokkhonViewModel(
         )
 
     private fun notifyNewSosAlerts(list: List<SosAlert>) {
+        if (!FeatureFlags.SOS_ENABLED) return
         val activeAlerts = list.filter { it.status == "ACTIVE" && !it.isExpiredAfter24Hours() && it.id.isNotBlank() }
         if (!sosInitialLoadDone) {
             activeAlerts.mapTo(seenSosAlertIds) { it.id }
@@ -517,7 +519,9 @@ class RokkhonViewModel(
                 )
             }
 
-        items.distinctBy { it.id }.map { it.copy(isRead = it.isRead || it.id in readIds) }
+        items.distinctBy { it.id }
+            .filter { FeatureFlags.SOS_ENABLED || (it.kind != NotificationKind.SOS_ALERT && it.kind != NotificationKind.FALSE_SOS_WARNING) }
+            .map { it.copy(isRead = it.isRead || it.id in readIds) }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000L),
@@ -559,8 +563,10 @@ class RokkhonViewModel(
             }
         }
         locationTracker?.seedInitialCoordinatesIfUnset(_userLatitude.value, _userLongitude.value)
-        MeshAlertNotifier.ensureStarted(appContext)
-        bleMeshManager.startMeshScanning()
+        if (FeatureFlags.SOS_ENABLED) {
+            MeshAlertNotifier.ensureStarted(appContext)
+            bleMeshManager.startMeshScanning()
+        }
         refreshGpsLocation()
         RokkhonGuardService.start(appContext)
 
@@ -637,7 +643,7 @@ class RokkhonViewModel(
 
     /** Called after the user grants Bluetooth / location permissions. */
     fun onPermissionsChanged() {
-        bleMeshManager.startMeshScanning()
+        if (FeatureFlags.SOS_ENABLED) bleMeshManager.startMeshScanning()
         refreshGpsLocation()
         RokkhonGuardService.start(appContext)
     }

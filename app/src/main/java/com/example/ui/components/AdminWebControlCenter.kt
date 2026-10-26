@@ -5,9 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.GppBad
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.icons.UIcons
 import com.example.ui.theme.PinCrimsonRed
 import com.example.ui.viewmodel.RokkhonViewModel
 
@@ -78,7 +76,7 @@ fun AdminEnforcementLockScreen(
                 .widthIn(max = 460.dp),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF121726)),
-            border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFEF4444).copy(alpha = 0.55f))
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFE11900).copy(alpha = 0.55f))
         ) {
             Column(
                 modifier = Modifier
@@ -90,12 +88,12 @@ fun AdminEnforcementLockScreen(
                     modifier = Modifier
                         .size(72.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFEF4444).copy(alpha = 0.16f))
-                        .border(2.dp, Color(0xFFEF4444).copy(alpha = 0.5f), CircleShape),
+                        .background(Color(0xFFE11900).copy(alpha = 0.16f))
+                        .border(2.dp, Color(0xFFE11900).copy(alpha = 0.5f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isDeviceBanned) Icons.Default.Block else Icons.Default.GppBad,
+                        imageVector = if (isDeviceBanned) UIcons.Block else UIcons.GppBad,
                         contentDescription = "Enforcement Alert",
                         tint = Color(0xFFFF5252),
                         modifier = Modifier.size(38.dp)

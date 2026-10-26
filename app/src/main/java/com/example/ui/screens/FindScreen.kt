@@ -23,15 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.LocalHospital
-import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.FeatureFlags
 import com.example.data.model.AppLanguage
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.SosAlert
@@ -71,8 +63,8 @@ import com.example.ui.components.SelectedMapPin
 import com.example.ui.components.SosPostCardItem
 import com.example.ui.components.SosVideoAudioInspectorDialog
 import com.example.ui.components.springClick
+import com.example.ui.icons.UIcons
 import com.example.ui.theme.IosSystemGreen
-import com.example.ui.theme.PinCrimsonRed
 import com.example.ui.theme.RadarObsidianBg
 import com.example.ui.theme.RokkhonPalette
 import com.example.ui.viewmodel.MapLayerFilter
@@ -104,7 +96,9 @@ fun RadarMapHubScreen(
     val userLng by viewModel.userLongitude.collectAsStateWithLifecycle()
     val userBearing by viewModel.userBearing.collectAsStateWithLifecycle()
     val selectedBloodGroup by viewModel.selectedBloodFilter.collectAsStateWithLifecycle()
-    val layerFilter by viewModel.mapLayerFilter.collectAsStateWithLifecycle()
+    val savedLayerFilter by viewModel.mapLayerFilter.collectAsStateWithLifecycle()
+    // With SOS hidden, the SOS layer falls back to donors.
+    val layerFilter = if (!FeatureFlags.SOS_ENABLED && savedLayerFilter == MapLayerFilter.SOS_ALERTS_ONLY) MapLayerFilter.DONORS_ONLY else savedLayerFilter
     val pledgedIds by viewModel.pledgedRequestIds.collectAsStateWithLifecycle()
     val respondedSosIds by viewModel.respondedSosIds.collectAsStateWithLifecycle()
     val reportedFalseSosIds by viewModel.reportedFalseSosIds.collectAsStateWithLifecycle()
@@ -140,7 +134,7 @@ fun RadarMapHubScreen(
     }
 
     // Active SOS alerts stay visible for 24 hours even if falseAlarmReports >= 3 (no immediate auto-removal)
-    val activeSosAlerts = allSosAlerts.filter { alert ->
+    val activeSosAlerts = if (!FeatureFlags.SOS_ENABLED) emptyList() else allSosAlerts.filter { alert ->
         alert.status == "ACTIVE" &&
             !alert.isExpiredAfter24Hours() &&
             (!isAreaFilterEnabled || selectedDistrict.matchesArea(alert.district))
@@ -195,7 +189,7 @@ fun RadarMapHubScreen(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Surface(
-                    color = PinCrimsonRed,
+                    color = Color.Black,
                     shape = CircleShape,
                     modifier = Modifier
                         .border(0.8.dp, Color.White.copy(alpha = 0.28f), CircleShape)
@@ -207,7 +201,7 @@ fun RadarMapHubScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Search,
+                            imageVector = UIcons.Search,
                             contentDescription = "Search All 64 Districts",
                             tint = Color.White,
                             modifier = Modifier.size(13.dp)
@@ -227,7 +221,7 @@ fun RadarMapHubScreen(
                 }
 
                 Surface(
-                    color = if (isAreaAutoDetected) IosSystemGreen else Color(0xFF1A0F12).copy(alpha = 0.9f),
+                    color = if (isAreaAutoDetected) IosSystemGreen else Color(0xFF000000).copy(alpha = 0.9f),
                     shape = CircleShape,
                     modifier = Modifier
                         .border(0.8.dp, Color.White.copy(alpha = 0.22f), CircleShape)
@@ -239,7 +233,7 @@ fun RadarMapHubScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.MyLocation,
+                            imageVector = UIcons.MyLocation,
                             contentDescription = "Auto GPS",
                             tint = Color.White,
                             modifier = Modifier.size(13.dp)
@@ -255,7 +249,7 @@ fun RadarMapHubScreen(
                 }
 
                 Surface(
-                    color = Color(0xFF1A0F12).copy(alpha = 0.9f),
+                    color = Color(0xFF000000).copy(alpha = 0.9f),
                     shape = CircleShape,
                     modifier = Modifier
                         .border(0.8.dp, Color.White.copy(alpha = 0.18f), CircleShape)
@@ -274,7 +268,7 @@ fun RadarMapHubScreen(
                 BANGLADESH_DISTRICTS.take(12).forEach { dist ->
                     val isSel = dist.areaKey == selectedDistrict.areaKey
                     Surface(
-                        color = if (isSel) PinCrimsonRed else Color(0xFF1A0F12).copy(alpha = 0.85f),
+                        color = if (isSel) Color.Black else Color(0xFF000000).copy(alpha = 0.85f),
                         shape = CircleShape,
                         modifier = Modifier.clickable { viewModel.selectDistrict(dist, isManual = true) }
                     ) {
@@ -350,7 +344,7 @@ fun RadarMapHubScreen(
                                 .width(40.dp)
                                 .height(4.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFE2D5D7))
+                                .background(Color(0xFFE2E2E2))
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -372,7 +366,7 @@ fun RadarMapHubScreen(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(if (isAreaAutoDetected) IosSystemGreen else RokkhonPalette.Crimson)
+                                    .background(if (isAreaAutoDetected) IosSystemGreen else RokkhonPalette.Primary)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
@@ -383,14 +377,14 @@ fun RadarMapHubScreen(
                                 maxLines = 1
                             )
                             Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
+                                imageVector = UIcons.KeyboardArrowDown,
                                 contentDescription = "Change Area",
-                                tint = RokkhonPalette.Crimson,
+                                tint = RokkhonPalette.Primary,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
                         RoundIconButton(
-                            icon = Icons.Default.Add,
+                            icon = UIcons.Add,
                             onClick = onOpenBloodRequestDialog,
                             filled = true,
                             contentDescription = if (language == AppLanguage.BENGALI) "রক্তের আবেদন" else "Post request",
@@ -402,10 +396,10 @@ fun RadarMapHubScreen(
 
                     val bnTabs = language == AppLanguage.BENGALI
                     SegmentedControl(
-                        segments = listOf(
-                            Segment("${if (bnTabs) "ডোনার" else "Donors"} ${areaDonors.size}", Icons.Default.People, "map_filter_tab_available_donors"),
-                            Segment("${if (bnTabs) "রোগী" else "Patients"} ${areaOpenRequests.size}", Icons.Default.LocalHospital, "map_filter_tab_patient_requests"),
-                            Segment("SOS ${activeSosAlerts.size}", Icons.Default.Shield, "map_filter_tab_sos_alerts")
+                        segments = listOfNotNull(
+                            Segment("${if (bnTabs) "ডোনার" else "Donors"} ${areaDonors.size}", UIcons.People, "map_filter_tab_available_donors"),
+                            Segment("${if (bnTabs) "রোগী" else "Patients"} ${areaOpenRequests.size}", UIcons.LocalHospital, "map_filter_tab_patient_requests"),
+                            if (FeatureFlags.SOS_ENABLED) Segment("SOS ${activeSosAlerts.size}", UIcons.Shield, "map_filter_tab_sos_alerts") else null
                         ),
                         selectedIndex = when (layerFilter) {
                             MapLayerFilter.BLOOD_REQUESTS_ONLY -> 1
@@ -431,7 +425,7 @@ fun RadarMapHubScreen(
                         if (areaOpenRequests.isEmpty()) {
                             item {
                                 RokkhonEmptyState(
-                                    icon = Icons.Default.LocalHospital,
+                                    icon = UIcons.LocalHospital,
                                     title = if (language == AppLanguage.BENGALI) "কোনো খোলা রক্তের আবেদন নেই" else "No open blood requests",
                                     body = if (language == AppLanguage.BENGALI) "এই এলাকায় এখন কেউ রক্ত খুঁজছেন না। কারও রক্ত লাগলে আবেদন করুন, মিলে যাওয়া ডোনারদের জানানো হবে।" else "Nobody is looking for blood here right now. Post a request and matching donors are notified.",
                                     actionLabel = if (language == AppLanguage.BENGALI) "রক্তের আবেদন করুন" else "Request blood",
@@ -472,7 +466,7 @@ fun RadarMapHubScreen(
                         if (activeSosAlerts.isEmpty()) {
                             item {
                                 RokkhonEmptyState(
-                                    icon = Icons.Default.Shield,
+                                    icon = UIcons.Shield,
                                     title = if (language == AppLanguage.BENGALI) "এখন কোনো সক্রিয় SOS নেই" else "No active SOS right now",
                                     body = if (language == AppLanguage.BENGALI) "এই এলাকাটি এই মুহূর্তে নিরাপদ। বিপদে পড়লে SOS পাঠান, ১ কি.মি.-এর মধ্যে সবাই ব্লুটুথ ও ইন্টারনেটে জানতে পারবে।" else "This area is quiet. If you are in danger, send an SOS and everyone within 1 km is alerted over Bluetooth and internet.",
                                     actionLabel = if (language == AppLanguage.BENGALI) "SOS পাঠান" else "Send SOS",
@@ -522,7 +516,7 @@ fun RadarMapHubScreen(
                         if (areaDonors.isEmpty()) {
                             item {
                                 RokkhonEmptyState(
-                                    icon = Icons.Default.People,
+                                    icon = UIcons.People,
                                     title = if (language == AppLanguage.BENGALI) "এই এলাকায় এখনো কোনো ডোনার নেই" else "No donors in this area yet",
                                     body = if (language == AppLanguage.BENGALI) {
                                         "অন্য এলাকা বেছে দেখুন, অথবা নিজে ডোনার হয়ে প্রোফাইলে রক্তের গ্রুপ ও ফোন নম্বর দিন।"

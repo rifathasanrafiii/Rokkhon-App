@@ -2,53 +2,58 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Lifeline & Uber-Inspired Burgundy-Obsidian & Warm Ivory Design System for Rokkhon (রক্ষণ)
-val IosSystemRed = Color(0xFF7B1120)       // Primary Deep Burgundy / Maroon CTA
-val IosDeepCrimson = Color(0xFF540A14)     // Deep Hero & Header Maroon
-val PinCrimsonRed = Color(0xFFD91E36)      // Glowing Blood Drop Map Pin Crimson
-val LifelineBlush = Color(0xFFF7E4E7)      // Soft Blush Rose Highlight Tile
-val LifelineBlushBorder = Color(0xFFEAD4D8)
+/*
+ * Monochrome palette after Uber's Base design system: black content and buttons on white,
+ * light greys for surfaces, and colour only where it carries meaning — red for SOS/emergency,
+ * green for "available / safe", blue for your own GPS position.
+ * (The older token names are kept so every screen picks the new values up.)
+ */
+val IosSystemRed = Color(0xFF000000)       // Primary: buttons, selected states, key icons
+val IosDeepCrimson = Color(0xFF000000)
+val PinCrimsonRed = Color(0xFFE11900)      // SOS / emergency only
+val LifelineBlush = Color(0xFFF3F3F3)      // Icon circles, chips
+val LifelineBlushBorder = Color(0xFFE2E2E2)
 
-val IosSystemGreen = Color(0xFF1F9D55)     // Verified Donor Online Green
-val IosSystemBlue = Color(0xFF2563EB)      // GPS Blue Puck & BLE Signal Ring
-val IosSystemOrange = Color(0xFFD97706)    // Urgent / Audio Blackbox Amber
-val IosSystemIndigo = Color(0xFF4F46E5)
+val IosSystemGreen = Color(0xFF05944F)     // Available / safe
+val IosSystemBlue = Color(0xFF276EF1)      // Your GPS position
+val IosSystemOrange = Color(0xFFB86E00)    // Warnings
+val IosSystemIndigo = Color(0xFF545454)
 
-// Dark Obsidian-Burgundy Radar & Hero Canvas Colors
-val RadarObsidianBg = Color(0xFF140609)
-val RadarDarkMaroon = Color(0xFF260910)
-val RadarGlassCard = Color(0xFF2B1217)
+// Dark surfaces (splash, camera preview, map overlays)
+val RadarObsidianBg = Color(0xFF000000)
+val RadarDarkMaroon = Color(0xFF141414)
+val RadarGlassCard = Color(0xFF1F1F1F)
 
-// Light Mode Surfaces (Warm Alabaster & Pure White Bottom Sheet Style)
-val IosLightBackground = Color(0xFFFAF6F6)
+// Light surfaces
+val IosLightBackground = Color(0xFFFFFFFF)
 val IosLightSurface = Color(0xFFFFFFFF)
-val IosLightSurfaceElevated = Color(0xFFF6EFEF)
-val IosLightTextPrimary = Color(0xFF1A0F12)
-val IosLightTextSecondary = Color(0xFF756568)
-val IosLightOutline = Color(0xFFECE2E4)
+val IosLightSurfaceElevated = Color(0xFFF6F6F6)
+val IosLightTextPrimary = Color(0xFF000000)
+val IosLightTextSecondary = Color(0xFF5E5E5E)
+val IosLightOutline = Color(0xFFE2E2E2)
 
-// Dark Mode Surfaces
-val IosDarkBackground = Color(0xFF120608)
-val IosDarkSurface = Color(0xFF1E0C10)
-val IosDarkSurfaceElevated = Color(0xFF2B1217)
-val IosDarkTextPrimary = Color(0xFFFAF3F4)
-val IosDarkTextSecondary = Color(0xFFB8A2A6)
-val IosDarkOutline = Color(0xFF3D2026)
+// Dark surfaces for the (unused) dark scheme
+val IosDarkBackground = Color(0xFF000000)
+val IosDarkSurface = Color(0xFF141414)
+val IosDarkSurfaceElevated = Color(0xFF1F1F1F)
+val IosDarkTextPrimary = Color(0xFFFFFFFF)
+val IosDarkTextSecondary = Color(0xFFAFAFAF)
+val IosDarkOutline = Color(0xFF333333)
 
-// The literal colours the screens use, named once so new layouts stay on the same palette.
+/** Semantic colours for the screens; use these instead of literal hex values. */
 object RokkhonPalette {
-    val Crimson = Color(0xFFB80F24)        // Primary actions, selected states
-    val CrimsonBright = Color(0xFFE01E37)  // SOS
-    val Blush = Color(0xFFF5DDE0)          // Icon circles
-    val BlushSoft = Color(0xFFFDF0F1)      // Selected backgrounds
-    val Background = Color(0xFFFAF8F8)     // Sheet background
-    val Border = Color(0xFFEEE6E8)         // Card outline
-    val Track = Color(0xFFF3ECEE)          // Segmented control / progress track
-    val Ink = Color(0xFF1A1113)            // Titles
-    val Muted = Color(0xFF7B6F72)          // Secondary text
-    val HeroTop = Color(0xFF7B0C1A)
-    val HeroMid = Color(0xFF5A0913)
-    val HeroBottom = Color(0xFF2B060B)
-    val Amber = Color(0xFFD97706)
-    val Green = Color(0xFF1F9D55)
+    val Primary = Color(0xFF000000)        // Buttons, selected chips, titles' icons
+    val OnPrimary = Color(0xFFFFFFFF)
+    val Sos = Color(0xFFE11900)            // SOS and emergency actions only
+    val Chip = Color(0xFFEEEEEE)           // Icon circles, unselected chips
+    val Subtle = Color(0xFFF6F6F6)         // Search bar, tiles, grouped rows
+    val Background = Color(0xFFFFFFFF)
+    val Border = Color(0xFFE8E8E8)
+    val Track = Color(0xFFF3F3F3)          // Segmented control / progress track
+    val Ink = Color(0xFF000000)
+    val Muted = Color(0xFF5E5E5E)
+    val Faint = Color(0xFFAFAFAF)
+    val Divider = Color(0xFFEEEEEE)
+    val Warning = Color(0xFFB86E00)
+    val Positive = Color(0xFF05944F)
 }

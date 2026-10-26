@@ -17,7 +17,7 @@ private val IosDarkColorScheme = darkColorScheme(
     primary = IosSystemRed,
     onPrimary = Color.White,
     primaryContainer = Color(0xFF3A101B),
-    onPrimaryContainer = Color(0xFFFFB3C0),
+    onPrimaryContainer = Color(0xFFDDDDDD),
     secondary = IosSystemBlue,
     onSecondary = Color.White,
     secondaryContainer = Color(0xFF102A45),
@@ -34,31 +34,35 @@ private val IosDarkColorScheme = darkColorScheme(
 )
 
 private val IosLightColorScheme = lightColorScheme(
-    primary = IosSystemRed,
+    primary = Color.Black,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFE5EA),
-    onPrimaryContainer = IosDeepCrimson,
+    primaryContainer = Color(0xFFF3F3F3),
+    onPrimaryContainer = Color.Black,
     secondary = IosSystemBlue,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE5F1FF),
-    onSecondaryContainer = Color(0xFF004C99),
+    secondaryContainer = Color(0xFFEEEEEE),
+    onSecondaryContainer = Color.Black,
     tertiary = IosSystemGreen,
     onTertiary = Color.White,
+    error = PinCrimsonRed,
     background = IosLightBackground,
     onBackground = IosLightTextPrimary,
     surface = IosLightSurface,
     onSurface = IosLightTextPrimary,
     surfaceVariant = IosLightSurfaceElevated,
     onSurfaceVariant = IosLightTextSecondary,
-    outline = IosLightOutline
+    surfaceContainerLow = Color(0xFFF6F6F6),
+    surfaceContainerHigh = Color(0xFFFFFFFF),
+    outline = IosLightOutline,
+    outlineVariant = Color(0xFFEEEEEE)
 )
 
 val IosShapes = Shapes(
-    extraSmall = RoundedCornerShape(10.dp),
-    small = RoundedCornerShape(14.dp),
-    medium = RoundedCornerShape(18.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp)
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(24.dp)
 )
 
 /**

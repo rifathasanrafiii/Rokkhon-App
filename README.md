@@ -1,6 +1,6 @@
 # রক্ষণ (Rokkhon)
 
-Bangladesh blood-donor network + personal safety SOS app (Kotlin, Jetpack Compose, Firebase).
+Bangladesh blood-donor network (Kotlin, Jetpack Compose, Firebase). A personal-safety SOS system is built in but hidden for now: set `FeatureFlags.SOS_ENABLED = true` in `app/src/main/java/com/example/FeatureFlags.kt` to show it again.
 
 - **রক্ত (Blood):** find available, *compatible* donors by area; post a blood request that notifies matching donors in that area; share requests to WhatsApp/Facebook; one pledge per account.
 - **SOS:** in-app SOS or 3x power/volume press (5-second cancel window), real microphone evidence, live GPS until "I'm safe", one-tap 999 call and SMS with a location link to up to 3 trusted contacts.
@@ -58,4 +58,9 @@ ROKKHON_SCREENSHOT_LANG=en ROKKHON_SCREENSHOTS=$PWD/screenshots-en gradle testDe
 
 The Find tab downloads real OpenStreetMap tiles, so rendering it needs network access. Each screenshot also gets a `.tags.json` with the bounds of every tagged element (used by the click-through simulator).
 
+## Design
+
+Monochrome, after Uber's Base design system: black content and buttons on white, grey surfaces, colour only where it means something (green = can donate now, red = emergency / sign out, blue = your GPS dot). Shared pieces live in `ui/components/RokkhonKit.kt` and `ui/theme/Color.kt` (`RokkhonPalette`).
+
 Fonts: Google Sans (SIL Open Font License, see `licenses/GoogleSans-OFL.txt`).
+Icons: Uicons (regular rounded) by Flaticon, converted to vectors in `ui/icons/UIcons.kt`; free with attribution (credit on the Profile screen, licence in `licenses/Uicons-Flaticon.txt`).

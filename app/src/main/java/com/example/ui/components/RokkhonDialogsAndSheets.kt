@@ -21,18 +21,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bloodtype
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.ReportProblem
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -62,6 +50,7 @@ import com.example.data.model.BANGLADESH_DIVISIONS
 import com.example.data.model.BangladeshDistrict
 import com.example.data.model.NotificationKind
 import com.example.data.model.RokkhonNotificationItem
+import com.example.ui.icons.UIcons
 import com.example.ui.theme.IosSystemBlue
 import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemOrange
@@ -135,7 +124,7 @@ fun BangladeshAreaPickerDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.LocationOn,
+                                    imageVector = UIcons.LocationOn,
                                     contentDescription = null,
                                     tint = IosSystemRed,
                                     modifier = Modifier.size(20.dp)
@@ -150,7 +139,7 @@ fun BangladeshAreaPickerDialog(
                                         "Select Area (All 64 Districts)"
                                     },
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = Color(0xFF1A0F12),
+                                    color = Color(0xFF000000),
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 Text(
@@ -160,7 +149,7 @@ fun BangladeshAreaPickerDialog(
                                         "All 64 districts + Dhaka & Chattogram areas (${BANGLADESH_DISTRICTS.size} locations)"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF756568)
+                                    color = Color(0xFF5E5E5E)
                                 )
                             }
                         }
@@ -170,12 +159,12 @@ fun BangladeshAreaPickerDialog(
                             modifier = Modifier
                                 .size(34.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFF5ECEE))
+                                .background(Color(0xFFF3F3F3))
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Close,
+                                imageVector = UIcons.Close,
                                 contentDescription = "Close",
-                                tint = Color(0xFF1A0F12),
+                                tint = Color(0xFF000000),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -189,7 +178,7 @@ fun BangladeshAreaPickerDialog(
                         onValueChange = { searchQuery = it },
                         leadingIcon = {
                             Icon(
-                                imageVector = Icons.Default.Search,
+                                imageVector = UIcons.Search,
                                 contentDescription = null,
                                 tint = IosSystemRed
                             )
@@ -198,7 +187,7 @@ fun BangladeshAreaPickerDialog(
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { searchQuery = "" }) {
                                     Icon(
-                                        imageVector = Icons.Default.Close,
+                                        imageVector = UIcons.Close,
                                         contentDescription = "Clear",
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -226,13 +215,13 @@ fun BangladeshAreaPickerDialog(
 
                     // Auto-Detect GPS Button
                     Surface(
-                        color = if (isAutoGpsActive) IosSystemGreen.copy(alpha = 0.14f) else Color(0xFFFAF6F6),
+                        color = if (isAutoGpsActive) IosSystemGreen.copy(alpha = 0.14f) else Color(0xFFF6F6F6),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .border(
                                 1.dp,
-                                if (isAutoGpsActive) IosSystemGreen else Color(0xFFEDE2E4),
+                                if (isAutoGpsActive) IosSystemGreen else Color(0xFFE8E8E8),
                                 RoundedCornerShape(16.dp)
                             )
                             .clickable {
@@ -248,7 +237,7 @@ fun BangladeshAreaPickerDialog(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Default.MyLocation,
+                                    imageVector = UIcons.MyLocation,
                                     contentDescription = null,
                                     tint = IosSystemGreen,
                                     modifier = Modifier.size(18.dp)
@@ -272,13 +261,13 @@ fun BangladeshAreaPickerDialog(
                                             "Currently selected: ${selectedDistrict.nameEn}"
                                         },
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFF5A4A4E)
+                                        color = Color(0xFF545454)
                                     )
                                 }
                             }
                             if (isAutoGpsActive) {
                                 Icon(
-                                    imageVector = Icons.Default.CheckCircle,
+                                    imageVector = UIcons.CheckCircle,
                                     contentDescription = null,
                                     tint = IosSystemGreen,
                                     modifier = Modifier.size(18.dp)
@@ -299,8 +288,8 @@ fun BangladeshAreaPickerDialog(
                         BANGLADESH_DIVISIONS.forEach { (divKey, labels) ->
                             val isSelected = selectedDivisionKey == divKey
                             Surface(
-                                color = if (isSelected) IosSystemRed else Color(0xFFF5ECEE),
-                                contentColor = if (isSelected) Color.White else Color(0xFF3D2E31),
+                                color = if (isSelected) IosSystemRed else Color(0xFFF3F3F3),
+                                contentColor = if (isSelected) Color.White else Color(0xFF333333),
                                 shape = CircleShape,
                                 modifier = Modifier
                                     .clickable { selectedDivisionKey = divKey }
@@ -328,13 +317,13 @@ fun BangladeshAreaPickerDialog(
                         items(filteredDistricts, key = { it.areaKey }) { dist ->
                             val isCurrent = dist.areaKey == selectedDistrict.areaKey
                             Surface(
-                                color = if (isCurrent) LifelineBlush else Color(0xFFFAF8F8),
+                                color = if (isCurrent) LifelineBlush else Color(0xFFFFFFFF),
                                 shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .border(
                                         width = if (isCurrent) 1.4.dp else 1.dp,
-                                        color = if (isCurrent) IosSystemRed else Color(0xFFEEE6E8),
+                                        color = if (isCurrent) IosSystemRed else Color(0xFFE8E8E8),
                                         shape = RoundedCornerShape(16.dp)
                                     )
                                     .clickable {
@@ -355,9 +344,9 @@ fun BangladeshAreaPickerDialog(
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.LocationOn,
+                                            imageVector = UIcons.LocationOn,
                                             contentDescription = null,
-                                            tint = if (isCurrent) IosSystemRed else Color(0xFF5A4A4E),
+                                            tint = if (isCurrent) IosSystemRed else Color(0xFF545454),
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(modifier = Modifier.width(10.dp))
@@ -365,7 +354,7 @@ fun BangladeshAreaPickerDialog(
                                             Text(
                                                 text = "${dist.nameEn} • ${dist.nameBn}",
                                                 style = MaterialTheme.typography.titleSmall,
-                                                color = if (isCurrent) IosSystemRed else Color(0xFF1A0F12),
+                                                color = if (isCurrent) IosSystemRed else Color(0xFF000000),
                                                 fontWeight = FontWeight.ExtraBold
                                             )
                                             Text(
@@ -375,7 +364,7 @@ fun BangladeshAreaPickerDialog(
                                                     "${dist.divisionEn} Division • ${dist.defaultHospitalEn}"
                                                 },
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = Color(0xFF756568)
+                                                color = Color(0xFF5E5E5E)
                                             )
                                         }
                                     }
@@ -385,13 +374,13 @@ fun BangladeshAreaPickerDialog(
                                         shape = CircleShape,
                                         modifier = Modifier.border(
                                             0.8.dp,
-                                            if (isCurrent) IosSystemRed else Color(0xFFE2D5D7),
+                                            if (isCurrent) IosSystemRed else Color(0xFFE2E2E2),
                                             CircleShape
                                         )
                                     ) {
                                         Text(
                                             text = if (language == AppLanguage.BENGALI) dist.divisionBn else dist.divisionEn,
-                                            color = if (isCurrent) Color.White else Color(0xFF5A4A4E),
+                                            color = if (isCurrent) Color.White else Color(0xFF545454),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -465,7 +454,7 @@ fun RokkhonNotificationCenterDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.NotificationsActive,
+                                    imageVector = UIcons.NotificationsActive,
                                     contentDescription = null,
                                     tint = IosSystemRed,
                                     modifier = Modifier.size(20.dp)
@@ -480,7 +469,7 @@ fun RokkhonNotificationCenterDialog(
                                         "Notifications"
                                     },
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = Color(0xFF1A0F12),
+                                    color = Color(0xFF000000),
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 Text(
@@ -490,7 +479,7 @@ fun RokkhonNotificationCenterDialog(
                                         if (unreadCount > 0) "$unreadCount unread" else "All caught up"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF756568)
+                                    color = Color(0xFF5E5E5E)
                                 )
                             }
                         }
@@ -500,7 +489,7 @@ fun RokkhonNotificationCenterDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                color = Color(0xFFF5ECEE),
+                                color = Color(0xFFF3F3F3),
                                 shape = CircleShape,
                                 modifier = Modifier
                                     .clickable { onMarkAllRead() }
@@ -511,7 +500,7 @@ fun RokkhonNotificationCenterDialog(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.DoneAll,
+                                        imageVector = UIcons.DoneAll,
                                         contentDescription = "Mark All Read",
                                         tint = IosSystemRed,
                                         modifier = Modifier.size(15.dp)
@@ -531,12 +520,12 @@ fun RokkhonNotificationCenterDialog(
                                 modifier = Modifier
                                     .size(34.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFFF5ECEE))
+                                    .background(Color(0xFFF3F3F3))
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Close,
+                                    imageVector = UIcons.Close,
                                     contentDescription = "Close",
-                                    tint = Color(0xFF1A0F12),
+                                    tint = Color(0xFF000000),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -563,7 +552,7 @@ fun RokkhonNotificationCenterDialog(
                         if (notifications.isEmpty()) {
                             item {
                                 RokkhonEmptyState(
-                                    icon = Icons.Default.NotificationsActive,
+                                    icon = UIcons.NotificationsActive,
                                     title = if (language == AppLanguage.BENGALI) "কোনো নোটিফিকেশন নেই" else "No notifications yet",
                                     body = if (language == AppLanguage.BENGALI) {
                                         "এলাকায় নতুন রক্তের আবেদন, ১ কি.মি.-এর মধ্যে SOS বা কেউ সাড়া দিলে এখানে জানানো হবে।"
@@ -576,20 +565,20 @@ fun RokkhonNotificationCenterDialog(
                         }
                         items(notifications, key = { it.id }) { item ->
                             val (accentColor, iconVec) = when (item.kind) {
-                                NotificationKind.SOS_ALERT -> PinCrimsonRed to Icons.Default.Shield
-                                NotificationKind.BLOOD_REQUEST -> IosSystemRed to Icons.Default.Bloodtype
-                                NotificationKind.RESPONDER_UPDATE -> IosSystemGreen to Icons.Default.VerifiedUser
-                                NotificationKind.FALSE_SOS_WARNING -> IosSystemOrange to Icons.Default.ReportProblem
+                                NotificationKind.SOS_ALERT -> PinCrimsonRed to UIcons.Shield
+                                NotificationKind.BLOOD_REQUEST -> IosSystemRed to UIcons.Bloodtype
+                                NotificationKind.RESPONDER_UPDATE -> IosSystemGreen to UIcons.VerifiedUser
+                                NotificationKind.FALSE_SOS_WARNING -> IosSystemOrange to UIcons.ReportProblem
                             }
 
                             Surface(
-                                color = if (item.isRead) Color(0xFFFAF8F8) else accentColor.copy(alpha = 0.08f),
+                                color = if (item.isRead) Color(0xFFFFFFFF) else accentColor.copy(alpha = 0.08f),
                                 shape = RoundedCornerShape(18.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .border(
                                         width = if (item.isRead) 1.dp else 1.3.dp,
-                                        color = if (item.isRead) Color(0xFFEEE6E8) else accentColor.copy(alpha = 0.4f),
+                                        color = if (item.isRead) Color(0xFFE8E8E8) else accentColor.copy(alpha = 0.4f),
                                         shape = RoundedCornerShape(18.dp)
                                     )
                                     .clickable { onNotificationClick(item) }
@@ -627,7 +616,7 @@ fun RokkhonNotificationCenterDialog(
                                             Text(
                                                 text = if (language == AppLanguage.BENGALI) item.titleBn else item.titleEn,
                                                 style = MaterialTheme.typography.titleSmall,
-                                                color = Color(0xFF1A0F12),
+                                                color = Color(0xFF000000),
                                                 fontWeight = FontWeight.ExtraBold,
                                                 modifier = Modifier.weight(1f)
                                             )
@@ -643,7 +632,7 @@ fun RokkhonNotificationCenterDialog(
                                         Text(
                                             text = if (language == AppLanguage.BENGALI) item.bodyBn else item.bodyEn,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = Color(0xFF5A4A4E)
+                                            color = Color(0xFF545454)
                                         )
                                         Spacer(modifier = Modifier.height(5.dp))
                                         Row(
@@ -654,7 +643,7 @@ fun RokkhonNotificationCenterDialog(
                                             Text(
                                                 text = item.areaName,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = Color(0xFF756568),
+                                                color = Color(0xFF5E5E5E),
                                                 fontWeight = FontWeight.SemiBold
                                             )
                                             Text(
@@ -712,7 +701,7 @@ fun FalseSosAccountWarningBanner(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.ReportProblem,
+                    imageVector = UIcons.ReportProblem,
                     contentDescription = "False SOS Warning",
                     tint = Color(0xFFD97706),
                     modifier = Modifier.size(20.dp)
@@ -747,7 +736,7 @@ fun FalseSosAccountWarningBanner(
                     modifier = Modifier.size(26.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        imageVector = UIcons.Close,
                         contentDescription = "Dismiss Warning",
                         tint = Color(0xFF92400E),
                         modifier = Modifier.size(16.dp)

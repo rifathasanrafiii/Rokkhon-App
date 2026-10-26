@@ -25,11 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +60,7 @@ import com.example.data.model.BloodRequest
 import com.example.data.model.DonorNode
 import com.example.data.model.SosAlert
 import com.example.data.model.canDonateTo
+import com.example.ui.icons.UIcons
 import com.example.ui.screens.donorInitials
 import com.example.ui.theme.IosSystemBlue
 import com.example.ui.theme.IosSystemGreen
@@ -392,7 +388,7 @@ fun InteractiveBangladeshRadarMap(
                 val pos = latLngToOffset(req.latitude, req.longitude)
 
                 drawRoundRect(
-                    color = Color(0xFF8B1425),
+                    color = Color(0xFF000000),
                     topLeft = Offset(pos.x - 20.dp.toPx(), pos.y - 20.dp.toPx()),
                     size = Size(40.dp.toPx(), 40.dp.toPx()),
                     cornerRadius = CornerRadius(20.dp.toPx(), 20.dp.toPx())
@@ -405,7 +401,7 @@ fun InteractiveBangladeshRadarMap(
                 val hLayout = textMeasurer.measure(
                     text = req.bloodGroup,
                     style = TextStyle(
-                        color = Color(0xFF8B1425),
+                        color = Color(0xFF000000),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -428,7 +424,7 @@ fun InteractiveBangladeshRadarMap(
                     center = pos
                 )
                 drawRoundRect(
-                    color = Color(0xFFE11D48),
+                    color = Color(0xFFE11900),
                     topLeft = Offset(pos.x - 28.dp.toPx(), pos.y - 14.dp.toPx()),
                     size = Size(56.dp.toPx(), 28.dp.toPx()),
                     cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx())
@@ -525,7 +521,7 @@ fun InteractiveBangladeshRadarMap(
                         .size(38.dp)
                         .testTag("map_zoom_in_button")
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Zoom In", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(UIcons.Add, contentDescription = "Zoom In", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
             Surface(
@@ -542,7 +538,7 @@ fun InteractiveBangladeshRadarMap(
                         .size(38.dp)
                         .testTag("map_zoom_out_button")
                 ) {
-                    Icon(Icons.Default.Remove, contentDescription = "Zoom Out", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(UIcons.Remove, contentDescription = "Zoom Out", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
             Surface(
@@ -562,11 +558,11 @@ fun InteractiveBangladeshRadarMap(
                         .size(38.dp)
                         .testTag("map_recenter_button")
                 ) {
-                    Icon(Icons.Default.MyLocation, contentDescription = "Recenter", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(UIcons.MyLocation, contentDescription = "Recenter", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
             Surface(
-                color = if (useOsmRealTiles) PinCrimsonRed else RadarObsidianBg.copy(alpha = 0.88f),
+                color = if (useOsmRealTiles) Color.Black else RadarObsidianBg.copy(alpha = 0.88f),
                 shape = CircleShape,
                 modifier = Modifier.border(0.8.dp, Color.White.copy(alpha = 0.16f), CircleShape)
             ) {
@@ -576,7 +572,7 @@ fun InteractiveBangladeshRadarMap(
                         .size(38.dp)
                         .testTag("map_style_toggle_button")
                 ) {
-                    Icon(Icons.Default.Layers, contentDescription = "Toggle Map Layer", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(UIcons.Layers, contentDescription = "Toggle Map Layer", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -681,7 +677,7 @@ fun OverlappingDonorAvatarRow(
     modifier: Modifier = Modifier
 ) {
     val avatarColors = listOf(
-        Color(0xFFB80F24),
+        Color(0xFF000000),
         Color(0xFF1565C0),
         Color(0xFF0F6E56),
         Color(0xFF7C2D12)
@@ -715,12 +711,12 @@ fun OverlappingDonorAvatarRow(
                 .size(32.dp)
                 .clip(CircleShape)
                 .background(Color.White)
-                .border(1.5.dp, Color(0xFFEAE0E2), CircleShape),
+                .border(1.5.dp, Color(0xFFE8E8E8), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "+$extraCount",
-                color = Color(0xFF1A1113),
+                color = Color(0xFF000000),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.ExtraBold
             )

@@ -157,7 +157,7 @@ fun RollingNumber(
     }
 }
 
-/** Round icon button with a short label under it (the row under the hero number). */
+/** Grey rounded tile with a thin icon and a short label under it (Uber's shortcut row). */
 @Composable
 fun QuickAction(
     icon: ImageVector,
@@ -165,7 +165,7 @@ fun QuickAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     emphasized: Boolean = false,
-    onDark: Boolean = true,
+    onDark: Boolean = false,
     testTag: String = ""
 ) {
     Column(
@@ -176,36 +176,31 @@ fun QuickAction(
     ) {
         Box(
             modifier = Modifier
-                .size(54.dp)
-                .then(if (emphasized) Modifier.shadow(10.dp, CircleShape, ambientColor = RokkhonPalette.CrimsonBright, spotColor = RokkhonPalette.CrimsonBright) else Modifier)
-                .clip(CircleShape)
+                .fillMaxWidth()
+                .height(64.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(
                     when {
-                        emphasized -> RokkhonPalette.CrimsonBright
-                        onDark -> Color.White.copy(alpha = 0.14f)
-                        else -> RokkhonPalette.Blush
+                        emphasized -> RokkhonPalette.Sos
+                        onDark -> Color.White.copy(alpha = 0.12f)
+                        else -> RokkhonPalette.Subtle
                     }
-                )
-                .border(
-                    1.dp,
-                    if (onDark) Color.White.copy(alpha = if (emphasized) 0.38f else 0.18f) else Color.Transparent,
-                    CircleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (onDark || emphasized) Color.White else RokkhonPalette.Crimson,
-                modifier = Modifier.size(23.dp)
+                tint = if (emphasized || onDark) Color.White else RokkhonPalette.Ink,
+                modifier = Modifier.size(26.dp)
             )
         }
-        Spacer(modifier = Modifier.height(7.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = label,
-            fontSize = 12.sp,
-            color = if (onDark) Color.White.copy(alpha = 0.92f) else RokkhonPalette.Ink,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 12.5.sp,
+            color = if (onDark) Color.White else RokkhonPalette.Ink,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center
@@ -213,7 +208,7 @@ fun QuickAction(
     }
 }
 
-/** Icon tile for a 2-column grid: tinted icon, big rolling value, one short label. */
+/** Grey tile for a 2-column grid: thin icon, big value, one short label (Uber "suggestions" style). */
 @Composable
 fun StatTile(
     icon: ImageVector,
@@ -229,15 +224,15 @@ fun StatTile(
     trailing: (@Composable () -> Unit)? = null
 ) {
     Surface(
-        color = if (selected) RokkhonPalette.BlushSoft else Color.White,
-        shape = RoundedCornerShape(22.dp),
+        color = RokkhonPalette.Subtle,
+        shape = RoundedCornerShape(16.dp),
         modifier = modifier
             .border(
-                if (selected) 1.4.dp else 1.dp,
-                if (selected) accent.copy(alpha = 0.45f) else RokkhonPalette.Border,
-                RoundedCornerShape(22.dp)
+                if (selected) 2.dp else 0.dp,
+                if (selected) RokkhonPalette.Primary else Color.Transparent,
+                RoundedCornerShape(16.dp)
             )
-            .springClick(onClick = onClick)
+            .springClick(pressedScale = 0.97f, onClick = onClick)
             .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -246,37 +241,28 @@ fun StatTile(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(accent.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(imageVector = icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
-                }
+                Icon(imageVector = icon, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
                 trailing?.invoke()
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             if (valueText != null) {
                 Text(
                     text = valueText,
-                    fontSize = 20.sp,
-                    lineHeight = 26.sp,
+                    fontSize = 19.sp,
+                    lineHeight = 24.sp,
                     color = RokkhonPalette.Ink,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             } else {
-                RollingNumber(value = value, fontSize = 26.sp, color = RokkhonPalette.Ink, suffix = valueSuffix)
+                RollingNumber(value = value, fontSize = 24.sp, color = RokkhonPalette.Ink, fontWeight = FontWeight.Bold, suffix = valueSuffix)
             }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = label,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 color = RokkhonPalette.Muted,
-                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -335,7 +321,7 @@ fun SegmentedControl(
                         Icon(
                             imageVector = seg.icon,
                             contentDescription = null,
-                            tint = if (selected) RokkhonPalette.Crimson else RokkhonPalette.Muted,
+                            tint = if (selected) RokkhonPalette.Primary else RokkhonPalette.Muted,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -365,7 +351,7 @@ fun SectionHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = title, fontSize = 17.sp, color = RokkhonPalette.Ink, fontWeight = FontWeight.ExtraBold)
+        Text(text = title, fontSize = 20.sp, color = RokkhonPalette.Ink, fontWeight = FontWeight.Bold)
         trailing?.invoke()
     }
 }
@@ -384,7 +370,7 @@ fun RoundIconButton(
         modifier = modifier
             .size(36.dp)
             .clip(CircleShape)
-            .background(if (filled) RokkhonPalette.Crimson else RokkhonPalette.BlushSoft)
+            .background(if (filled) RokkhonPalette.Primary else RokkhonPalette.Subtle)
             .springClick(onClick = onClick)
             .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier),
         contentAlignment = Alignment.Center
@@ -392,7 +378,7 @@ fun RoundIconButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = if (filled) Color.White else RokkhonPalette.Crimson,
+            tint = if (filled) Color.White else RokkhonPalette.Primary,
             modifier = Modifier.size(19.dp)
         )
     }
@@ -421,13 +407,13 @@ fun SheetGridItem(
             modifier = Modifier
                 .size(52.dp)
                 .clip(RoundedCornerShape(18.dp))
-                .background(if (active) RokkhonPalette.Crimson else RokkhonPalette.BlushSoft),
+                .background(if (active) RokkhonPalette.Primary else RokkhonPalette.Subtle),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (active) Color.White else RokkhonPalette.Crimson,
+                tint = if (active) Color.White else RokkhonPalette.Primary,
                 modifier = Modifier.size(23.dp)
             )
         }
@@ -445,7 +431,7 @@ fun SheetGridItem(
             Text(
                 text = state,
                 fontSize = 10.5.sp,
-                color = if (active) RokkhonPalette.Crimson else RokkhonPalette.Muted,
+                color = if (active) RokkhonPalette.Primary else RokkhonPalette.Muted,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1
             )
@@ -475,7 +461,7 @@ fun RokkhonBottomSheet(
                     .width(38.dp)
                     .height(4.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFDAD2D4))
+                    .background(Color(0xFFDADADA))
             )
         },
         modifier = Modifier.testTag(testTag)
@@ -487,7 +473,7 @@ fun RokkhonBottomSheet(
                 .padding(start = 20.dp, end = 20.dp, bottom = 18.dp)
         ) {
             if (title != null) {
-                Text(text = title, fontSize = 19.sp, color = RokkhonPalette.Ink, fontWeight = FontWeight.ExtraBold)
+                Text(text = title, fontSize = 22.sp, color = RokkhonPalette.Ink, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(14.dp))
             }
             content()

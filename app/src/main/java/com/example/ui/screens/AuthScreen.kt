@@ -32,14 +32,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -84,15 +76,17 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
+import com.example.FeatureFlags
 import com.example.KEY_OTP_VERIFIED_NAME
 import com.example.KEY_OTP_VERIFIED_PHONE
 import com.example.R
 import com.example.data.model.isValidBangladeshMobile
+import com.example.ui.icons.UIcons
 import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemRed
 import com.example.ui.theme.LifelineBlush
 import com.example.ui.theme.RadarDarkMaroon
-import com.example.ui.theme.RadarObsidianBg
+import com.example.ui.theme.RokkhonPalette
 import com.example.ui.viewmodel.RokkhonViewModel
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -424,7 +418,7 @@ fun AuthScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(RadarObsidianBg)
+            .background(Color.White)
     ) {
         // Top Pure Gradient Hero Section (No background shapes, elevated text with spacious breathing room)
         Box(
@@ -434,9 +428,8 @@ fun AuthScreen(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF8B1124),
-                            Color(0xFF4B0A15),
-                            RadarObsidianBg
+                            Color.White,
+                            Color.White
                         )
                     )
                 )
@@ -452,13 +445,13 @@ fun AuthScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
-                    painter = painterResource(R.drawable.rokkhon_wordmark_white),
+                    painter = painterResource(R.drawable.rokkhon_wordmark_black),
                     contentDescription = "রক্ষণ",
                     modifier = Modifier.height(28.dp)
                 )
 
                 Surface(
-                    color = Color.White.copy(alpha = 0.14f),
+                    color = RokkhonPalette.Subtle,
                     shape = CircleShape,
                     modifier = Modifier
                         .clickable { onSkipSignIn() }
@@ -469,16 +462,16 @@ fun AuthScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "শুধু SOS",
+                            text = if (FeatureFlags.SOS_ENABLED) "শুধু SOS" else "এখন না",
                             style = MaterialTheme.typography.labelLarge,
-                            color = Color.White,
+                            color = RokkhonPalette.Ink,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            imageVector = UIcons.ArrowForward,
                             contentDescription = "Skip Sign-In",
-                            tint = Color.White,
+                            tint = RokkhonPalette.Ink,
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -494,15 +487,15 @@ fun AuthScreen(
                 Text(
                     text = "প্রতিটি পদক্ষেপ\nএকটি জীবন বাঁচাতে পারে।",
                     fontSize = 28.sp,
-                    color = Color.White,
+                    color = RokkhonPalette.Ink,
                     fontWeight = FontWeight.ExtraBold,
                     lineHeight = 39.sp
                 )
                 Spacer(modifier = Modifier.height(14.dp))
                 Text(
-                    text = "জরুরি রক্তদাতা ও অফলাইন ব্লুটুথ সুরক্ষা নেটওয়ার্ক",
+                    text = "আপনার এলাকার রক্তদাতাদের সাথে যুক্ত হোন",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.84f),
+                    color = RokkhonPalette.Muted,
                     letterSpacing = 0.2.sp,
                     lineHeight = 22.sp
                 )
@@ -532,7 +525,7 @@ fun AuthScreen(
                         .width(42.dp)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFE5D9DB))
+                        .background(Color(0xFFE2E2E2))
                 )
 
                 Spacer(modifier = Modifier.height(22.dp))
@@ -545,13 +538,13 @@ fun AuthScreen(
                         text = "মোবাইল নম্বর দিয়ে লগইন",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF1A0F12)
+                        color = Color(0xFF000000)
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "আপনার নাম ও ১১-ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF756568),
+                        color = Color(0xFF5E5E5E),
                         lineHeight = 19.sp
                     )
                 }
@@ -562,7 +555,7 @@ fun AuthScreen(
                     value = userNameInput,
                     onValueChange = { userNameInput = it.take(40) },
                     leadingIcon = {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = IosSystemRed)
+                        Icon(UIcons.Person, contentDescription = null, tint = IosSystemRed)
                     },
                     label = { Text("আপনার নাম") },
                     placeholder = { Text("যেমন: Rifat Hasan") },
@@ -581,7 +574,7 @@ fun AuthScreen(
                         mobileInput = it.filter { ch -> ch.isDigit() || ch == '+' }.take(14)
                     },
                     leadingIcon = {
-                        Icon(Icons.Default.Call, contentDescription = null, tint = IosSystemRed)
+                        Icon(UIcons.Call, contentDescription = null, tint = IosSystemRed)
                     },
                     label = { Text("মোবাইল নম্বর (01XXXXXXXXX)") },
                     placeholder = { Text("017XXXXXXXX") },
@@ -616,7 +609,7 @@ fun AuthScreen(
                         .height(52.dp)
                         .testTag("send_otp_button")
                 ) {
-                    Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(UIcons.Sms, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "OTP পাঠান",
@@ -634,7 +627,7 @@ fun AuthScreen(
                     ) {
                         Text(
                             text = infoNotice ?: "",
-                            color = Color(0xFF4A0E17),
+                            color = Color(0xFF1F1F1F),
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(12.dp),
@@ -650,14 +643,14 @@ fun AuthScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFEDE2E4))
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE8E8E8))
                     Text(
                         text = "   অথবা   ",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFF8C7A7E),
+                        color = Color(0xFF8A8A8A),
                         fontWeight = FontWeight.SemiBold
                     )
-                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFEDE2E4))
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE8E8E8))
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -688,7 +681,7 @@ fun AuthScreen(
                     enabled = !isLoading,
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1A0F12),
+                        containerColor = Color(0xFF000000),
                         contentColor = Color.White
                     ),
                     modifier = Modifier
@@ -717,10 +710,10 @@ fun AuthScreen(
                 OutlinedButton(
                     onClick = onSkipSignIn,
                     shape = CircleShape,
-                    border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFFE2D3D6)),
+                    border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFFE2E2E2)),
                     colors = ButtonDefaults.outlinedButtonColors(
                         containerColor = Color.White,
-                        contentColor = Color(0xFF4A3539)
+                        contentColor = Color(0xFF333333)
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -728,7 +721,7 @@ fun AuthScreen(
                         .testTag("skip_sign_in_button")
                 ) {
                     Text(
-                        text = "লগইন ছাড়া শুধু জরুরি SOS",
+                        text = if (FeatureFlags.SOS_ENABLED) "লগইন ছাড়া শুধু জরুরি SOS" else "লগইন ছাড়া দেখুন",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -771,7 +764,7 @@ fun OtpVerificationScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF8B1124))
+            .background(Color.White)
     ) {
         // Top Pure Crimson-Burgundy Gradient Screen (Zero background shapes, elevated & airy text)
         Box(
@@ -781,8 +774,8 @@ fun OtpVerificationScreen(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFFA81228),
-                            Color(0xFF6B0B1A),
+                            Color.White,
+                            Color.White,
                             RadarDarkMaroon
                         )
                     )
@@ -799,7 +792,7 @@ fun OtpVerificationScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    color = Color.White.copy(alpha = 0.16f),
+                    color = RokkhonPalette.Subtle,
                     shape = CircleShape,
                     modifier = Modifier
                         .clickable { onBackToPhoneInput() }
@@ -810,23 +803,23 @@ fun OtpVerificationScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = UIcons.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = RokkhonPalette.Ink,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "ফিরে যান",
                             style = MaterialTheme.typography.labelLarge,
-                            color = Color.White,
+                            color = RokkhonPalette.Ink,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
 
                 Image(
-                    painter = painterResource(R.drawable.rokkhon_wordmark_white),
+                    painter = painterResource(R.drawable.rokkhon_wordmark_black),
                     contentDescription = "রক্ষণ",
                     modifier = Modifier.height(24.dp)
                 )
@@ -841,7 +834,7 @@ fun OtpVerificationScreen(
                 Text(
                     text = if (userName.isNotBlank()) "$userName  •  $e164Phone" else e164Phone,
                     style = MaterialTheme.typography.labelLarge,
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = RokkhonPalette.Muted,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 0.5.sp
                 )
@@ -851,7 +844,7 @@ fun OtpVerificationScreen(
                 Text(
                     text = "ওটিপি কোড যাচাই করুন",
                     fontSize = 28.sp,
-                    color = Color.White,
+                    color = RokkhonPalette.Ink,
                     fontWeight = FontWeight.ExtraBold,
                     lineHeight = 36.sp
                 )
@@ -861,7 +854,7 @@ fun OtpVerificationScreen(
                 Text(
                     text = "$e164Phone নম্বরে SMS-এ আসা ৬ সংখ্যার কোডটি নিচের বক্সে লিখুন",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.90f),
+                    color = RokkhonPalette.Muted,
                     fontWeight = FontWeight.Medium,
                     lineHeight = 22.sp
                 )
@@ -890,7 +883,7 @@ fun OtpVerificationScreen(
                         .width(42.dp)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFE5D9DB))
+                        .background(Color(0xFFE2E2E2))
                 )
 
                 Spacer(modifier = Modifier.height(28.dp))
@@ -950,8 +943,8 @@ fun OtpVerificationScreen(
                                         .background(
                                             when {
                                                 isFilled -> LifelineBlush
-                                                isFocusedBox -> Color(0xFFFFF8F8)
-                                                else -> Color(0xFFF7F2F3)
+                                                isFocusedBox -> Color(0xFFFFFFFF)
+                                                else -> Color(0xFFF6F6F6)
                                             }
                                         )
                                         .border(
@@ -959,7 +952,7 @@ fun OtpVerificationScreen(
                                             color = when {
                                                 isFocusedBox -> IosSystemRed
                                                 isFilled -> IosSystemRed.copy(alpha = 0.75f)
-                                                else -> Color(0xFFDCD0D2)
+                                                else -> Color(0xFFDADADA)
                                             },
                                             shape = RoundedCornerShape(14.dp)
                                         ),
@@ -970,7 +963,7 @@ fun OtpVerificationScreen(
                                             text = char,
                                             style = MaterialTheme.typography.headlineSmall,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = Color(0xFF1A0F12)
+                                            color = Color(0xFF000000)
                                         )
                                     } else if (isFocusedBox) {
                                         Box(
@@ -1020,7 +1013,7 @@ fun OtpVerificationScreen(
                         .height(52.dp)
                         .testTag("verify_otp_button")
                 ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Icon(UIcons.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "OTP যাচাই ও লগইন সম্পন্ন করুন",
@@ -1049,7 +1042,7 @@ fun OtpVerificationScreen(
                             .testTag("resend_otp_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Refresh,
+                            imageVector = UIcons.Refresh,
                             contentDescription = null,
                             tint = IosSystemRed,
                             modifier = Modifier.size(16.dp)
@@ -1075,7 +1068,7 @@ fun OtpVerificationScreen(
                             text = "নম্বর পরিবর্তন",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1A0F12)
+                            color = Color(0xFF000000)
                         )
                     }
                 }

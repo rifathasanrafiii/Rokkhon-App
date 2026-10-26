@@ -1,6 +1,11 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,22 +28,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Bloodtype
-import androidx.compose.material.icons.filled.BluetoothConnected
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.LocalHospital
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Whatshot
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -58,10 +48,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.FeatureFlags
 import com.example.R
-import com.example.ui.theme.IosSystemRed
-import com.example.ui.theme.LifelineBlush
-import com.example.ui.theme.RadarObsidianBg
+import com.example.ui.components.springClick
+import com.example.ui.icons.UIcons
+import com.example.ui.theme.RokkhonPalette
 import kotlinx.coroutines.delay
 
 /**
@@ -81,15 +72,7 @@ fun RokkhonSplashScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF8B1124),
-                        Color(0xFF4B0A15),
-                        RadarObsidianBg
-                    )
-                )
-            )
+            .background(Color.Black)
             .clickable { onSplashFinished() }
             .testTag("rokkhon_splash_screen"),
         contentAlignment = Alignment.Center
@@ -112,8 +95,8 @@ fun RokkhonSplashScreen(
             Text(
                 text = "প্রতিটি পদক্ষেপ একটি জীবন বাঁচাতে পারে",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.White.copy(alpha = 0.90f),
-                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.7f),
+                fontWeight = FontWeight.Normal,
                 letterSpacing = 0.4.sp,
                 lineHeight = 26.sp,
                 textAlign = TextAlign.Center
@@ -146,70 +129,55 @@ fun RokkhonTutorialScreen(
 ) {
     var currentStep by remember { mutableIntStateOf(0) }
 
-    val slides = listOf(
+    val slides = listOfNotNull(
         TutorialSlide(
-            badge = "STEP 01 / 03",
-            titleBn = "প্রতিটি পদক্ষেপ\nএকটি জীবন বাঁচাতে পারে",
-            subtitleBn = "এলাকাভিত্তিক রক্তদাতা ও জরুরি রোগীর আবেদন",
-            descriptionBn = "রোগীর নাম, হিমোগ্লোবিন (Hb), সমস্যা ও কেবিন নম্বর দিয়ে পোস্ট করলে সেই এলাকার ম্যাচিং ডোনারদের কাছে তাৎক্ষণিক নোটিফিকেশন পৌঁছে যাবে।",
+            badge = "",
+            titleBn = "কাছের ডোনার,\nএক নজরে",
+            subtitleBn = "",
+            descriptionBn = "আপনার এলাকায় কারা রক্ত দিতে পারবেন দেখুন, আর সরাসরি তাদের কল করুন।",
             highlightPoints = listOf(
-                TutorialHighlightPoint(
-                    icon = Icons.Default.Bloodtype,
-                    label = "উপলব্ধ ডোনার ও রোগীর পোস্টের জন্য আলাদা ফিল্টার"
-                ),
-                TutorialHighlightPoint(
-                    icon = Icons.Default.LocalHospital,
-                    label = "রোগীর নাম, রক্তের ব্যাগ, হিমোগ্লোবিন ও কেবিন তথ্য"
-                ),
-                TutorialHighlightPoint(
-                    icon = Icons.Default.Whatshot,
-                    label = "ডেইলি চেক-ইন স্ট্রিক ও গার্ডিয়ান পয়েন্ট ব্যাজ"
-                )
+                TutorialHighlightPoint(UIcons.Bloodtype, "রোগীর গ্রুপ মিলিয়ে ডোনার খোঁজা"),
+                TutorialHighlightPoint(UIcons.Event, "শেষ রক্তদানের ৯০ দিন নিজে থেকেই হিসাব হয়"),
+                TutorialHighlightPoint(UIcons.Call, "এক ট্যাপে কল বা মেসেজ")
             ),
-            icon = Icons.Default.Bloodtype
+            icon = UIcons.People
         ),
         TutorialSlide(
-            badge = "STEP 02 / 03",
-            titleBn = "রিয়েল বাংলাদেশ ম্যাপ ও\nঅফলাইন ব্লুটুথ সিগন্যাল",
-            subtitleBn = "ইন্টারনেট ছাড়াই কাছের মানুষদের কাছে বিপদ সংকেত",
-            descriptionBn = "রিয়েল স্ট্রিট ম্যাপে আপনার এলাকার সক্রিয় ডোনার খুঁজুন। ইন্টারনেট না থাকলেও ১ কি.মি. এলাকার ফোনে ব্লুটুথ SOS পৌঁছে যাবে।",
+            badge = "",
+            titleBn = "রক্ত লাগলে\nআবেদন করুন",
+            subtitleBn = "",
+            descriptionBn = "রোগীর তথ্য দিয়ে আবেদন করলে, মিলে যাওয়া ডোনাররা সাথে সাথে জানতে পারেন।",
             highlightPoints = listOf(
-                TutorialHighlightPoint(
-                    icon = Icons.Default.Map,
-                    label = "বাংলাদেশ ম্যাপে এলাকাভিত্তিক ডোনার ও SOS এরিয়া"
-                ),
-                TutorialHighlightPoint(
-                    icon = Icons.Default.BluetoothConnected,
-                    label = "ইন্টারনেট ছাড়াই ১ কি.মি. ব্লুটুথ (BLE) মেশ সিগন্যাল"
-                ),
-                TutorialHighlightPoint(
-                    icon = Icons.Default.NotificationsActive,
-                    label = "রক্তের গ্রুপ কম্প্যাটিবিলিটি ও ৯০ দিনের বিরতি চেক"
-                )
+                TutorialHighlightPoint(UIcons.LocalHospital, "হাসপাতাল, ওয়ার্ড আর কত ব্যাগ লাগবে"),
+                TutorialHighlightPoint(UIcons.Share, "হোয়াটসঅ্যাপ বা ফেসবুকে শেয়ার করুন"),
+                TutorialHighlightPoint(UIcons.CheckCircle, "রক্ত পেলে আবেদন বন্ধ করুন")
             ),
-            icon = Icons.Default.BluetoothConnected
+            icon = UIcons.Bloodtype
         ),
         TutorialSlide(
-            badge = "STEP 03 / 03",
-            titleBn = "এক ট্যাপে হোম ও\nSOS বাটনে দ্রুত সুরক্ষা",
-            subtitleBn = "৫ সেকেন্ডের অডিও প্রমাণ ও লাইভ লোকেশন ট্র্যাকিং",
-            descriptionBn = "হোম বা SOS স্ক্রিনের বাটনে ট্যাপ করলে অডিও প্রমাণ ও রিয়েল-টাইম জিপিএস লোকেশনসহ জরুরি অ্যালার্ট চলে যাবে।",
+            badge = "",
+            titleBn = "ম্যাপে দেখুন\nকে কত কাছে",
+            subtitleBn = "",
+            descriptionBn = "রাস্তার ম্যাপে আপনার এলাকার ডোনার আর রোগীর আবেদন একসাথে দেখুন।",
             highlightPoints = listOf(
-                TutorialHighlightPoint(
-                    icon = Icons.Default.FlashOn,
-                    label = "এক ট্যাপে হোম ও SOS বাটনে দ্রুত অ্যালার্ট"
-                ),
-                TutorialHighlightPoint(
-                    icon = Icons.Default.Call,
-                    label = "পরিবারের ৩ জন বিশ্বস্ত কন্টাক্টকে SMS ও ৯৯৯ কল"
-                ),
-                TutorialHighlightPoint(
-                    icon = Icons.Default.LocationOn,
-                    label = "নিরাপদ মার্ক না করা পর্যন্ত রিয়েল-টাইম জিপিএস ট্র্যাকিং"
-                )
+                TutorialHighlightPoint(UIcons.Map, "সারা বাংলাদেশের ৬৪ জেলা"),
+                TutorialHighlightPoint(UIcons.MyLocation, "জিপিএস দিয়ে নিজের এলাকা"),
+                TutorialHighlightPoint(UIcons.Star, "প্রতিদিন চেক-ইন করে পয়েন্ট")
             ),
-            icon = Icons.Default.FlashOn
-        )
+            icon = UIcons.Map
+        ),
+        if (FeatureFlags.SOS_ENABLED) TutorialSlide(
+            badge = "",
+            titleBn = "বিপদে\nএক ট্যাপে SOS",
+            subtitleBn = "",
+            descriptionBn = "৫ সেকেন্ডের অডিও প্রমাণ আর লাইভ লোকেশন সহ কাছের মানুষদের জানিয়ে দিন।",
+            highlightPoints = listOf(
+                TutorialHighlightPoint(UIcons.FlashOn, "এক ট্যাপে SOS"),
+                TutorialHighlightPoint(UIcons.Call, "৯৯৯ কল ও পরিবারকে SMS"),
+                TutorialHighlightPoint(UIcons.LocationOn, "নিরাপদ না হওয়া পর্যন্ত লাইভ লোকেশন")
+            ),
+            icon = UIcons.FlashOn
+        ) else null
     )
 
     val slide = slides[currentStep]
@@ -217,223 +185,98 @@ fun RokkhonTutorialScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(RadarObsidianBg)
+            .background(Color.White)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 24.dp, vertical = 14.dp)
             .testTag("rokkhon_tutorial_screen")
     ) {
-        // Top Pure Gradient Hero Section (No background shapes)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.46f)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF8B1124),
-                            Color(0xFF4B0A15),
-                            RadarObsidianBg
-                        )
-                    )
-                )
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 28.dp, vertical = 18.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
+            Image(
+                painter = painterResource(R.drawable.rokkhon_wordmark_black),
+                contentDescription = "রক্ষণ",
+                modifier = Modifier.height(28.dp)
+            )
+            Text(
+                text = "স্কিপ",
+                color = RokkhonPalette.Muted,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.rokkhon_wordmark_white),
-                    contentDescription = "রক্ষণ",
-                    modifier = Modifier.height(28.dp)
-                )
+                    .clip(CircleShape)
+                    .springClick { onFinishTutorial() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .testTag("skip_tutorial_button")
+            )
+        }
 
-                Surface(
-                    color = Color.White.copy(alpha = 0.15f),
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .clickable { onFinishTutorial() }
-                        .testTag("skip_tutorial_button")
+        AnimatedContent(
+            targetState = slide,
+            modifier = Modifier.weight(1f),
+            transitionSpec = {
+                (fadeIn() + slideInHorizontally { it / 6 }) togetherWith fadeOut()
+            },
+            label = "tutorial_slide"
+        ) { s ->
+            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                Spacer(modifier = Modifier.height(48.dp))
+                Box(
+                    modifier = Modifier.size(88.dp).clip(CircleShape).background(RokkhonPalette.Subtle),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "স্কিপ",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
+                    Icon(s.icon, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(40.dp))
                 }
-            }
-
-            AnimatedContent(
-                targetState = slide,
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(top = 24.dp),
-                label = "tutorial_hero"
-            ) { targetSlide ->
-                Column {
-                    Text(
-                        text = targetSlide.badge,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.72f),
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.4.sp
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        text = targetSlide.titleBn,
-                        fontSize = 28.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold,
-                        lineHeight = 38.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = targetSlide.subtitleBn,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.85f),
-                        lineHeight = 22.sp
-                    )
+                Spacer(modifier = Modifier.height(28.dp))
+                Text(s.titleBn, fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(s.descriptionBn, fontSize = 16.sp, lineHeight = 24.sp, color = RokkhonPalette.Muted)
+                Spacer(modifier = Modifier.height(24.dp))
+                s.highlightPoints.forEach { point ->
+                    Row(modifier = Modifier.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(point.icon, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(22.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Text(point.label, fontSize = 15.5.sp, color = RokkhonPalette.Ink)
+                    }
                 }
             }
         }
 
-        // Bottom Rounded Pure White Sheet
-        Surface(
-            color = Color.White,
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 16.dp)) {
+            slides.indices.forEach { idx ->
+                val w by animateDpAsState(if (idx == currentStep) 24.dp else 8.dp, label = "dot")
+                Box(
+                    modifier = Modifier
+                        .height(8.dp)
+                        .width(w)
+                        .clip(CircleShape)
+                        .background(if (idx == currentStep) Color.Black else RokkhonPalette.Chip)
+                )
+            }
+        }
+
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.56f)
+                .height(56.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.Black)
+                .springClick(pressedScale = 0.98f) {
+                    if (currentStep < slides.lastIndex) currentStep += 1 else onFinishTutorial()
+                }
+                .testTag("tutorial_next_button"),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(horizontal = 26.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(42.dp)
-                            .height(4.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE2D5D7))
-                            .align(Alignment.CenterHorizontally)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = slide.descriptionBn,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF2B1B1E),
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = 23.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        slide.highlightPoints.forEach { point ->
-                            Surface(
-                                color = Color(0xFFFAF5F6),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .clip(CircleShape)
-                                            .background(LifelineBlush),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = point.icon,
-                                            contentDescription = null,
-                                            tint = IosSystemRed,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        text = point.label,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF3B131A),
-                                        fontWeight = FontWeight.SemiBold,
-                                        lineHeight = 19.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp, bottom = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        slides.indices.forEach { idx ->
-                            Box(
-                                modifier = Modifier
-                                    .height(8.dp)
-                                    .width(if (idx == currentStep) 26.dp else 8.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (idx == currentStep) IosSystemRed else Color(0xFFE2D5D7)
-                                    )
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            if (currentStep < slides.lastIndex) {
-                                currentStep += 1
-                            } else {
-                                onFinishTutorial()
-                            }
-                        },
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = IosSystemRed,
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier
-                            .height(50.dp)
-                            .testTag("tutorial_next_button")
-                    ) {
-                        Text(
-                            text = if (currentStep < slides.lastIndex) "পরবর্তী" else "শুরু করুন",
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
+            Text(
+                text = if (currentStep < slides.lastIndex) "পরবর্তী" else "শুরু করুন",
+                color = Color.White,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

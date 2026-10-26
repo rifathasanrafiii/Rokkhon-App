@@ -25,15 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.LocalHospital
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -51,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -64,11 +54,11 @@ import com.example.data.model.AppLanguage
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.isValidBangladeshMobile
 import com.example.ui.components.BangladeshAreaPickerDialog
+import com.example.ui.icons.UIcons
 import com.example.ui.screens.BloodGroupPillGrid2x4
 import com.example.ui.theme.IosSystemRed
 import com.example.ui.theme.LifelineBlush
-import com.example.ui.theme.RadarDarkMaroon
-import com.example.ui.theme.RadarObsidianBg
+import com.example.ui.theme.RokkhonPalette
 
 /**
  * Full-Screen Emergency Blood Request Sheet with Searchable All-Bangladesh Area Selection.
@@ -117,16 +107,11 @@ fun PostBloodRequestDialog(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(RadarObsidianBg)
+                .background(Color.White)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color(0xFF4C0D18), RadarDarkMaroon, RadarObsidianBg)
-                        )
-                    )
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 20.dp, vertical = 14.dp)
             ) {
@@ -140,15 +125,15 @@ fun PostBloodRequestDialog(
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = UIcons.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = RokkhonPalette.Ink
                         )
                     }
                     Text(
-                        text = if (language == AppLanguage.BENGALI) "Emergency Request • রক্তের আবেদন" else "Emergency Request",
+                        text = "",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
+                        color = RokkhonPalette.Ink,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.width(36.dp))
@@ -157,21 +142,21 @@ fun PostBloodRequestDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = if (language == AppLanguage.BENGALI) "চলুন সঠিক\nডোনার খুঁজি।" else "Let's find the\nright donor.",
-                    style = MaterialTheme.typography.displayLarge,
-                    color = Color.White,
+                    text = if (language == AppLanguage.BENGALI) "রক্তের আবেদন" else "Request blood",
+                    fontSize = 30.sp,
+                    color = RokkhonPalette.Ink,
                     fontWeight = FontWeight.ExtraBold,
                     lineHeight = 34.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = if (language == AppLanguage.BENGALI) {
-                        "সারা বাংলাদেশের যেকোনো জেলা বা এলাকা সিলেক্ট করে রোগীর তথ্য দিন।"
+                        "কার জন্য রক্ত লাগবে, জানিয়ে দিন। মিলে যাওয়া ডোনাররা সাথে সাথে জানবেন।"
                     } else {
-                        "Triggers real-time alert to available donors in your selected Bangladesh area."
+                        "Tell us who needs blood. Matching donors are notified right away."
                     },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.75f)
+                    color = RokkhonPalette.Muted
                 )
             }
 
@@ -199,14 +184,14 @@ fun PostBloodRequestDialog(
                                 .width(40.dp)
                                 .height(4.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFE2D5D7))
+                                .background(Color(0xFFE2E2E2))
                         )
                     }
 
                     Text(
-                        text = if (language == AppLanguage.BENGALI) "Blood group needed • রক্তের গ্রুপ" else "Blood group needed",
+                        text = if (language == AppLanguage.BENGALI) "কোন গ্রুপের রক্ত লাগবে?" else "Blood group needed",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF1A0F12),
+                        color = Color(0xFF000000),
                         fontWeight = FontWeight.ExtraBold
                     )
 
@@ -229,9 +214,9 @@ fun PostBloodRequestDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (language == AppLanguage.BENGALI) "রোগীর এলাকা সিলেক্ট করুন (৬৪ জেলা)" else "Select Hospital Area (All 64 Districts)",
+                            text = if (language == AppLanguage.BENGALI) "হাসপাতাল কোন এলাকায়?" else "Hospital area",
                             style = MaterialTheme.typography.titleSmall,
-                            color = Color(0xFF1A0F12),
+                            color = Color(0xFF000000),
                             fontWeight = FontWeight.ExtraBold
                         )
                         Surface(
@@ -243,7 +228,7 @@ fun PostBloodRequestDialog(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Search, contentDescription = null, tint = IosSystemRed, modifier = Modifier.size(14.dp))
+                                Icon(UIcons.Search, contentDescription = null, tint = IosSystemRed, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = if (language == AppLanguage.BENGALI) "সব জেলা খুঁজুন" else "Search All 64",
@@ -264,11 +249,11 @@ fun PostBloodRequestDialog(
                         BANGLADESH_DISTRICTS.take(16).forEach { dist ->
                             val isSelected = district.contains(dist.nameEn.substringBefore(","))
                             Surface(
-                                color = if (isSelected) IosSystemRed else Color(0xFFFAF6F6),
-                                contentColor = if (isSelected) Color.White else Color(0xFF1A0F12),
+                                color = if (isSelected) IosSystemRed else Color(0xFFF6F6F6),
+                                contentColor = if (isSelected) Color.White else Color(0xFF000000),
                                 shape = CircleShape,
                                 modifier = Modifier
-                                    .border(1.dp, Color(0xFFEDE2E4), CircleShape)
+                                    .border(1.dp, Color(0xFFE8E8E8), CircleShape)
                                     .clickable {
                                         district = dist.nameEn
                                         hospitalName = dist.defaultHospitalEn
@@ -285,9 +270,9 @@ fun PostBloodRequestDialog(
                     }
 
                     Text(
-                        text = if (language == AppLanguage.BENGALI) "Hospital & Clinical Details • রোগীর তথ্য" else "Hospital & Clinical Details",
+                        text = if (language == AppLanguage.BENGALI) "রোগীর তথ্য" else "Patient details",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF1A0F12),
+                        color = Color(0xFF000000),
                         fontWeight = FontWeight.ExtraBold
                     )
 
@@ -295,7 +280,7 @@ fun PostBloodRequestDialog(
                         value = hospitalName,
                         onValueChange = { hospitalName = it },
                         leadingIcon = {
-                            Icon(Icons.Default.LocalHospital, contentDescription = null, tint = IosSystemRed)
+                            Icon(UIcons.LocalHospital, contentDescription = null, tint = IosSystemRed)
                         },
                         label = { Text(if (language == AppLanguage.BENGALI) "হাসপাতালের নাম (Hospital) *" else "Hospital Name *") },
                         placeholder = { Text(defaultHospital) },
@@ -311,7 +296,7 @@ fun PostBloodRequestDialog(
                         value = district,
                         onValueChange = { district = it },
                         leadingIcon = {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = IosSystemRed)
+                            Icon(UIcons.LocationOn, contentDescription = null, tint = IosSystemRed)
                         },
                         label = { Text(if (language == AppLanguage.BENGALI) "এলাকা / জেলা (Location)" else "Location / Area") },
                         modifier = Modifier.fillMaxWidth(),
@@ -366,17 +351,17 @@ fun PostBloodRequestDialog(
                         Text(
                             text = if (language == AppLanguage.BENGALI) "রক্তের ব্যাগ:" else "Bags Needed:",
                             style = MaterialTheme.typography.labelLarge,
-                            color = Color(0xFF1A0F12),
+                            color = Color(0xFF000000),
                             fontWeight = FontWeight.Bold
                         )
                         listOf(1, 2, 3, 4).forEach { count ->
                             val isSelected = unitsNeeded == count
                             Surface(
-                                color = if (isSelected) IosSystemRed else Color(0xFFFAF6F6),
-                                contentColor = if (isSelected) Color.White else Color(0xFF1A0F12),
+                                color = if (isSelected) IosSystemRed else Color(0xFFF6F6F6),
+                                contentColor = if (isSelected) Color.White else Color(0xFF000000),
                                 shape = CircleShape,
                                 modifier = Modifier
-                                    .border(1.dp, Color(0xFFEDE2E4), CircleShape)
+                                    .border(1.dp, Color(0xFFE8E8E8), CircleShape)
                                     .clickable { unitsNeeded = count }
                             ) {
                                 Text(
@@ -422,7 +407,7 @@ fun PostBloodRequestDialog(
                     Text(
                         text = if (language == AppLanguage.BENGALI) "How urgent is it? • কখন রক্ত লাগবে?" else "How urgent is it?",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF1A0F12),
+                        color = Color(0xFF000000),
                         fontWeight = FontWeight.ExtraBold
                     )
 
@@ -438,19 +423,19 @@ fun PostBloodRequestDialog(
                         slots.forEach { (key, title, sub) ->
                             val isSel = selectedUrgencySlot == key
                             val iconVec = when (key) {
-                                "NOW" -> Icons.Default.FlashOn
-                                "SIX_HRS" -> Icons.Default.Schedule
-                                else -> Icons.Default.WbSunny
+                                "NOW" -> UIcons.FlashOn
+                                "SIX_HRS" -> UIcons.Schedule
+                                else -> UIcons.WbSunny
                             }
                             Surface(
                                 color = if (isSel) IosSystemRed else Color.White,
-                                contentColor = if (isSel) Color.White else Color(0xFF1A0F12),
+                                contentColor = if (isSel) Color.White else Color(0xFF000000),
                                 shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier
                                     .weight(1f)
                                     .border(
                                         width = if (isSel) 0.dp else 1.dp,
-                                        color = Color(0xFFEDE2E4),
+                                        color = Color(0xFFE8E8E8),
                                         shape = RoundedCornerShape(20.dp)
                                     )
                                     .clickable { selectedUrgencySlot = key }
@@ -474,7 +459,7 @@ fun PostBloodRequestDialog(
                                     Text(
                                         text = sub,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (isSel) Color.White.copy(alpha = 0.8f) else Color(0xFF756568)
+                                        color = if (isSel) Color.White.copy(alpha = 0.8f) else Color(0xFF5E5E5E)
                                     )
                                 }
                             }
@@ -532,7 +517,7 @@ fun PostBloodRequestDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            imageVector = UIcons.ArrowForward,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )

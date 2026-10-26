@@ -35,6 +35,13 @@ object RokkhonIntents {
         launch(context, Intent(Intent.ACTION_DIAL, Uri.parse("tel:${phone.trim()}")), language)
     }
 
+    /** Opens the SMS app to one number with the text filled in (no SMS permission needed). */
+    fun sms(context: Context, phone: String, text: String, language: AppLanguage = AppLanguage.BENGALI) {
+        if (phone.isBlank()) return
+        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${phone.trim()}")).putExtra("sms_body", text)
+        launch(context, intent, language)
+    }
+
     /** Opens turn-by-turn directions to a point (Google Maps if installed, else any maps app). */
     fun directions(context: Context, lat: Double, lng: Double, language: AppLanguage) {
         val navUri = Uri.parse("google.navigation:q=$lat,$lng&mode=w")

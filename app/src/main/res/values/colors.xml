@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Top colour of the splash gradient; the launch window uses it so cold start has no flash. -->
-    <color name="rokkhon_crimson">#FF8B1124</color>
+    <!-- Splash background (black); the launch window uses it so cold start has no flash. -->
+    <color name="rokkhon_splash">#FF000000</color>
 </resources>

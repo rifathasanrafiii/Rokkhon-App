@@ -82,7 +82,7 @@ fun HardwareSosCountdownOverlay(
                     modifier = Modifier
                         .size(150.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFE11D48)),
+                        .background(Color(0xFFE11900)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -106,7 +106,7 @@ fun HardwareSosCountdownOverlay(
                 Spacer(modifier = Modifier.height(28.dp))
                 Button(
                     onClick = onCancel,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF7A0A1A)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF000000)),
                     shape = CircleShape,
                     modifier = Modifier
                         .fillMaxWidth()

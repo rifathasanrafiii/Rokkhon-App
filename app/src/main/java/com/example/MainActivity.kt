@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -45,14 +46,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.PersonOutline
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -99,6 +92,7 @@ import com.example.ui.components.AdminEnforcementLockScreen
 import com.example.ui.components.HardwareSosCountdownOverlay
 import com.example.ui.components.LiveCameraAudioSosDialog
 import com.example.ui.components.PostBloodRequestDialog
+import com.example.ui.icons.UIcons
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.DonorProfileScreen
 import com.example.ui.screens.HomeMatchHubScreen
@@ -133,7 +127,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_MyApplication)
         super.onCreate(savedInstanceState)
-        runCatching { enableEdgeToEdge() }
+        // White screens: dark status/navigation bar icons regardless of the phone's dark mode.
+        runCatching {
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+                navigationBarStyle = SystemBarStyle.light(android.graphics.Color.WHITE, android.graphics.Color.WHITE)
+            )
+        }
         RokkhonNotificationHelper.ensureChannel(this)
 
         hardwareSosDetector = HardwareSosDetector(
@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                 _pendingHardwareSosMethod.value = triggerMethod
             }
         )
-        hardwareSosDetector.startListening()
+        if (FeatureFlags.SOS_ENABLED) hardwareSosDetector.startListening()
 
         setContent {
             MyApplicationTheme {
@@ -160,7 +160,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (::hardwareSosDetector.isInitialized && hardwareSosDetector.onKeyDown(keyCode, event)) {
+        if (FeatureFlags.SOS_ENABLED && ::hardwareSosDetector.isInitialized && hardwareSosDetector.onKeyDown(keyCode, event)) {
             return true
         }
         return super.onKeyDown(keyCode, event)
@@ -403,7 +403,7 @@ fun RokkhonAuthenticatedShell(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = Color(0xFFFAF8F8),
+        containerColor = Color(0xFFFFFFFF),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             RokkhonFloatingBottomBar(
@@ -421,7 +421,8 @@ fun RokkhonAuthenticatedShell(
         ) {
             // Tab switch: quick fade with a slight scale, like a native tab bar.
             AnimatedContent(
-                targetState = currentTab,
+                // With SOS hidden, an old saved SOS tab opens Home instead.
+                targetState = if (!FeatureFlags.SOS_ENABLED && currentTab == RokkhonTab.SOS_GUARDIAN) RokkhonTab.HOME_MATCH else currentTab,
                 transitionSpec = {
                     (fadeIn(tween(220, delayMillis = 40)) + scaleIn(tween(220, delayMillis = 40), initialScale = 0.985f)) togetherWith
                         fadeOut(tween(120))
@@ -497,7 +498,7 @@ fun RokkhonAuthenticatedShell(
                         )
                         IconButton(onClick = { viewModel.dismissToastBanner() }) {
                             Icon(
-                                imageVector = Icons.Default.Close,
+                                imageVector = UIcons.Close,
                                 contentDescription = if (language == AppLanguage.BENGALI) "বন্ধ করুন" else "Dismiss",
                                 tint = Color.White,
                                 modifier = Modifier.size(18.dp)
@@ -596,20 +597,18 @@ private fun RokkhonFloatingBottomBar(
 ) {
     val isBn = language == AppLanguage.BENGALI
     val haptics = LocalHapticFeedback.current
-    Box(
+    // Uber-style tab bar: white, hairline on top, no floating pill.
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFFAF8F8))
+            .background(Color.White)
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {
-        Surface(
-            color = Color.White,
-            shape = RoundedCornerShape(36.dp),
-            shadowElevation = 10.dp,
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFEEEEEE)))
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(70.dp)
+                .height(64.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -620,7 +619,7 @@ private fun RokkhonFloatingBottomBar(
             ) {
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.HOME_MATCH,
-                    icon = Icons.Default.Home,
+                    icon = UIcons.Home,
                     label = if (isBn) "হোম" else "Home",
                     onClick = { onSelectTab(RokkhonTab.HOME_MATCH) },
                     modifier = Modifier
@@ -630,7 +629,7 @@ private fun RokkhonFloatingBottomBar(
 
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.RADAR_MAP,
-                    icon = Icons.Default.Search,
+                    icon = UIcons.Search,
                     label = if (isBn) "খুঁজুন" else "Find",
                     onClick = { onSelectTab(RokkhonTab.RADAR_MAP) },
                     modifier = Modifier
@@ -644,12 +643,10 @@ private fun RokkhonFloatingBottomBar(
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
-                        color = Color(0xFFC8102E),
+                        color = Color.Black,
                         shape = CircleShape,
-                        shadowElevation = 6.dp,
                         modifier = Modifier
-                            .offset(y = (-6).dp)
-                            .size(52.dp)
+                            .size(46.dp)
                             .clip(CircleShape)
                             .clickable(role = Role.Button) {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -659,18 +656,18 @@ private fun RokkhonFloatingBottomBar(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Default.Add,
+                                imageVector = UIcons.Add,
                                 contentDescription = if (isBn) "রক্তের আবেদন করুন" else "Request blood",
                                 tint = Color.White,
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
                 }
 
-                RokkhonBottomNavItem(
+                if (FeatureFlags.SOS_ENABLED) RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.SOS_GUARDIAN,
-                    icon = Icons.Default.Shield,
+                    icon = UIcons.Shield,
                     label = "SOS",
                     onClick = { onSelectTab(RokkhonTab.SOS_GUARDIAN) },
                     modifier = Modifier
@@ -680,7 +677,7 @@ private fun RokkhonFloatingBottomBar(
 
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.DONOR_PROFILE,
-                    icon = Icons.Default.PersonOutline,
+                    icon = UIcons.PersonOutline,
                     label = if (isBn) "প্রোফাইল" else "Profile",
                     onClick = { onSelectTab(RokkhonTab.DONOR_PROFILE) },
                     modifier = Modifier
@@ -700,13 +697,13 @@ private fun RokkhonBottomNavItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val activeRed = Color(0xFFB80F24)
-    val inactiveGray = Color(0xFF6E6265)
+    val activeRed = Color.Black
+    val inactiveGray = Color(0xFF8A8A8A)
     val haptics = LocalHapticFeedback.current
-    val pillColor by animateColorAsState(if (selected) Color(0xFFFBE9EB) else Color.Transparent, label = "nav_pill")
+    val pillColor = Color.Transparent
     val tint by animateColorAsState(if (selected) activeRed else inactiveGray, label = "nav_tint")
     val iconScale by animateFloatAsState(
-        targetValue = if (selected) 1.12f else 1f,
+        targetValue = if (selected) 1.08f else 1f,
         animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium),
         label = "nav_icon_scale"
     )

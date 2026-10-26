@@ -327,7 +327,7 @@ private class PinIcons(context: Context) {
             lineTo(cx + r * 0.55f, cy + r * 0.55f)
             close()
         }
-        c.drawPath(path, fill(0xFFB80F24.toInt()))
+        c.drawPath(path, fill(0xFF000000.toInt()))
         c.drawCircle(cx, cy, r, stroke(0xFFFFFFFF.toInt(), 2f * d))
         drawCentredText(c, bloodGroup, cx, cy, 11f * d, 0xFFFFFFFF.toInt())
         bmp
@@ -338,9 +338,9 @@ private class PinIcons(context: Context) {
         val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val cx = s / 2f
-        c.drawCircle(cx, cx, cx - 2 * d, fill(0xFF7A0C18.toInt()))
+        c.drawCircle(cx, cx, cx - 2 * d, fill(0xFF000000.toInt()))
         c.drawCircle(cx, cx, cx - 6 * d, fill(0xFFFFFFFF.toInt()))
-        drawCentredText(c, bloodGroup, cx, cx, 11f * d, 0xFF7A0C18.toInt())
+        drawCentredText(c, bloodGroup, cx, cx, 11f * d, 0xFF000000.toInt())
         bmp
     }
 
