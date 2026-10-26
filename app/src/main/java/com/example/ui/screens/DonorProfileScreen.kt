@@ -65,6 +65,7 @@ import com.example.data.model.daysUntilEligible
 import com.example.data.model.isValidBangladeshMobile
 import com.example.data.model.parseDonationDateMillis
 import com.example.ui.components.BangladeshAreaPickerDialog
+import com.example.ui.components.BloodGroupGrid
 import com.example.ui.components.RokkhonBottomSheet
 import com.example.ui.components.RollingNumber
 import com.example.ui.components.RoundIconButton
@@ -115,6 +116,13 @@ fun DonorProfileScreen(
 
     val bn = language == AppLanguage.BENGALI
     var showEditSheet by remember { mutableStateOf(false) }
+    val donorEditorRequested by viewModel.donorEditorRequested.collectAsStateWithLifecycle()
+    LaunchedEffect(donorEditorRequested) {
+        if (donorEditorRequested) {
+            showEditSheet = true
+            viewModel.consumeDonorEditorRequest()
+        }
+    }
     var showDonatedConfirm by remember { mutableStateOf(false) }
     var showProfileAreaPicker by remember { mutableStateOf(false) }
 
@@ -377,14 +385,13 @@ fun DonorProfileScreen(
     if (showProfileAreaPicker) {
         BangladeshAreaPickerDialog(
             selectedDistrict = BANGLADESH_AREAS.firstOrNull { district.equals(it.nameEn, ignoreCase = true) } ?: selectedDistrict,
-            isAutoGpsActive = false,
             language = language,
+            onDetectLocation = { done -> viewModel.detectNearestArea(done) },
             onSelectDistrict = { picked ->
                 district = picked.nameEn
                 viewModel.selectDistrict(picked)
                 if (myDonor != null) saveProfile()
             },
-            onSelectAutoGps = {},
             onDismiss = { showProfileAreaPicker = false }
         )
     }
@@ -452,7 +459,7 @@ fun DonorProfileScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(if (bn) "রক্তের গ্রুপ" else "Blood group", fontSize = 13.sp, color = RokkhonPalette.Muted, fontWeight = FontWeight.SemiBold)
-                BloodGroupChipRow(language = language, selected = bloodGroup, onSelect = { if (it != null) bloodGroup = it }, includeAll = false)
+                BloodGroupGrid(selected = bloodGroup, onSelect = { bloodGroup = it }, tagPrefix = "profile_group_")
                 OutlinedTextField(
                     value = displayName,
                     onValueChange = { displayName = it },

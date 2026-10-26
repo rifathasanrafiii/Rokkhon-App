@@ -79,3 +79,12 @@ fun areaPath(area: BangladeshDistrict): Pair<AreaDivision, AreaDistrict>? {
     }
     return null
 }
+
+/** Result of "use my location" in the area picker, shown on that page itself. */
+sealed interface AreaDetect {
+    data class Found(val area: BangladeshDistrict) : AreaDetect
+    data object NoPermission : AreaDetect
+    data object LocationOff : AreaDetect
+    data object OutsideBangladesh : AreaDetect
+    data object Failed : AreaDetect
+}

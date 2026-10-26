@@ -225,6 +225,16 @@ class ScreenshotTourTest {
     }
 
     @Test
+    fun joinOpensDonorForm() {
+        startApp()
+        tap("home_profile_shortcut")
+        composeRule.mainClock.advanceTimeBy(1_200)
+        // The donor form opens straight away (it is a bottom sheet, so it is not in the PNG).
+        composeRule.onNodeWithTag("save_donor_profile_button").assertExists()
+        save("21_join_donor_form")
+    }
+
+    @Test
     fun areaPicker() {
         startApp()
         tap("area_dropdown_selector")

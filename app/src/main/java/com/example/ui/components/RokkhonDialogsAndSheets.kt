@@ -2,25 +2,25 @@ package com.example.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +28,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,24 +37,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.AppLanguage
 import com.example.data.model.NotificationKind
 import com.example.data.model.RokkhonNotificationItem
 import com.example.ui.icons.UIcons
-import com.example.ui.theme.IosSystemBlue
-import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemOrange
-import com.example.ui.theme.IosSystemRed
-import com.example.ui.theme.LifelineBlush
-import com.example.ui.theme.PinCrimsonRed
+import com.example.ui.theme.RokkhonPalette
 
 /**
- * Live Notification Center Dialog/Sheet:
- * Opens when tapping the top-right Notification Bell on the Home screen.
- * Displays Live SOS alerts, nearby blood requests, responder updates, and False-SOS warnings.
+ * Notifications, full screen: unread first, a small filter, and one compact row per item. Tapping a
+ * row opens what it is about. Grey and black; red only for an SOS.
  */
 @Composable
 fun RokkhonNotificationCenterDialog(
@@ -65,258 +64,180 @@ fun RokkhonNotificationCenterDialog(
     onNotificationClick: (RokkhonNotificationItem) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val bn = language == AppLanguage.BENGALI
+    var filter by rememberSaveable { mutableStateOf(0) }
+    val shown = notifications.filter {
+        when (filter) {
+            1 -> it.kind == NotificationKind.BLOOD_REQUEST || it.kind == NotificationKind.RESPONDER_UPDATE
+            2 -> it.kind == NotificationKind.SOS_ALERT || it.kind == NotificationKind.FALSE_SOS_WARNING
+            else -> true
+        }
+    }
+    val fresh = shown.filter { !it.isRead }
+    val earlier = shown.filter { it.isRead }
+
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.62f))
-                .padding(horizontal = 14.dp, vertical = 28.dp),
-            contentAlignment = Alignment.Center
+                .background(Color.White)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .testTag("notification_center_dialog")
         ) {
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.84f)
-                    .testTag("notification_center_dialog")
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(18.dp)
-                ) {
-                    // Header
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(LifelineBlush),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = UIcons.NotificationsActive,
-                                    contentDescription = null,
-                                    tint = IosSystemRed,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = if (language == AppLanguage.BENGALI) {
-                                        "নোটিফিকেশন"
-                                    } else {
-                                        "Notifications"
-                                    },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color(0xFF000000),
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    text = if (language == AppLanguage.BENGALI) {
-                                        if (unreadCount > 0) "$unreadCount টি নতুন" else "সব পড়া হয়েছে"
-                                    } else {
-                                        if (unreadCount > 0) "$unreadCount unread" else "All caught up"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF5E5E5E)
-                                )
-                            }
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                color = Color(0xFFF3F3F3),
-                                shape = CircleShape,
-                                modifier = Modifier
-                                    .clickable { onMarkAllRead() }
-                                    .testTag("notifications_mark_all_read_button")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = UIcons.DoneAll,
-                                        contentDescription = "Mark All Read",
-                                        tint = IosSystemRed,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (language == AppLanguage.BENGALI) "সব পড়া হয়েছে" else "Read All",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = IosSystemRed,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFF3F3F3))
-                            ) {
-                                Icon(
-                                    imageVector = UIcons.Close,
-                                    contentDescription = "Close",
-                                    tint = Color(0xFF000000),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (falseSosWarningBanner != null || falseSosPenaltyCount > 0) {
+                RoundIconButton(icon = UIcons.ArrowBack, onClick = onDismiss, contentDescription = if (bn) "ফিরে যান" else "Back", testTag = "notification_back")
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(if (bn) "নোটিফিকেশন" else "Notifications", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
+                    Text(
+                        if (unreadCount > 0) (if (bn) "${bnCount(unreadCount)}টি নতুন" else "$unreadCount new") else (if (bn) "সব দেখা হয়েছে" else "All caught up"),
+                        fontSize = 12.5.sp, color = RokkhonPalette.Muted
+                    )
+                }
+                if (unreadCount > 0) {
+                    Text(
+                        if (bn) "সব পড়া" else "Mark read",
+                        fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Ink,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(RokkhonPalette.Subtle)
+                            .springClick(onClick = onMarkAllRead)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .testTag("notification_mark_all_read")
+                    )
+                }
+            }
+            SegmentedControl(
+                segments = listOf(
+                    Segment(if (bn) "সব" else "All"),
+                    Segment(if (bn) "রক্ত" else "Blood"),
+                    Segment("SOS")
+                ),
+                selectedIndex = filter,
+                onSelect = { filter = it },
+                height = 38.dp,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            )
+            LazyColumn(
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+                modifier = Modifier.weight(1f).navigationBarsPadding()
+            ) {
+                if (falseSosPenaltyCount > 0 || falseSosWarningBanner != null) {
+                    item(key = "warning") {
                         FalseSosAccountWarningBanner(
                             language = language,
                             warningMessage = falseSosWarningBanner,
-                            penaltyCount = falseSosPenaltyCount
+                            penaltyCount = falseSosPenaltyCount,
+                            modifier = Modifier.padding(vertical = 8.dp)
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
                     }
-
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        if (notifications.isEmpty()) {
-                            item {
-                                RokkhonEmptyState(
-                                    icon = UIcons.NotificationsActive,
-                                    title = if (language == AppLanguage.BENGALI) "কোনো নোটিফিকেশন নেই" else "No notifications yet",
-                                    body = if (language == AppLanguage.BENGALI) {
-                                        "এলাকায় নতুন রক্তের আবেদন, ১ কি.মি.-এর মধ্যে SOS বা কেউ সাড়া দিলে এখানে জানানো হবে।"
-                                    } else {
-                                        "New blood requests in your area, SOS within 1 km and responder updates show up here."
-                                    },
-                                    testTag = "notifications_empty"
-                                )
-                            }
-                        }
-                        items(notifications, key = { it.id }) { item ->
-                            val (accentColor, iconVec) = when (item.kind) {
-                                NotificationKind.SOS_ALERT -> PinCrimsonRed to UIcons.Shield
-                                NotificationKind.BLOOD_REQUEST -> IosSystemRed to UIcons.Bloodtype
-                                NotificationKind.RESPONDER_UPDATE -> IosSystemGreen to UIcons.VerifiedUser
-                                NotificationKind.FALSE_SOS_WARNING -> IosSystemOrange to UIcons.ReportProblem
-                            }
-
-                            Surface(
-                                color = if (item.isRead) Color(0xFFFFFFFF) else accentColor.copy(alpha = 0.08f),
-                                shape = RoundedCornerShape(18.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(
-                                        width = if (item.isRead) 1.dp else 1.3.dp,
-                                        color = if (item.isRead) Color(0xFFE8E8E8) else accentColor.copy(alpha = 0.4f),
-                                        shape = RoundedCornerShape(18.dp)
-                                    )
-                                    .clickable { onNotificationClick(item) }
-                                    .testTag("notification_item_${item.id}")
+                }
+                if (shown.isEmpty()) {
+                    item(key = "empty") {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 64.dp, start = 24.dp, end = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier.size(64.dp).clip(CircleShape).background(RokkhonPalette.Subtle),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(14.dp),
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(accentColor.copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = iconVec,
-                                            contentDescription = null,
-                                            tint = accentColor,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = if (language == AppLanguage.BENGALI) item.titleBn else item.titleEn,
-                                                style = MaterialTheme.typography.titleSmall,
-                                                color = Color(0xFF000000),
-                                                fontWeight = FontWeight.ExtraBold,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = item.timestampLabel,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = accentColor,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(3.dp))
-                                        Text(
-                                            text = if (language == AppLanguage.BENGALI) item.bodyBn else item.bodyEn,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color(0xFF545454)
-                                        )
-                                        Spacer(modifier = Modifier.height(5.dp))
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = item.areaName,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = Color(0xFF5E5E5E),
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                            Text(
-                                                text = when (item.kind) {
-                                                    NotificationKind.SOS_ALERT -> if (language == AppLanguage.BENGALI) "SOS দেখুন →" else "View SOS →"
-                                                    NotificationKind.BLOOD_REQUEST -> if (language == AppLanguage.BENGALI) "আবেদন দেখুন →" else "View request →"
-                                                    else -> if (language == AppLanguage.BENGALI) "বিস্তারিত →" else "Details →"
-                                                },
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = IosSystemBlue,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
+                                Icon(UIcons.NotificationsNone, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(28.dp))
                             }
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(if (bn) "এখনও কিছু নেই" else "Nothing yet", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                if (bn) "আপনার এলাকায় রক্তের আবেদন বা আপনার রক্তের গ্রুপ মিললে এখানে জানাব।"
+                                else "We'll let you know here when someone near you needs your blood group.",
+                                fontSize = 13.sp, lineHeight = 19.sp, color = RokkhonPalette.Muted,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
+                if (fresh.isNotEmpty()) {
+                    item(key = "fresh_label") { NotificationGroupLabel(if (bn) "নতুন" else "New") }
+                    items(fresh, key = { "n_${it.id}" }) { NotificationRow(it, bn) { onNotificationClick(it) } }
+                }
+                if (earlier.isNotEmpty()) {
+                    item(key = "earlier_label") { NotificationGroupLabel(if (bn) "আগের" else "Earlier") }
+                    items(earlier, key = { "e_${it.id}" }) { NotificationRow(it, bn) { onNotificationClick(it) } }
+                }
             }
+        }
+    }
+}
+
+private fun bnCount(n: Int): String = n.toString().map { if (it.isDigit()) '০' + (it - '0') else it }.joinToString("")
+
+@Composable
+private fun NotificationGroupLabel(text: String) {
+    Text(
+        text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Muted,
+        modifier = Modifier.padding(top = 14.dp, bottom = 4.dp, start = 4.dp)
+    )
+}
+
+@Composable
+private fun NotificationRow(item: RokkhonNotificationItem, bn: Boolean, onClick: () -> Unit) {
+    val sos = item.kind == NotificationKind.SOS_ALERT
+    val icon = when (item.kind) {
+        NotificationKind.SOS_ALERT -> UIcons.Shield
+        NotificationKind.BLOOD_REQUEST -> UIcons.Bloodtype
+        NotificationKind.RESPONDER_UPDATE -> UIcons.People
+        NotificationKind.FALSE_SOS_WARNING -> UIcons.ReportProblem
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (!item.isRead) RokkhonPalette.Subtle else Color.White)
+            .springClick(pressedScale = 0.98f, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp)
+            .testTag("notification_item_${item.id}"),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(if (sos) RokkhonPalette.Sos else if (!item.isRead) Color.White else RokkhonPalette.Subtle),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = if (sos) Color.White else RokkhonPalette.Ink, modifier = Modifier.size(20.dp))
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (bn) item.titleBn else item.titleEn,
+                    fontSize = 14.5.sp,
+                    fontWeight = if (item.isRead) FontWeight.Medium else FontWeight.Bold,
+                    color = RokkhonPalette.Ink,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!item.isRead) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(RokkhonPalette.Primary))
+                }
+            }
+            Text(
+                if (bn) item.bodyBn else item.bodyEn,
+                fontSize = 13.sp, lineHeight = 18.sp, color = RokkhonPalette.Muted, maxLines = 2
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                listOf(item.timestampLabel, item.areaName).filter { it.isNotBlank() }.joinToString(" · "),
+                fontSize = 11.5.sp, color = RokkhonPalette.Faint, maxLines = 1
+            )
         }
     }
 }

@@ -480,3 +480,29 @@ fun RokkhonBottomSheet(
         }
     }
 }
+
+/** All eight blood groups as a 4×2 grid of grey tiles; the chosen one turns black. */
+@Composable
+fun BloodGroupGrid(selected: String?, onSelect: (String) -> Unit, modifier: Modifier = Modifier, tagPrefix: String = "blood_filter_") {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-").chunked(4).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { bg ->
+                    val sel = selected == bg
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (sel) RokkhonPalette.Primary else RokkhonPalette.Subtle)
+                            .springClick(pressedScale = 0.94f) { onSelect(bg) }
+                            .testTag("$tagPrefix$bg"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(bg, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = if (sel) Color.White else RokkhonPalette.Ink)
+                    }
+                }
+            }
+        }
+    }
+}

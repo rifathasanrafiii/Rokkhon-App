@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -305,9 +304,9 @@ fun FindScreen(
         BangladeshAreaPickerDialog(
             language = language,
             selectedDistrict = selectedDistrict,
-            isAutoGpsActive = isAreaAutoDetected,
-            onSelectAutoGps = { viewModel.autoSelectAreaFromPermission(notifyUser = true) },
             onSelectDistrict = { viewModel.selectDistrict(it, isManual = true) },
+            onDetectLocation = { done -> viewModel.detectNearestArea(done) },
+            onAreaDetected = { viewModel.selectDistrict(it, isManual = false) },
             onDismiss = { showAreaPicker = false }
         )
     }

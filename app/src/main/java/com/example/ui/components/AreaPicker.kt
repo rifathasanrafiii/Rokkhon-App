@@ -1,6 +1,12 @@
 package com.example.ui.components
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -36,6 +42,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -43,12 +50,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -57,7 +66,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import com.example.data.model.AppLanguage
+import com.example.data.model.AreaDetect
 import com.example.data.model.AreaDistrict
 import com.example.data.model.AreaDivision
 import com.example.data.model.BANGLADESH_AREAS
@@ -69,6 +80,8 @@ import com.example.data.model.shortNameEn
 import com.example.ui.icons.UIcons
 import com.example.ui.screens.bnDigits
 import com.example.ui.theme.RokkhonPalette
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Area picker, the way people think about where they live: বিভাগ → জেলা → উপজেলা.
@@ -79,15 +92,20 @@ import com.example.ui.theme.RokkhonPalette
 fun BangladeshAreaPickerDialog(
     language: AppLanguage,
     selectedDistrict: BangladeshDistrict,
-    isAutoGpsActive: Boolean,
-    onSelectAutoGps: () -> Unit,
     onSelectDistrict: (BangladeshDistrict) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** Finds the nearest area from GPS and reports back; null hides "use my location". */
+    onDetectLocation: (((AreaDetect) -> Unit) -> Unit)? = null,
+    /** What to do with a GPS result (defaults to a normal pick). */
+    onAreaDetected: (BangladeshDistrict) -> Unit = onSelectDistrict
 ) {
     val bn = language == AppLanguage.BENGALI
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
     var divisionName by rememberSaveable { mutableStateOf<String?>(null) }
     var districtName by rememberSaveable { mutableStateOf<String?>(null) }
+    var gps by remember { mutableStateOf<GpsUi>(GpsUi.Idle) }
     val division = BANGLADESH_AREA_TREE.firstOrNull { it.nameEn == divisionName }
     val district = division?.districts?.firstOrNull { it.nameEn == districtName }
     val selectedPath = remember(selectedDistrict.areaKey) { areaPath(selectedDistrict) }
@@ -96,6 +114,31 @@ fun BangladeshAreaPickerDialog(
         district != null -> 2
         division != null -> 1
         else -> 0
+    }
+
+    fun pick(area: BangladeshDistrict) {
+        onSelectDistrict(area)
+        onDismiss()
+    }
+
+    fun detect() {
+        val run = onDetectLocation ?: return
+        gps = GpsUi.Searching
+        run { result ->
+            gps = GpsUi.Done(result)
+            if (result is AreaDetect.Found) {
+                onAreaDetected(result.area)
+                // Let the person see what was found before the page closes.
+                scope.launch {
+                    delay(1100)
+                    onDismiss()
+                }
+            }
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted.values.any { it }) detect() else gps = GpsUi.Done(AreaDetect.NoPermission)
     }
 
     fun back() {
@@ -119,58 +162,56 @@ fun BangladeshAreaPickerDialog(
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .testTag("bangladesh_area_picker_dialog")
         ) {
-            // Top bar: back/close, title, breadcrumb.
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 RoundIconButton(
                     icon = if (level == 0) UIcons.Close else UIcons.ArrowBack,
                     onClick = { back() },
                     contentDescription = if (bn) "ফিরে যান" else "Back",
                     testTag = "area_picker_back"
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = when {
                             district != null -> if (bn) district.nameBn else district.nameEn
                             division != null -> (if (bn) "${division.nameBn} বিভাগ" else "${division.nameEn} Division")
-                            else -> if (bn) "এলাকা বেছে নিন" else "Choose your area"
+                            else -> if (bn) "এলাকা" else "Area"
                         },
-                        fontSize = 20.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink,
+                        fontSize = 18.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = when {
                             district != null -> if (bn) "${district.divisionBn} বিভাগ · ${bnDigits(district.upazilas.size)}টি উপজেলা" else "${district.divisionEn} Division · ${district.upazilas.size} upazilas"
                             division != null -> if (bn) "${bnDigits(division.districts.size)}টি জেলা · ${bnDigits(division.upazilaCount)}টি উপজেলা" else "${division.districts.size} districts · ${division.upazilaCount} upazilas"
-                            else -> if (bn) "৮টি বিভাগ · ৬৪টি জেলা · ৪৯৪টি উপজেলা" else "8 divisions · 64 districts · 494 upazilas"
+                            else -> if (bn) "৮ বিভাগ · ৬৪ জেলা · ৪৯৪ উপজেলা" else "8 divisions · 64 districts · 494 upazilas"
                         },
-                        fontSize = 12.5.sp, color = RokkhonPalette.Muted
+                        fontSize = 12.sp, color = RokkhonPalette.Muted
                     )
                 }
             }
 
-            // Search: always there, jumps straight to any place.
             Row(
                 Modifier
                     .padding(horizontal = 16.dp)
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .height(46.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(RokkhonPalette.Subtle)
                     .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(UIcons.Search, null, tint = RokkhonPalette.Muted, modifier = Modifier.size(18.dp))
+                Icon(UIcons.Search, null, tint = RokkhonPalette.Muted, modifier = Modifier.size(17.dp))
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.weight(1f)) {
                     if (query.isEmpty()) {
-                        Text(if (bn) "জেলা বা উপজেলার নাম লিখুন" else "Search a district or upazila", color = RokkhonPalette.Faint, fontSize = 15.sp)
+                        Text(if (bn) "জেলা বা উপজেলা খুঁজুন" else "Search a district or upazila", color = RokkhonPalette.Faint, fontSize = 14.5.sp)
                     }
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it },
                         singleLine = true,
-                        textStyle = TextStyle(fontSize = 15.sp, color = RokkhonPalette.Ink),
+                        textStyle = TextStyle(fontSize = 14.5.sp, color = RokkhonPalette.Ink),
                         modifier = Modifier.fillMaxWidth().testTag("area_search_input")
                     )
                 }
@@ -179,7 +220,26 @@ fun BangladeshAreaPickerDialog(
                         modifier = Modifier.size(30.dp).clip(CircleShape).springClick { query = "" }.padding(6.dp))
                 }
             }
-            Spacer(Modifier.height(8.dp))
+
+            if (onDetectLocation != null && level == 0) {
+                Spacer(Modifier.height(10.dp))
+                GpsRow(
+                    bn = bn,
+                    state = gps,
+                    onClick = {
+                        if (gps != GpsUi.Searching) {
+                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                            if (granted) detect()
+                            else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                        }
+                    },
+                    onOpenLocationSettings = {
+                        runCatching { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
+                    }
+                )
+            }
+            Spacer(Modifier.height(6.dp))
 
             AnimatedContent(
                 targetState = level,
@@ -192,16 +252,75 @@ fun BangladeshAreaPickerDialog(
                 modifier = Modifier.weight(1f)
             ) { lvl ->
                 when (lvl) {
-                    0 -> DivisionGrid(bn, selectedDistrict, selectedPath?.first, isAutoGpsActive, onSelectAutoGps) { divisionName = it.nameEn }
+                    0 -> DivisionGrid(bn, selectedDistrict, selectedPath?.first) { divisionName = it.nameEn }
                     1 -> division?.let { div ->
                         DistrictList(bn, div, selectedPath?.second) { districtName = it.nameEn }
                     }
                     2 -> district?.let { d ->
-                        PlaceList(bn, d, selectedDistrict) { onSelectDistrict(it) }
+                        PlaceList(bn, d, selectedDistrict) { pick(it) }
                     }
-                    else -> SearchResults(bn, query, selectedDistrict) { onSelectDistrict(it) }
+                    else -> SearchResults(bn, query, selectedDistrict) { pick(it) }
                 }
             }
+        }
+    }
+}
+
+private sealed interface GpsUi {
+    data object Idle : GpsUi
+    data object Searching : GpsUi
+    data class Done(val result: AreaDetect) : GpsUi
+}
+
+/** "Use my location" with its result right here: searching, found, or what to fix. */
+@Composable
+private fun GpsRow(bn: Boolean, state: GpsUi, onClick: () -> Unit, onOpenLocationSettings: () -> Unit) {
+    val result = (state as? GpsUi.Done)?.result
+    val found = result as? AreaDetect.Found
+    val (title, subtitle) = when {
+        state == GpsUi.Searching -> (if (bn) "আপনার লোকেশন খুঁজছি…" else "Finding your location…") to
+            (if (bn) "কয়েক সেকেন্ড লাগতে পারে" else "This can take a few seconds")
+        found != null -> (if (bn) "পাওয়া গেছে: ${found.area.nameBn}" else "Found: ${found.area.nameEn}") to
+            (if (bn) "এই এলাকা বেছে নেওয়া হলো" else "Selected this area")
+        result == AreaDetect.NoPermission -> (if (bn) "লোকেশনের অনুমতি নেই" else "No location permission") to
+            (if (bn) "ট্যাপ করে অনুমতি দিন" else "Tap to allow")
+        result == AreaDetect.LocationOff -> (if (bn) "ফোনের লোকেশন বন্ধ" else "Phone location is off") to
+            (if (bn) "চালু করে আবার চেষ্টা করুন" else "Turn it on and try again")
+        result == AreaDetect.OutsideBangladesh -> (if (bn) "আপনি বাংলাদেশের বাইরে আছেন" else "You're outside Bangladesh") to
+            (if (bn) "নিচ থেকে এলাকা বেছে নিন" else "Pick an area below")
+        result == AreaDetect.Failed -> (if (bn) "লোকেশন পাওয়া যায়নি" else "Couldn't get your location") to
+            (if (bn) "আবার চেষ্টা করতে ট্যাপ করুন" else "Tap to try again")
+        else -> (if (bn) "আমার লোকেশন" else "Use my location") to
+            (if (bn) "GPS দিয়ে সবচেয়ে কাছের জেলা" else "Nearest district from GPS")
+    }
+    Row(
+        Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (found != null) RokkhonPalette.Primary else RokkhonPalette.Subtle)
+            .springClick(pressedScale = 0.98f, onClick = if (result == AreaDetect.LocationOff) onOpenLocationSettings else onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .testTag("area_picker_auto_gps_button"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(if (found != null) Color.White.copy(alpha = 0.16f) else Color.White),
+            contentAlignment = Alignment.Center
+        ) {
+            if (state == GpsUi.Searching) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = RokkhonPalette.Ink)
+            } else {
+                Icon(
+                    if (found != null) UIcons.CheckCircle else UIcons.MyLocation, null,
+                    tint = if (found != null) Color.White else RokkhonPalette.Ink, modifier = Modifier.size(17.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, color = if (found != null) Color.White else RokkhonPalette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, fontSize = 12.sp, color = if (found != null) Color.White.copy(alpha = 0.8f) else RokkhonPalette.Muted, maxLines = 1)
         }
     }
 }
@@ -211,68 +330,47 @@ private fun DivisionGrid(
     bn: Boolean,
     selected: BangladeshDistrict,
     selectedDivision: AreaDivision?,
-    isAutoGpsActive: Boolean,
-    onSelectAutoGps: () -> Unit,
     onOpen: (AreaDivision) -> Unit
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.navigationBarsPadding()
     ) {
         item(span = { GridItemSpan(2) }) {
-            Column {
-                // Current choice + GPS, as one card.
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(RokkhonPalette.Subtle)) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircleIcon(UIcons.LocationOn, dark = true)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(if (bn) "এখন বেছে নেওয়া" else "Selected now", fontSize = 12.sp, color = RokkhonPalette.Muted)
-                            Text(if (bn) selected.nameBn else selected.nameEn, fontSize = 15.5.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                    HorizontalDivider(color = Color.White, thickness = 2.dp)
-                    Row(
-                        Modifier.fillMaxWidth().springClick(pressedScale = 0.98f, onClick = onSelectAutoGps).padding(14.dp).testTag("area_picker_auto_gps_button"),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircleIcon(UIcons.MyLocation)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(if (bn) "GPS দিয়ে কাছের এলাকা" else "Use my location", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Ink)
-                            Text(
-                                if (isAutoGpsActive) (if (bn) "চালু আছে" else "On") else (if (bn) "সবচেয়ে কাছের জেলা নিজে থেকে বেছে নেবে" else "Picks the nearest district for you"),
-                                fontSize = 12.5.sp, color = if (isAutoGpsActive) RokkhonPalette.Positive else RokkhonPalette.Muted
-                            )
-                        }
-                        Icon(UIcons.KeyboardArrowRight, null, tint = RokkhonPalette.Faint, modifier = Modifier.size(18.dp))
-                    }
-                }
-                Spacer(Modifier.height(18.dp))
-                Text(if (bn) "বিভাগ" else "Divisions", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
+            Row(Modifier.padding(top = 6.dp, bottom = 2.dp, start = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (bn) "বিভাগ" else "Divisions", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink, modifier = Modifier.weight(1f))
+                Icon(UIcons.LocationOn, null, tint = RokkhonPalette.Muted, modifier = Modifier.size(13.dp))
+                Spacer(Modifier.width(3.dp))
+                Text(
+                    if (bn) selected.shortNameBn() else selected.shortNameEn(),
+                    fontSize = 12.5.sp, color = RokkhonPalette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("area_picker_current")
+                )
             }
         }
         itemsIndexed(BANGLADESH_AREA_TREE, key = { _, d -> d.nameEn }) { _, div ->
             val isSelected = selectedDivision?.nameEn == div.nameEn
-            Column(
+            Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(if (isSelected) RokkhonPalette.Primary else RokkhonPalette.Subtle)
                     .springClick(pressedScale = 0.96f) { onOpen(div) }
-                    .padding(14.dp)
-                    .testTag("division_chip_${div.nameEn}")
+                    .padding(horizontal = 12.dp, vertical = 11.dp)
+                    .testTag("division_chip_${div.nameEn}"),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(if (bn) div.nameBn else div.nameEn, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else RokkhonPalette.Ink)
-                Text(if (bn) div.nameEn else div.nameBn, fontSize = 12.sp, color = if (isSelected) Color.White.copy(alpha = 0.7f) else RokkhonPalette.Muted)
-                Spacer(Modifier.height(14.dp))
-                Text(
-                    if (bn) "${bnDigits(div.districts.size)} জেলা · ${bnDigits(div.upazilaCount)} উপজেলা" else "${div.districts.size} districts · ${div.upazilaCount} upazilas",
-                    fontSize = 12.sp, fontWeight = FontWeight.Medium, color = if (isSelected) Color.White.copy(alpha = 0.85f) else RokkhonPalette.Muted
-                )
+                Column(Modifier.weight(1f)) {
+                    Text(if (bn) div.nameBn else div.nameEn, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else RokkhonPalette.Ink, maxLines = 1)
+                    Text(
+                        if (bn) "${bnDigits(div.districts.size)} জেলা · ${bnDigits(div.upazilaCount)} উপজেলা" else "${div.districts.size} dist · ${div.upazilaCount} upz",
+                        fontSize = 11.5.sp, color = if (isSelected) Color.White.copy(alpha = 0.8f) else RokkhonPalette.Muted, maxLines = 1
+                    )
+                }
+                Icon(UIcons.KeyboardArrowRight, null, tint = if (isSelected) Color.White else RokkhonPalette.Faint, modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -292,12 +390,12 @@ private fun DistrictList(bn: Boolean, division: AreaDivision, selectedDistrict: 
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .springClick(pressedScale = 0.98f) { onOpen(d) }
-                    .padding(vertical = 12.dp, horizontal = 4.dp)
+                    .padding(vertical = 9.dp, horizontal = 4.dp)
                     .testTag("district_row_${d.nameEn}"),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(if (selectedDistrict?.nameEn == d.nameEn) RokkhonPalette.Primary else RokkhonPalette.Subtle),
+                    Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(if (selectedDistrict?.nameEn == d.nameEn) RokkhonPalette.Primary else RokkhonPalette.Subtle),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -410,7 +508,7 @@ private fun PlaceRow(title: String, subtitle: String?, selected: Boolean, onClic
             .clip(RoundedCornerShape(14.dp))
             .background(if (selected) RokkhonPalette.Subtle else if (emphasized) RokkhonPalette.Subtle else Color.White)
             .springClick(pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
             .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically
     ) {

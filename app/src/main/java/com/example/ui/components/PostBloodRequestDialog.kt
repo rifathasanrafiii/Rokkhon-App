@@ -1,20 +1,20 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -23,15 +23,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,28 +38,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.AppLanguage
+import com.example.data.model.AreaDetect
 import com.example.data.model.BANGLADESH_AREAS
 import com.example.data.model.BANGLADESH_DISTRICTS
+import com.example.data.model.areaPath
 import com.example.data.model.isValidBangladeshMobile
-import com.example.ui.components.BangladeshAreaPickerDialog
 import com.example.ui.icons.UIcons
-import com.example.ui.screens.BloodGroupPillGrid2x4
-import com.example.ui.theme.IosSystemRed
-import com.example.ui.theme.LifelineBlush
+import com.example.ui.screens.bnDigits
 import com.example.ui.theme.RokkhonPalette
 
 /**
- * Full-Screen Emergency Blood Request Sheet with Searchable All-Bangladesh Area Selection.
+ * "Request blood": one compact page. What is needed (group, bags, when), where (area, hospital),
+ * who (patient) and how to reach you. The summary and the send button stay at the bottom.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PostBloodRequestDialog(
     language: AppLanguage,
@@ -83,469 +80,338 @@ fun PostBloodRequestDialog(
         district: String,
         contactPhone: String,
         urgencyLevel: String
-    ) -> Unit
+    ) -> Unit,
+    onDetectArea: (((AreaDetect) -> Unit) -> Unit)? = null
 ) {
+    val bn = language == AppLanguage.BENGALI
     var bloodGroup by remember { mutableStateOf<String?>(null) }
-    var patientName by remember { mutableStateOf("") }
-    var unitsNeeded by remember { mutableIntStateOf(2) }
-    var hemoglobinLevel by remember { mutableStateOf("") }
-    var patientProblem by remember { mutableStateOf("") }
+    var unitsNeeded by remember { mutableIntStateOf(1) }
+    var urgency by remember { mutableIntStateOf(0) }
+    var area by remember {
+        mutableStateOf(
+            BANGLADESH_AREAS.firstOrNull { it.nameEn.equals(defaultDistrict, ignoreCase = true) }
+                ?: BANGLADESH_DISTRICTS.firstOrNull { it.matchesArea(defaultDistrict) }
+                ?: BANGLADESH_DISTRICTS.first()
+        )
+    }
     var hospitalName by remember { mutableStateOf("") }
     var wardCabinNumber by remember { mutableStateOf("") }
-    var district by remember { mutableStateOf(defaultDistrict) }
+    var patientName by remember { mutableStateOf("") }
+    var hemoglobinLevel by remember { mutableStateOf("") }
+    var patientProblem by remember { mutableStateOf("") }
     var contactPhone by remember { mutableStateOf("") }
     var showErrors by remember { mutableStateOf(false) }
+    var showAreaPicker by remember { mutableStateOf(false) }
+
     val groupMissing = bloodGroup == null
     val hospitalMissing = hospitalName.isBlank()
     val phoneInvalid = !isValidBangladeshMobile(contactPhone)
-    var selectedUrgencySlot by remember { mutableStateOf("NOW") }
-    var showAreaPickerDialog by remember { mutableStateOf(false) }
+    val urgencies = listOf(
+        Triple(if (bn) "এখনই" else "Now", "CRITICAL", "Now • Emergency"),
+        Triple(if (bn) "৬ ঘণ্টায়" else "In 6 h", "URGENT", "Within 6 hrs • Urgent"),
+        Triple(if (bn) "আজ" else "Today", "STANDARD", "Today • Flexible")
+    )
+    val suggestedHospital = (if (bn) area.defaultHospitalBn else area.defaultHospitalEn).ifBlank { defaultHospital }
+
+    fun submit() {
+        if (groupMissing || hospitalMissing || phoneInvalid) {
+            showErrors = true
+            return
+        }
+        val (_, level, timeText) = urgencies[urgency]
+        onSubmit(
+            patientName.trim(), bloodGroup!!, unitsNeeded, hemoglobinLevel.trim(), patientProblem.trim(),
+            hospitalName.trim(), wardCabinNumber.trim(), timeText, area.nameEn, contactPhone.trim(), level
+        )
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
+        BackHandler(onBack = onDismiss)
         Column(
-            modifier = Modifier
+            Modifier
                 .fillMaxSize()
                 .background(Color.White)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .imePadding()
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = 20.dp, vertical = 14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = UIcons.ArrowBack,
-                            contentDescription = "Back",
-                            tint = RokkhonPalette.Ink
-                        )
-                    }
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                RoundIconButton(icon = UIcons.Close, onClick = onDismiss, contentDescription = if (bn) "বন্ধ" else "Close", testTag = "blood_request_close")
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(if (bn) "রক্তের আবেদন" else "Request blood", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
                     Text(
-                        text = "",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = RokkhonPalette.Ink,
-                        fontWeight = FontWeight.SemiBold
+                        if (bn) "মিলে যাওয়া ডোনাররা সাথে সাথে জানবেন" else "Matching donors nearby are told right away",
+                        fontSize = 12.sp, color = RokkhonPalette.Muted
                     )
-                    Spacer(modifier = Modifier.width(36.dp))
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = if (language == AppLanguage.BENGALI) "রক্তের আবেদন" else "Request blood",
-                    fontSize = 30.sp,
-                    color = RokkhonPalette.Ink,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 34.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = if (language == AppLanguage.BENGALI) {
-                        "কার জন্য রক্ত লাগবে, জানিয়ে দিন। মিলে যাওয়া ডোনাররা সাথে সাথে জানবেন।"
-                    } else {
-                        "Tell us who needs blood. Matching donors are notified right away."
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = RokkhonPalette.Muted
-                )
             }
 
-            Surface(
-                color = Color.White,
-                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
+            Column(
+                Modifier
                     .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 6.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 22.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                FormSection(if (bn) "কোন গ্রুপের রক্ত?" else "Blood group") {
+                    BloodGroupGrid(selected = bloodGroup, onSelect = { bloodGroup = it })
+                    if (showErrors && groupMissing) ErrorText(if (bn) "রক্তের গ্রুপ বেছে নিন" else "Choose the blood group")
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(0.9f)) {
+                        FieldLabel(if (bn) "কত ব্যাগ" else "Bags")
+                        Row(
+                            Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(12.dp)).background(RokkhonPalette.Subtle),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            StepButton(UIcons.Remove, enabled = unitsNeeded > 1, testTag = "bags_minus") { unitsNeeded-- }
+                            Text(
+                                if (bn) "${bnDigits(unitsNeeded)} ব্যাগ" else "$unitsNeeded bag" + if (unitsNeeded > 1) "s" else "",
+                                fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink,
+                                modifier = Modifier.weight(1f).testTag("bags_value"),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            StepButton(UIcons.Add, enabled = unitsNeeded < 10, testTag = "bags_plus") { unitsNeeded++ }
+                        }
+                    }
+                    Column(Modifier.weight(1.4f)) {
+                        FieldLabel(if (bn) "কখন লাগবে" else "When")
+                        SegmentedControl(
+                            segments = urgencies.map { Segment(it.first) },
+                            selectedIndex = urgency,
+                            onSelect = { urgency = it },
+                            height = 46.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                FormSection(if (bn) "কোথায়" else "Where") {
+                    val path = remember(area.areaKey) { areaPath(area) }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(RokkhonPalette.Subtle)
+                            .springClick(pressedScale = 0.98f) { showAreaPicker = true }
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .testTag("blood_request_area"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(UIcons.LocationOn, null, tint = RokkhonPalette.Ink, modifier = Modifier.size(19.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(if (bn) area.nameBn else area.nameEn, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            path?.let { (div, d) ->
+                                Text(if (bn) "${d.nameBn} · ${div.nameBn} বিভাগ" else "${d.nameEn} · ${div.nameEn} Division", fontSize = 12.sp, color = RokkhonPalette.Muted)
+                            }
+                        }
+                        Text(if (bn) "বদলান" else "Change", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Ink)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    FormField(
+                        value = hospitalName,
+                        onChange = { hospitalName = it },
+                        placeholder = if (bn) "হাসপাতালের নাম *" else "Hospital name *",
+                        icon = UIcons.LocalHospital,
+                        error = showErrors && hospitalMissing,
+                        testTag = "blood_request_hospital_input"
+                    )
+                    if (hospitalName.isBlank() && suggestedHospital.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            Modifier
+                                .clip(CircleShape)
+                                .border(1.dp, RokkhonPalette.Border, CircleShape)
+                                .springClick { hospitalName = suggestedHospital }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(UIcons.Add, null, tint = RokkhonPalette.Muted, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(suggestedHospital, fontSize = 12.sp, color = RokkhonPalette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (showErrors && hospitalMissing) ErrorText(if (bn) "হাসপাতালের নাম দিন" else "Enter the hospital")
+                    Spacer(Modifier.height(8.dp))
+                    FormField(
+                        value = wardCabinNumber,
+                        onChange = { wardCabinNumber = it },
+                        placeholder = if (bn) "ওয়ার্ড / কেবিন / বেড" else "Ward / cabin / bed",
+                        icon = UIcons.MedicalServices,
+                        testTag = "blood_request_ward_input"
+                    )
+                }
+
+                FormSection(if (bn) "রোগী" else "Patient") {
+                    FormField(
+                        value = patientName,
+                        onChange = { patientName = it },
+                        placeholder = if (bn) "রোগীর নাম" else "Patient name",
+                        icon = UIcons.Person,
+                        testTag = "blood_request_patient_name_input"
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FormField(
+                            value = hemoglobinLevel,
+                            onChange = { hemoglobinLevel = it.filter { c -> c.isDigit() || c == '.' }.take(4) },
+                            placeholder = if (bn) "হিমোগ্লোবিন" else "Hb (g/dL)",
+                            keyboardType = KeyboardType.Decimal,
+                            modifier = Modifier.weight(0.8f),
+                            testTag = "blood_request_hemoglobin_input"
+                        )
+                        FormField(
+                            value = patientProblem,
+                            onChange = { patientProblem = it },
+                            placeholder = if (bn) "সমস্যা (যেমন অপারেশন)" else "Reason (e.g. surgery)",
+                            modifier = Modifier.weight(1.2f),
+                            testTag = "blood_request_problem_input"
+                        )
+                    }
+                }
+
+                FormSection(if (bn) "যোগাযোগ" else "Contact") {
+                    FormField(
+                        value = contactPhone,
+                        onChange = { contactPhone = it.filter { ch -> ch.isDigit() || ch == '+' }.take(14) },
+                        placeholder = if (bn) "মোবাইল নম্বর * (01XXXXXXXXX)" else "Mobile number * (01XXXXXXXXX)",
+                        icon = UIcons.Call,
+                        keyboardType = KeyboardType.Phone,
+                        error = showErrors && phoneInvalid,
+                        testTag = "blood_request_phone_input"
+                    )
+                    if (showErrors && phoneInvalid) ErrorText(if (bn) "সঠিক বাংলাদেশি মোবাইল নম্বর দিন" else "Enter a valid Bangladeshi mobile number")
+                }
+            }
+
+            // Summary + send, always in reach.
+            Column(Modifier.fillMaxWidth().background(Color.White).navigationBarsPadding()) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(RokkhonPalette.Divider))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(bloodGroup ?: "—", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = RokkhonPalette.Ink)
+                            Spacer(Modifier.width(8.dp))
+                            if (urgency == 0) {
+                                Box(Modifier.size(7.dp).clip(CircleShape).background(RokkhonPalette.Sos))
+                                Spacer(Modifier.width(5.dp))
+                            }
+                            Text(
+                                (if (bn) "${bnDigits(unitsNeeded)} ব্যাগ" else "$unitsNeeded bag" + if (unitsNeeded > 1) "s" else "") + " · " + urgencies[urgency].first,
+                                fontSize = 13.sp, color = RokkhonPalette.Muted
+                            )
+                        }
+                        Text(if (bn) area.nameBn else area.nameEn, fontSize = 12.sp, color = RokkhonPalette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Spacer(Modifier.width(12.dp))
                     Box(
-                        modifier = Modifier.fillMaxWidth(),
+                        Modifier
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(RokkhonPalette.Primary)
+                            .springClick(pressedScale = 0.96f) { submit() }
+                            .padding(horizontal = 20.dp)
+                            .testTag("submit_blood_request_button"),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .width(40.dp)
-                                .height(4.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFE2E2E2))
-                        )
-                    }
-
-                    Text(
-                        text = if (language == AppLanguage.BENGALI) "কোন গ্রুপের রক্ত লাগবে?" else "Blood group needed",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF000000),
-                        fontWeight = FontWeight.ExtraBold
-                    )
-
-                    BloodGroupPillGrid2x4(
-                        selectedBloodGroup = bloodGroup,
-                        onSelectBloodGroup = { bloodGroup = it }
-                    )
-                    if (showErrors && groupMissing) {
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) "রক্তের গ্রুপ বেছে নিন" else "Choose the blood group",
-                            color = IosSystemRed,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) "হাসপাতাল কোন এলাকায়?" else "Hospital area",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = Color(0xFF000000),
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Surface(
-                            color = LifelineBlush,
-                            shape = CircleShape,
-                            modifier = Modifier.clickable { showAreaPickerDialog = true }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(UIcons.Search, contentDescription = null, tint = IosSystemRed, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (language == AppLanguage.BENGALI) "সব জেলা খুঁজুন" else "Search All 64",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = IosSystemRed,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (bn) "আবেদন পাঠান" else "Send request", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(6.dp))
+                            Icon(UIcons.ArrowForward, null, tint = Color.White, modifier = Modifier.size(16.dp))
                         }
                     }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        BANGLADESH_DISTRICTS.take(16).forEach { dist ->
-                            val isSelected = district.contains(dist.nameEn.substringBefore(","))
-                            Surface(
-                                color = if (isSelected) IosSystemRed else Color(0xFFF6F6F6),
-                                contentColor = if (isSelected) Color.White else Color(0xFF000000),
-                                shape = CircleShape,
-                                modifier = Modifier
-                                    .border(1.dp, Color(0xFFE8E8E8), CircleShape)
-                                    .clickable {
-                                        district = dist.nameEn
-                                        hospitalName = dist.defaultHospitalEn
-                                    }
-                            ) {
-                                Text(
-                                    text = dist.nameEn,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Text(
-                        text = if (language == AppLanguage.BENGALI) "রোগীর তথ্য" else "Patient details",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF000000),
-                        fontWeight = FontWeight.ExtraBold
-                    )
-
-                    OutlinedTextField(
-                        value = hospitalName,
-                        onValueChange = { hospitalName = it },
-                        leadingIcon = {
-                            Icon(UIcons.LocalHospital, contentDescription = null, tint = IosSystemRed)
-                        },
-                        label = { Text(if (language == AppLanguage.BENGALI) "হাসপাতালের নাম (Hospital) *" else "Hospital Name *") },
-                        placeholder = { Text(defaultHospital) },
-                        isError = showErrors && hospitalMissing,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("blood_request_hospital_input"),
-                        shape = RoundedCornerShape(16.dp),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = district,
-                        onValueChange = { district = it },
-                        leadingIcon = {
-                            Icon(UIcons.LocationOn, contentDescription = null, tint = IosSystemRed)
-                        },
-                        label = { Text(if (language == AppLanguage.BENGALI) "এলাকা / জেলা (Location)" else "Location / Area") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = patientName,
-                        onValueChange = { patientName = it },
-                        label = { Text(if (language == AppLanguage.BENGALI) "রোগীর নাম (Patient Name)" else "Patient Name") },
-                        placeholder = { Text(if (language == AppLanguage.BENGALI) "রোগীর পুরো নাম" else "Patient's full name") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("blood_request_patient_name_input"),
-                        shape = RoundedCornerShape(16.dp),
-                        singleLine = true
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = hemoglobinLevel,
-                            onValueChange = { hemoglobinLevel = it },
-                            label = { Text(if (language == AppLanguage.BENGALI) "হিমোগ্লোবিন (Hb)" else "Hemoglobin (g/dL)") },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("blood_request_hemoglobin_input"),
-                            shape = RoundedCornerShape(16.dp),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = wardCabinNumber,
-                            onValueChange = { wardCabinNumber = it },
-                            label = { Text(if (language == AppLanguage.BENGALI) "ওয়ার্ড / কেবিন" else "Ward / Cabin") },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("blood_request_ward_input"),
-                            shape = RoundedCornerShape(16.dp),
-                            singleLine = true
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) "রক্তের ব্যাগ:" else "Bags Needed:",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = Color(0xFF000000),
-                            fontWeight = FontWeight.Bold
-                        )
-                        listOf(1, 2, 3, 4).forEach { count ->
-                            val isSelected = unitsNeeded == count
-                            Surface(
-                                color = if (isSelected) IosSystemRed else Color(0xFFF6F6F6),
-                                contentColor = if (isSelected) Color.White else Color(0xFF000000),
-                                shape = CircleShape,
-                                modifier = Modifier
-                                    .border(1.dp, Color(0xFFE8E8E8), CircleShape)
-                                    .clickable { unitsNeeded = count }
-                            ) {
-                                Text(
-                                    text = "$count ব্যাগ",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = patientProblem,
-                        onValueChange = { patientProblem = it },
-                        label = { Text(if (language == AppLanguage.BENGALI) "রোগীর সমস্যা (Problem / Diagnosis)" else "Problem / Diagnosis") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("blood_request_problem_input"),
-                        shape = RoundedCornerShape(16.dp),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = contactPhone,
-                        onValueChange = { contactPhone = it.filter { ch -> ch.isDigit() || ch == '+' }.take(14) },
-                        label = { Text(if (language == AppLanguage.BENGALI) "জরুরি মোবাইল নম্বর (Phone) *" else "Contact Phone *") },
-                        placeholder = { Text("01XXXXXXXXX") },
-                        isError = showErrors && phoneInvalid,
-                        supportingText = if (showErrors && phoneInvalid) {
-                            { Text(if (language == AppLanguage.BENGALI) "সঠিক বাংলাদেশি মোবাইল নম্বর দিন" else "Enter a valid Bangladeshi mobile number") }
-                        } else {
-                            null
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("blood_request_phone_input"),
-                        shape = RoundedCornerShape(16.dp),
-                        singleLine = true
-                    )
-
-                    Text(
-                        text = if (language == AppLanguage.BENGALI) "How urgent is it? • কখন রক্ত লাগবে?" else "How urgent is it?",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF000000),
-                        fontWeight = FontWeight.ExtraBold
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        val slots = listOf(
-                            Triple("NOW", "Now", "Emergency"),
-                            Triple("SIX_HRS", "6 hrs", "Urgent"),
-                            Triple("TODAY", "Today", "Flexible")
-                        )
-                        slots.forEach { (key, title, sub) ->
-                            val isSel = selectedUrgencySlot == key
-                            val iconVec = when (key) {
-                                "NOW" -> UIcons.FlashOn
-                                "SIX_HRS" -> UIcons.Schedule
-                                else -> UIcons.WbSunny
-                            }
-                            Surface(
-                                color = if (isSel) IosSystemRed else Color.White,
-                                contentColor = if (isSel) Color.White else Color(0xFF000000),
-                                shape = RoundedCornerShape(20.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .border(
-                                        width = if (isSel) 0.dp else 1.dp,
-                                        color = Color(0xFFE8E8E8),
-                                        shape = RoundedCornerShape(20.dp)
-                                    )
-                                    .clickable { selectedUrgencySlot = key }
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = iconVec,
-                                        contentDescription = title,
-                                        tint = if (isSel) Color.White else IosSystemRed,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    Text(
-                                        text = sub,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isSel) Color.White.copy(alpha = 0.8f) else Color(0xFF5E5E5E)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Button(
-                        onClick = {
-                            val mappedUrgency = when (selectedUrgencySlot) {
-                                "NOW" -> "CRITICAL"
-                                "SIX_HRS" -> "URGENT"
-                                else -> "STANDARD"
-                            }
-                            val mappedTimeText = when (selectedUrgencySlot) {
-                                "NOW" -> "Now • Emergency"
-                                "SIX_HRS" -> "Within 6 hrs • Urgent"
-                                else -> "Today • Flexible"
-                            }
-                            // Required: blood group, hospital, a real mobile number. No made-up fallbacks.
-                            if (groupMissing || hospitalMissing || phoneInvalid) {
-                                showErrors = true
-                                return@Button
-                            }
-                            onSubmit(
-                                patientName.trim(),
-                                bloodGroup!!,
-                                unitsNeeded,
-                                hemoglobinLevel.trim(),
-                                patientProblem.trim(),
-                                hospitalName.trim(),
-                                wardCabinNumber.trim(),
-                                mappedTimeText,
-                                district.ifBlank { defaultDistrict },
-                                contactPhone.trim(),
-                                mappedUrgency
-                            )
-                        },
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = IosSystemRed),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp)
-                            .testTag("submit_blood_request_button")
-                    ) {
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) {
-                                "জরুরি রক্তের আবেদন পোস্ট করুন"
-                            } else {
-                                "Post Emergency Blood Request"
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = UIcons.ArrowForward,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
                 }
             }
         }
     }
 
-    if (showAreaPickerDialog) {
-        val currentDistObj = BANGLADESH_AREAS.firstOrNull { it.nameEn.equals(district, ignoreCase = true) }
-            ?: BANGLADESH_DISTRICTS.firstOrNull { it.matchesArea(district) } ?: BANGLADESH_DISTRICTS.first()
+    if (showAreaPicker) {
         BangladeshAreaPickerDialog(
             language = language,
-            selectedDistrict = currentDistObj,
-            isAutoGpsActive = false,
-            onSelectAutoGps = {
-                district = currentDistObj.nameEn
-                hospitalName = currentDistObj.defaultHospitalEn
-            },
-            onSelectDistrict = { dist ->
-                district = dist.nameEn
-                hospitalName = dist.defaultHospitalEn
-            },
-            onDismiss = { showAreaPickerDialog = false }
+            selectedDistrict = area,
+            onSelectDistrict = { area = it },
+            onDismiss = { showAreaPicker = false },
+            onDetectLocation = onDetectArea
         )
+    }
+}
+
+@Composable
+private fun FormSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column {
+        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
+        Spacer(Modifier.height(8.dp))
+        content()
+    }
+}
+
+@Composable
+private fun FieldLabel(text: String) {
+    Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Muted, modifier = Modifier.padding(bottom = 6.dp, start = 2.dp))
+}
+
+@Composable
+private fun ErrorText(text: String) {
+    Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Sos, modifier = Modifier.padding(top = 4.dp, start = 2.dp))
+}
+
+@Composable
+private fun StepButton(icon: ImageVector, enabled: Boolean, testTag: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .padding(4.dp)
+            .size(38.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (enabled) Color.White else Color.Transparent)
+            .springClick(enabled = enabled, onClick = onClick)
+            .testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, null, tint = if (enabled) RokkhonPalette.Ink else RokkhonPalette.Faint, modifier = Modifier.size(16.dp))
+    }
+}
+
+/** Grey filled field: placeholder inside, thin red edge only when it needs fixing. */
+@Composable
+private fun FormField(
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+    testTag: String,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    icon: ImageVector? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    error: Boolean = false
+) {
+    Row(
+        modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(RokkhonPalette.Subtle)
+            .then(if (error) Modifier.border(1.dp, RokkhonPalette.Sos, RoundedCornerShape(12.dp)) else Modifier)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(icon, null, tint = RokkhonPalette.Muted, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
+        }
+        Box(Modifier.weight(1f)) {
+            if (value.isEmpty()) Text(placeholder, fontSize = 14.5.sp, color = RokkhonPalette.Faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 14.5.sp, color = RokkhonPalette.Ink),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                modifier = Modifier.fillMaxWidth().testTag(testTag)
+            )
+        }
     }
 }

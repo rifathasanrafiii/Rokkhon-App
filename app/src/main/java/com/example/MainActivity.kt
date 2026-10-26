@@ -629,6 +629,7 @@ fun RokkhonAuthenticatedShell(
             defaultDistrict = selectedDistrict.nameEn,
             defaultHospital = selectedDistrict.defaultHospitalEn,
             onDismiss = { showPostBloodRequestDialog = false },
+            onDetectArea = { done -> viewModel.detectNearestArea(done) },
             onSubmit = { patientName, bg, units, hb, problem, hospital, ward, neededTime, dist, phone, urgency ->
                 showPostBloodRequestDialog = false
                 viewModel.postUrgentBloodRequest(

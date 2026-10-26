@@ -14,6 +14,7 @@ import com.example.data.location.LocationTracker
 import com.example.data.media.LiveAudioVerifier
 import com.example.data.model.AppLanguage
 import com.example.data.model.BANGLADESH_AREAS
+import com.example.data.model.AreaDetect
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.BangladeshDistrict
 import com.example.data.model.BleSosBeacon
@@ -980,6 +981,19 @@ class RokkhonViewModel(
         _currentTab.value = tab
     }
 
+    private val _donorEditorRequested = MutableStateFlow(false)
+    /** "Join" elsewhere in the app: Profile opens the donor form straight away. */
+    val donorEditorRequested: StateFlow<Boolean> = _donorEditorRequested.asStateFlow()
+
+    fun openDonorEditor() {
+        _donorEditorRequested.value = true
+        _currentTab.value = RokkhonTab.DONOR_PROFILE
+    }
+
+    fun consumeDonorEditorRequest() {
+        _donorEditorRequested.value = false
+    }
+
     fun setBloodFilter(bloodGroup: String?) {
         _selectedBloodFilter.value = if (_selectedBloodFilter.value == bloodGroup) null else bloodGroup
     }
@@ -1009,6 +1023,44 @@ class RokkhonViewModel(
     }
 
     /** Picks the nearest listed area to the user's GPS position. */
+    /**
+     * Finds the nearest district from a fresh GPS fix and reports back, without selecting it: the
+     * area picker shows the result itself and decides what to do with it. Gives up after 15 s.
+     */
+    fun detectNearestArea(onResult: (AreaDetect) -> Unit) {
+        val tracker = locationTracker
+        if (_isLocationDisabledByAdmin.value || tracker == null) {
+            onResult(AreaDetect.Failed); return
+        }
+        if (!tracker.hasPermission()) {
+            onResult(AreaDetect.NoPermission); return
+        }
+        var done = false
+        fun finish(result: AreaDetect) {
+            if (done) return
+            done = true
+            onResult(result)
+        }
+        fun fromCoords(lat: Double, lng: Double): AreaDetect {
+            if (lat !in 20.5..26.7 || lng !in 88.0..92.7) return AreaDetect.OutsideBangladesh
+            val nearest = BANGLADESH_DISTRICTS.minByOrNull { calculateDistanceKm(lat, lng, it.latitude, it.longitude) }
+            return nearest?.let { AreaDetect.Found(it) } ?: AreaDetect.Failed
+        }
+        if (_hasRealGpsFix.value) {
+            finish(fromCoords(_userLatitude.value, _userLongitude.value)); return
+        }
+        tracker.requestCurrentLocation { lat, lng ->
+            updateGpsCoordinates(lat, lng, autoSelectArea = false)
+            finish(fromCoords(lat, lng))
+        }
+        viewModelScope.launch {
+            delay(15_000)
+            val lm = appContext.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
+            val enabled = lm == null || androidx.core.location.LocationManagerCompat.isLocationEnabled(lm)
+            finish(if (enabled) AreaDetect.Failed else AreaDetect.LocationOff)
+        }
+    }
+
     fun autoSelectAreaFromPermission(lat: Double? = null, lng: Double? = null, notifyUser: Boolean = false) {
         val effectiveLat = lat ?: _userLatitude.value
         val effectiveLng = lng ?: _userLongitude.value

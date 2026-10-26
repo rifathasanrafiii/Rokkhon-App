@@ -102,7 +102,6 @@ fun HomeMatchHubScreen(
     val onlyAvailableFilter by viewModel.onlyAvailableDonorsFilter.collectAsStateWithLifecycle()
     val selectedDistrict by viewModel.selectedDistrict.collectAsStateWithLifecycle()
     val isAreaFilterEnabled by viewModel.isAreaFilterEnabled.collectAsStateWithLifecycle()
-    val isAreaAutoDetected by viewModel.isAreaAutoDetected.collectAsStateWithLifecycle()
     val donorsState by viewModel.donorNodesState.collectAsStateWithLifecycle()
     val requestsState by viewModel.bloodRequestsState.collectAsStateWithLifecycle()
     val pledgedIds by viewModel.pledgedRequestIds.collectAsStateWithLifecycle()
@@ -274,7 +273,7 @@ fun HomeMatchHubScreen(
                     QuickAction(
                         icon = if (isOwnDonorRegistered) UIcons.CardGiftcard else UIcons.Person,
                         label = if (isOwnDonorRegistered) (if (bn) "রিওয়ার্ড" else "Rewards") else (if (bn) "ডোনার হোন" else "Join"),
-                        onClick = { viewModel.selectTab(if (isOwnDonorRegistered) RokkhonTab.REWARDS else RokkhonTab.DONOR_PROFILE) },
+                        onClick = { if (isOwnDonorRegistered) viewModel.selectTab(RokkhonTab.REWARDS) else viewModel.openDonorEditor() },
                         modifier = Modifier.weight(1f),
                         testTag = "home_profile_shortcut"
                     )
@@ -378,7 +377,7 @@ fun HomeMatchHubScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.Black)
-                        .springClick(pressedScale = 0.98f) { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) }
+                        .springClick(pressedScale = 0.98f) { viewModel.openDonorEditor() }
                         .padding(18.dp)
                         .testTag("home_become_donor_card"),
                     verticalAlignment = Alignment.CenterVertically
@@ -604,7 +603,7 @@ fun HomeMatchHubScreen(
                     icon = UIcons.Star,
                     label = if (bn) "রিওয়ার্ড" else "Rewards",
                     state = "$guardianPoints",
-                    onClick = { close(); viewModel.selectTab(RokkhonTab.DONOR_PROFILE) },
+                    onClick = { close(); viewModel.selectTab(RokkhonTab.REWARDS) },
                     modifier = Modifier.weight(1f)
                 )
                 SheetGridItem(
@@ -621,9 +620,9 @@ fun HomeMatchHubScreen(
         BangladeshAreaPickerDialog(
             language = language,
             selectedDistrict = selectedDistrict,
-            isAutoGpsActive = isAreaAutoDetected,
-            onSelectAutoGps = { viewModel.autoSelectAreaFromPermission(notifyUser = true) },
             onSelectDistrict = { dist -> viewModel.selectDistrict(dist, isManual = true) },
+            onDetectLocation = { done -> viewModel.detectNearestArea(done) },
+            onAreaDetected = { viewModel.selectDistrict(it, isManual = false) },
             onDismiss = { showAreaPickerDialog = false }
         )
     }
