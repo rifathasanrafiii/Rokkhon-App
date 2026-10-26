@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <title>রক্ষণ — অ্যাডমিন ওয়েব কন্ট্রোল সেন্টার (Standalone Admin Web App)</title>
   <style>
     :root {
@@ -49,17 +50,10 @@
       align-items: center;
       gap: 12px;
     }
-    .brand-logo {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, var(--rokkhon-red), #881337);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      font-size: 20px;
-      box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);
+    .brand-wordmark {
+      height: 30px;
+      width: auto;
+      display: block;
     }
     .brand-title {
       font-size: 17px;
@@ -387,9 +381,9 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brand-logo">র</div>
+      <img class="brand-wordmark" src="logo-white.svg" alt="রক্ষণ" />
       <div>
-        <div class="brand-title">রক্ষণ অ্যাডমিন ওয়েব কন্ট্রোল সেন্টার</div>
+        <div class="brand-title">অ্যাডমিন কন্ট্রোল সেন্টার</div>
         <div class="brand-sub">Standalone Web Portal • Reward, Location, Account Suspend &amp; Device Ban</div>
       </div>
     </div>

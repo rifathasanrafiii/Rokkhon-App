@@ -1,8 +1,7 @@
 package com.example.ui.screens
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,7 +54,6 @@ import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Verified
@@ -69,6 +67,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.mutableStateListOf
@@ -109,6 +108,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.data.model.AppLanguage
 import com.example.data.model.daysUntilEligible
 import com.example.data.model.triggerMethodLabel
@@ -123,7 +123,6 @@ import com.example.data.model.canDonateTo
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.BloodRequest
 import com.example.data.model.DonorNode
-import com.example.data.model.FALSE_SOS_REMOVAL_THRESHOLD
 import com.example.data.model.NotificationKind
 import com.example.data.model.SOS_NOTIFICATION_RADIUS_KM
 import com.example.data.model.SosAlert
@@ -237,36 +236,17 @@ fun HomeMatchHubScreen(
                 .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                // Top Brand Bar: "[Drop] rokkhon" on left, "[5d 345] [EN] [Bell] [R]" on right
+                // Top Brand Bar: রক্ষণ wordmark on left, "[5d 345] [EN] [Bell] [R]" on right
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFE01E37)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.WaterDrop,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "rokkhon",
-                            fontSize = 21.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.3).sp
-                        )
-                    }
+                    Image(
+                        painter = painterResource(R.drawable.rokkhon_wordmark_white),
+                        contentDescription = "রক্ষণ",
+                        modifier = Modifier.height(30.dp)
+                    )
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Surface
@@ -54,6 +56,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.data.model.AppLanguage
 import com.example.data.model.parseDonationDateMillis
 import com.example.data.model.isValidBangladeshMobile
@@ -704,6 +707,15 @@ fun DonorProfileScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                Image(
+                    painter = painterResource(R.drawable.rokkhon_wordmark_black),
+                    contentDescription = "রক্ষণ",
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .height(22.dp)
+                        .align(Alignment.CenterHorizontally)
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
             }

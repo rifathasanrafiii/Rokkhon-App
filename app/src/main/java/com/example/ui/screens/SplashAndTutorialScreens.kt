@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,7 +25,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.Bloodtype
 import androidx.compose.material.icons.filled.Call
@@ -53,14 +53,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.ui.theme.IosSystemRed
 import com.example.ui.theme.LifelineBlush
-import com.example.ui.theme.PinCrimsonRed
-import com.example.ui.theme.RadarDarkMaroon
 import com.example.ui.theme.RadarObsidianBg
 import kotlinx.coroutines.delay
 
@@ -101,33 +101,11 @@ fun RokkhonSplashScreen(
                 .padding(bottom = 56.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = "rokkhon",
-                    fontSize = 44.sp,
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-1.0).sp
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(PinCrimsonRed),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+            Image(
+                painter = painterResource(R.drawable.rokkhon_wordmark_white),
+                contentDescription = "রক্ষণ",
+                modifier = Modifier.height(56.dp)
+            )
 
             Spacer(modifier = Modifier.height(22.dp))
 
@@ -266,29 +244,11 @@ fun RokkhonTutorialScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "rokkhon",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .background(PinCrimsonRed),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                }
+                Image(
+                    painter = painterResource(R.drawable.rokkhon_wordmark_white),
+                    contentDescription = "রক্ষণ",
+                    modifier = Modifier.height(28.dp)
+                )
 
                 Surface(
                     color = Color.White.copy(alpha = 0.15f),

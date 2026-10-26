@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,7 +35,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Person
@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -85,11 +86,11 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
 import com.example.KEY_OTP_VERIFIED_NAME
 import com.example.KEY_OTP_VERIFIED_PHONE
+import com.example.R
 import com.example.data.model.isValidBangladeshMobile
 import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemRed
 import com.example.ui.theme.LifelineBlush
-import com.example.ui.theme.PinCrimsonRed
 import com.example.ui.theme.RadarDarkMaroon
 import com.example.ui.theme.RadarObsidianBg
 import com.example.ui.viewmodel.RokkhonViewModel
@@ -448,29 +449,11 @@ fun AuthScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "rokkhon",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .background(PinCrimsonRed),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                }
+                Image(
+                    painter = painterResource(R.drawable.rokkhon_wordmark_white),
+                    contentDescription = "রক্ষণ",
+                    modifier = Modifier.height(28.dp)
+                )
 
                 Surface(
                     color = Color.White.copy(alpha = 0.14f),
@@ -840,29 +823,11 @@ fun OtpVerificationScreen(
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "rokkhon",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(Color.White),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            tint = IosSystemRed,
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
-                }
+                Image(
+                    painter = painterResource(R.drawable.rokkhon_wordmark_white),
+                    contentDescription = "রক্ষণ",
+                    modifier = Modifier.height(24.dp)
+                )
             }
 
             // Elevated Text on the Red Screen with generous spacing
