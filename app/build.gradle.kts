@@ -21,6 +21,9 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // WebRTC (live SOS audio) and MapLibre (SOS map) ship native code; only phone ABIs are packaged.
+    ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -74,6 +77,8 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  // Compressed native libraries: a much smaller download for a sideloaded APK.
+  packaging { jniLibs { useLegacyPackaging = true } }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
@@ -122,6 +127,10 @@ dependencies {
   // implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
+  implementation(libs.firebase.database)
+  implementation(libs.firebase.messaging)
+  implementation(libs.stream.webrtc)
+  implementation(libs.maplibre.android)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)

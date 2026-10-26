@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Private SOS settings. See README "Private SOS setup". -->
+<resources>
+    <!-- Realtime Database URL. Leave empty to use the one in google-services.json
+         (it appears there after Realtime Database is created in the Firebase console). -->
+    <string name="sos_rtdb_url" translatable="false"></string>
+    <!-- Page that shows a live session to signed-in, authorised viewers. -->
+    <string name="sos_live_link_base" translatable="false">https://rokkhon.com/live/</string>
+    <!-- Trusted server that sends the FCM alert (web/api/sos-notify.js). Empty = push disabled. -->
+    <string name="sos_notify_endpoint" translatable="false">https://rokkhon.com/api/sos-notify</string>
+    <!-- Optional TURN relay (for example a self-hosted coturn). Empty = STUN only. -->
+    <string name="sos_turn_url" translatable="false"></string>
+    <string name="sos_turn_username" translatable="false"></string>
+    <string name="sos_turn_credential" translatable="false"></string>
+    <!-- Free vector tiles, no API key (https://openfreemap.org). -->
+    <string name="sos_map_style_url" translatable="false">https://tiles.openfreemap.org/styles/positron</string>
+</resources>

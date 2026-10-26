@@ -10,6 +10,7 @@ Bangladesh blood-donor network (Kotlin, Jetpack Compose, Firebase). A personal-s
 - **90-day rule:** after "I donated today" a donor shows as resting with a countdown and becomes available again automatically after 90 days.
 - **Rewards:** points, daily check-in streak and badges on their own tab.
 - **Real data only:** every donor, request and SOS comes from Firestore. Without sign-in (or without Firebase config) lists stay empty and only the offline SOS tools work (Bluetooth mesh, 999, SMS).
+- **Private SOS (`docs/PRIVATE_SOS.md`):** hold 3 s to share live GPS (and, if you choose, live microphone audio) only with Rokkhon accounts you trust, with per-person permissions, instant revocation, a secure `rokkhon.com/live/{id}` link and listener-side recording that never leaves their phone. Needs Realtime Database turned on (free); see the doc.
 - **Admin web (`admin-web/`):** rewards, location off, account suspend and device ban, written to `admin_controls/global_policy` and applied live in the app.
 
 ## Build and install
@@ -47,6 +48,9 @@ firebase emulators:exec --only firestore,auth --project demo-no-project "gradle 
 
 # Firestore security rules tests (one vote per account, trust score not client-writable, ...)
 firebase emulators:exec --only firestore,auth --project demo-no-project "node --test firestore.test.js"
+
+# Realtime Database rules for the private SOS
+firebase emulators:exec --only database --project demo-no-project "node --test database.test.js"
 ```
 
 ## Screenshots

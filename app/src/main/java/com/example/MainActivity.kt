@@ -2,6 +2,7 @@ package com.example
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -26,9 +27,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +37,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -55,7 +52,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,12 +60,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -88,6 +82,9 @@ import com.example.data.location.LocationTracker
 import com.example.data.model.AppLanguage
 import com.example.data.notification.RokkhonNotificationHelper
 import com.example.data.repository.RokkhonRepository
+import com.example.data.sos.SosIds
+import com.example.data.sos.SosNotifier
+import com.example.data.sos.SosRuntime
 import com.example.ui.components.AdminEnforcementLockScreen
 import com.example.ui.components.HardwareSosCountdownOverlay
 import com.example.ui.components.LiveCameraAudioSosDialog
@@ -102,9 +99,15 @@ import com.example.ui.screens.RokkhonSplashScreen
 import com.example.ui.screens.RokkhonTutorialScreen
 import com.example.ui.screens.SosGuardianAndBleScreen
 import com.example.ui.screens.signOutRokkhon
+import com.example.ui.sos.HistorySheet
+import com.example.ui.sos.PrivateSosScreen
+import com.example.ui.sos.SosAccessScreen
+import com.example.ui.sos.SosMonitorScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.viewmodel.PrivateSosViewModel
 import com.example.ui.viewmodel.RokkhonTab
 import com.example.ui.viewmodel.RokkhonViewModel
+import com.example.ui.viewmodel.SosMonitorViewModel
 import com.example.ui.viewmodel.UiState
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
@@ -125,6 +128,25 @@ class MainActivity : ComponentActivity() {
     private val _pendingHardwareSosMethod = MutableStateFlow<String?>(null)
     val pendingHardwareSosMethod: StateFlow<String?> = _pendingHardwareSosMethod.asStateFlow()
 
+    /** An SOS notification or a rokkhon.com/live/{id} link that should open the SOS screens. */
+    private val _pendingSosLaunch = MutableStateFlow<SosLaunch?>(null)
+
+    private fun readSosLaunch(intent: Intent?) {
+        val i = intent ?: return
+        val sid = i.getStringExtra(SosNotifier.EXTRA_SESSION)?.takeIf { SosIds.isSessionId(it) }
+            ?: SosIds.sessionIdFromLink(i.dataString)
+        when {
+            sid != null -> _pendingSosLaunch.value = SosLaunch.Session(sid)
+            i.getBooleanExtra(SosNotifier.EXTRA_OPEN_OWNER, false) -> _pendingSosLaunch.value = SosLaunch.Owner
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readSosLaunch(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_MyApplication)
         super.onCreate(savedInstanceState)
@@ -136,6 +158,8 @@ class MainActivity : ComponentActivity() {
             )
         }
         RokkhonNotificationHelper.ensureChannel(this)
+        SosNotifier.ensureChannels(this)
+        readSosLaunch(intent)
 
         hardwareSosDetector = HardwareSosDetector(
             context = this,
@@ -149,8 +173,11 @@ class MainActivity : ComponentActivity() {
             MyApplicationTheme {
                 val hardwareTrigger by pendingHardwareSosMethod.collectAsStateWithLifecycle()
                 val recentPowerTaps by hardwareSosDetector.recentPowerTapCount.collectAsStateWithLifecycle()
+                val sosLaunch by _pendingSosLaunch.collectAsStateWithLifecycle()
 
                 RokkhonAppRoot(
+                    sosLaunch = sosLaunch,
+                    onConsumeSosLaunch = { _pendingSosLaunch.value = null },
                     hardwareTriggerMethod = hardwareTrigger,
                     recentPowerTaps = recentPowerTaps,
                     onConsumeHardwareTrigger = { _pendingHardwareSosMethod.value = null },
@@ -196,8 +223,16 @@ private const val KEY_GUEST_MODE = "guest_mode_chosen"
 internal const val KEY_OTP_VERIFIED_PHONE = "otp_verified_phone"
 internal const val KEY_OTP_VERIFIED_NAME = "otp_verified_name"
 
+/** Where an SOS notification or link should land. */
+sealed interface SosLaunch {
+    data class Session(val sessionId: String) : SosLaunch
+    data object Owner : SosLaunch
+}
+
 @Composable
 fun RokkhonAppRoot(
+    sosLaunch: SosLaunch? = null,
+    onConsumeSosLaunch: () -> Unit = {},
     hardwareTriggerMethod: String? = null,
     recentPowerTaps: Int = 0,
     onConsumeHardwareTrigger: () -> Unit = {},
@@ -278,6 +313,8 @@ fun RokkhonAppRoot(
                     else -> "Guest"
                 }
                 RokkhonAuthenticatedShell(
+                    sosLaunch = sosLaunch,
+                    onConsumeSosLaunch = onConsumeSosLaunch,
                     currentUserId = resolvedUserId,
                     currentUserName = resolvedUserName,
                     isGuestSession = user == null,
@@ -327,6 +364,8 @@ private fun runtimePermissionsToAsk(): Array<String> {
 
 @Composable
 fun RokkhonAuthenticatedShell(
+    sosLaunch: SosLaunch? = null,
+    onConsumeSosLaunch: () -> Unit = {},
     currentUserId: String,
     currentUserName: String,
     isGuestSession: Boolean = false,
@@ -378,6 +417,29 @@ fun RokkhonAuthenticatedShell(
     val isDeviceBanned by viewModel.isCurrentDeviceBanned.collectAsStateWithLifecycle()
 
     val myDonor = (donorsState as? UiState.Success)?.data?.firstOrNull { it.userId == currentUserId }
+
+    // Private SOS (trusted accounts only). Needs a signed-in Firebase account; guests get 999 only.
+    val sosVm: PrivateSosViewModel? = if (useCloud) viewModel(key = "private_sos_$currentUserId") else null
+    var sosRoute by remember { mutableStateOf<SosRoute?>(null) }
+    val watchedSos by (sosVm?.watched ?: remember { MutableStateFlow(emptyList<com.example.data.sos.WatchedSos>()) }).collectAsStateWithLifecycle()
+    val ownerSos by SosRuntime.owner.collectAsStateWithLifecycle()
+    LaunchedEffect(sosLaunch) {
+        when (val l = sosLaunch) {
+            is SosLaunch.Session -> { sosRoute = SosRoute.Monitor(l.sessionId); onConsumeSosLaunch() }
+            SosLaunch.Owner -> { sosRoute = SosRoute.Home; onConsumeSosLaunch() }
+            null -> Unit
+        }
+    }
+    // In-app alert for trusted people even when no push server is set up (works while Rokkhon runs).
+    val alertedSos = remember { mutableSetOf<String>() }
+    LaunchedEffect(watchedSos) {
+        watchedSos.forEach { w ->
+            if (alertedSos.add(w.sessionId) && !SosAlertMemory.wasAlerted(appContext, w.sessionId)) {
+                SosAlertMemory.markAlerted(appContext, w.sessionId)
+                SosNotifier.alert(appContext, w.sessionId, w.ownerName)
+            }
+        }
+    }
 
     var showSosVerificationDialog by remember { mutableStateOf(false) }
     var showPostBloodRequestDialog by remember { mutableStateOf(false) }
@@ -442,7 +504,9 @@ fun RokkhonAuthenticatedShell(
                     onSimulatePowerTap = onSimulatePowerTap,
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true },
                     onOpenSosVerification = openSosVerification,
-                    onOpenTutorial = onOpenTutorial
+                    onOpenTutorial = onOpenTutorial,
+                    onOpenPrivateSos = if (sosVm != null) ({ sosRoute = SosRoute.Home }) else null,
+                    sosAlertActive = watchedSos.isNotEmpty() || ownerSos.active
                 )
                 RokkhonTab.RADAR_MAP -> FindScreen(
                     viewModel = viewModel,
@@ -458,6 +522,7 @@ fun RokkhonAuthenticatedShell(
                 RokkhonTab.DONOR_PROFILE -> Column(modifier = Modifier.fillMaxSize()) {
                     DonorProfileScreen(
                         viewModel = viewModel,
+                        onOpenSosAccess = if (sosVm != null) ({ sosRoute = SosRoute.Access }) else null,
                         onSignOut = {
                             if (isGuestSession) {
                                 onExitGuestOrSignOut()
@@ -573,6 +638,36 @@ fun RokkhonAuthenticatedShell(
                 )
             }
         )
+    }
+
+    val bn = language == AppLanguage.BENGALI
+    when (val route = sosRoute) {
+        null -> Unit
+        SosRoute.Home -> if (sosVm != null) PrivateSosScreen(
+            vm = sosVm, bn = bn,
+            onBack = { sosRoute = null },
+            onOpenAccess = { sosRoute = SosRoute.Access },
+            onOpenSession = { sosRoute = SosRoute.Monitor(it) }
+        )
+        SosRoute.Access -> if (sosVm != null) SosAccessScreen(
+            vm = sosVm, bn = bn,
+            onBack = { sosRoute = SosRoute.Home },
+            onOpenHistory = { g -> sosRoute = SosRoute.History(g.ownerUid, g.ownerName) }
+        )
+        is SosRoute.History -> if (sosVm != null) {
+            val history by remember(route.ownerUid) { sosVm.historyOf(route.ownerUid) }
+                .collectAsStateWithLifecycle(initialValue = com.example.data.sos.Live.Loading)
+            HistorySheet(bn, history, onDismiss = { sosRoute = SosRoute.Access },
+                onOpen = { sosRoute = SosRoute.Monitor(it.sessionId) }, onDelete = null)
+        }
+        is SosRoute.Monitor -> {
+            val app = appContext as android.app.Application
+            val monitorVm: SosMonitorViewModel = viewModel(
+                key = "sos_monitor_${route.sessionId}",
+                factory = viewModelFactory { initializer { SosMonitorViewModel(app, route.sessionId) } }
+            )
+            SosMonitorScreen(vm = monitorVm, bn = bn, onBack = { sosRoute = if (sosVm != null) SosRoute.Home else null })
+        }
     }
 
     if (isAccountSuspended || isDeviceBanned) {
@@ -758,5 +853,25 @@ private fun RokkhonBottomNavItem(
                 maxLines = 1
             )
         }
+    }
+}
+
+private sealed interface SosRoute {
+    data object Home : SosRoute
+    data object Access : SosRoute
+    data class History(val ownerUid: String, val ownerName: String) : SosRoute
+    data class Monitor(val sessionId: String) : SosRoute
+}
+
+/** Remembers which SOS sessions already raised an alert on this phone, so a restart doesn't repeat it. */
+private object SosAlertMemory {
+    private const val PREFS = "rokkhon_sos_alerted"
+    fun wasAlerted(context: Context, sid: String) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(sid, false)
+    fun markAlerted(context: Context, sid: String) {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val edit = p.edit()
+        if (p.all.size > 50) edit.clear()
+        edit.putBoolean(sid, true).apply()
     }
 }

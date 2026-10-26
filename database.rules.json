@@ -1,0 +1,210 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "sosLookup": {
+      "email": {
+        "$key": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.token.email != null && auth.token.email_verified == true && $key == auth.token.email.toLowerCase().replace('.', ',')",
+          ".validate": "newData.hasChildren(['uid', 'name']) && newData.child('uid').val() == auth.uid",
+          "uid": { ".validate": "newData.isString()" },
+          "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+          "$other": { ".validate": false }
+        }
+      },
+      "phone": {
+        "$key": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.token.phone_number != null && $key == auth.token.phone_number.replace('+', '')",
+          ".validate": "newData.hasChildren(['uid', 'name']) && newData.child('uid').val() == auth.uid",
+          "uid": { ".validate": "newData.isString()" },
+          "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "sosAccess": {
+      "$owner": {
+        ".read": "auth != null && auth.uid == $owner",
+        "$viewer": {
+          ".read": "auth != null && auth.uid == $viewer",
+          ".write": "auth != null && ((auth.uid == $owner && $viewer != $owner) || (auth.uid == $viewer && data.exists() && !newData.exists()))",
+          ".validate": "newData.hasChildren(['ownerName', 'viewerName', 'status', 'location', 'audio', 'alerts', 'history', 'createdAt', 'updatedAt'])",
+          "ownerName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+          "viewerName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+          "status": {
+            ".write": "auth != null && auth.uid == $viewer && data.val() == 'pending'",
+            ".validate": "newData.isString() && ((auth.uid == $owner && (newData.val() == data.val() || newData.val() == 'pending')) || (auth.uid == $viewer && (newData.val() == data.val() || (data.val() == 'pending' && (newData.val() == 'accepted' || newData.val() == 'declined')))))"
+          },
+          "location": { ".validate": "newData.isBoolean()" },
+          "audio": { ".validate": "newData.isBoolean()" },
+          "alerts": { ".validate": "newData.isBoolean()" },
+          "history": { ".validate": "newData.isBoolean()" },
+          "createdAt": { ".validate": "newData.isNumber() && ((data.exists() && newData.val() == data.val()) || (!data.exists() && newData.val() == now))" },
+          "updatedAt": {
+            ".write": "auth != null && auth.uid == $viewer && data.parent().child('status').val() == 'pending'",
+            ".validate": "newData.isNumber() && newData.val() == now"
+          },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "sosAccessIndex": {
+      "$viewer": {
+        ".read": "auth != null && auth.uid == $viewer",
+        "$owner": {
+          ".write": "auth != null && (auth.uid == $owner || (auth.uid == $viewer && !newData.exists()))",
+          ".validate": "newData.val() == true && $owner != $viewer"
+        }
+      }
+    },
+
+    "sosActive": {
+      "$owner": {
+        ".read": "auth != null && (auth.uid == $owner || (root.child('sosAccess').child($owner).child(auth.uid).child('status').val() == 'accepted' && (root.child('sosAccess').child($owner).child(auth.uid).child('alerts').val() == true || root.child('sosAccess').child($owner).child(auth.uid).child('location').val() == true || root.child('sosAccess').child($owner).child(auth.uid).child('audio').val() == true)))",
+        ".write": "auth != null && auth.uid == $owner",
+        ".validate": "newData.hasChildren(['sessionId', 'startedAt']) && newData.child('sessionId').isString() && newData.parent().parent().child('sosSessions').child(newData.child('sessionId').val()).child('ownerUid').val() == $owner && newData.parent().parent().child('sosSessions').child(newData.child('sessionId').val()).child('status').val() == 'active'",
+        "sessionId": { ".validate": "newData.isString()" },
+        "startedAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "sosSessions": {
+      "$sid": {
+        ".read": "auth != null && data.exists() && (data.child('ownerUid').val() == auth.uid || (root.child('sosAccess').child(data.child('ownerUid').val()).child(auth.uid).child('status').val() == 'accepted' && (root.child('sosAccess').child(data.child('ownerUid').val()).child(auth.uid).child('alerts').val() == true || root.child('sosAccess').child(data.child('ownerUid').val()).child(auth.uid).child('location').val() == true || root.child('sosAccess').child(data.child('ownerUid').val()).child(auth.uid).child('audio').val() == true || root.child('sosAccess').child(data.child('ownerUid').val()).child(auth.uid).child('history').val() == true)))",
+        ".write": "auth != null && ((!data.exists() && newData.child('ownerUid').val() == auth.uid) || (data.child('ownerUid').val() == auth.uid && (newData.exists() || data.child('status').val() == 'ended')))",
+        ".validate": "$sid.matches(/^[a-f0-9]{32}$/) && newData.hasChildren(['ownerUid', 'ownerName', 'status', 'startedAt', 'audio', 'recordingAllowed']) && (!data.exists() || newData.child('ownerUid').val() == data.child('ownerUid').val())",
+        "ownerUid": { ".validate": "newData.isString()" },
+        "ownerName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+        "status": { ".validate": "newData.val() == data.val() || (!data.exists() && newData.val() == 'active') || (data.val() == 'active' && newData.val() == 'ended')" },
+        "startedAt": { ".validate": "newData.isNumber() && ((data.exists() && newData.val() == data.val()) || (!data.exists() && newData.val() == now))" },
+        "endedAt": { ".validate": "newData.isNumber() && newData.parent().child('status').val() == 'ended' && (newData.val() == data.val() || newData.val() == now)" },
+        "audio": { ".validate": "newData.isBoolean()" },
+        "recordingAllowed": { ".validate": "newData.isBoolean()" },
+        "ownerOnline": { ".validate": "newData.isBoolean()" },
+        "locationOn": { ".validate": "newData.isBoolean()" },
+        "heartbeat": { ".validate": "newData.isNumber() && newData.val() <= now" },
+        "seen": {
+          "$viewer": {
+            ".write": "auth != null && auth.uid == $viewer && root.child('sosAccess').child(data.parent().parent().child('ownerUid').val()).child(auth.uid).child('status').val() == 'accepted'",
+            ".validate": "newData.isNumber() && newData.val() == now"
+          }
+        },
+        "listeners": {
+          "$viewer": {
+            ".write": "auth != null && auth.uid == $viewer && root.child('sosAccess').child(data.parent().parent().child('ownerUid').val()).child(auth.uid).child('status').val() == 'accepted' && root.child('sosAccess').child(data.parent().parent().child('ownerUid').val()).child(auth.uid).child('audio').val() == true",
+            ".validate": "newData.hasChildren(['state', 'recording', 'ts'])",
+            "state": { ".validate": "newData.isString() && newData.val().matches(/^(connecting|connected|reconnecting|failed|left)$/)" },
+            "recording": { ".validate": "newData.isBoolean() && (newData.val() == false || newData.parent().parent().parent().child('recordingAllowed').val() == true)" },
+            "ts": { ".validate": "newData.isNumber() && newData.val() == now" },
+            "$other": { ".validate": false }
+          }
+        },
+        "notify": {
+          "$viewer": { ".validate": "newData.isString() && newData.val().matches(/^(sent|failed|no_device)$/)" }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "liveLocations": {
+      "$sid": {
+        ".read": "auth != null && root.child('sosSessions').child($sid).exists() && (root.child('sosSessions').child($sid).child('ownerUid').val() == auth.uid || (root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('status').val() == 'accepted' && ((root.child('sosSessions').child($sid).child('status').val() == 'active' && root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('location').val() == true) || root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('history').val() == true)))",
+        ".write": "auth != null && root.child('sosSessions').child($sid).child('ownerUid').val() == auth.uid && (root.child('sosSessions').child($sid).child('status').val() == 'active' || !newData.exists())",
+        "latest": {
+          ".validate": "newData.hasChildren(['lat', 'lng', 'acc', 'ts', 'src'])",
+          "lat": { ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90" },
+          "lng": { ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180" },
+          "acc": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000" },
+          "ts": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "speed": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "src": { ".validate": "newData.isString() && newData.val().matches(/^(gps|last_known)$/)" },
+          "$other": { ".validate": false }
+        },
+        "trail": {
+          "$k": {
+            ".validate": "newData.hasChildren(['lat', 'lng', 'acc', 'ts'])",
+            "lat": { ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90" },
+            "lng": { ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180" },
+            "acc": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "ts": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "$other": { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "sosSignaling": {
+      "$sid": {
+        ".read": "auth != null && root.child('sosSessions').child($sid).child('ownerUid').val() == auth.uid",
+        ".write": "auth != null && root.child('sosSessions').child($sid).child('ownerUid').val() == auth.uid",
+        "$viewer": {
+          ".read": "auth != null && auth.uid == $viewer && root.child('sosSessions').child($sid).child('status').val() == 'active' && root.child('sosSessions').child($sid).child('audio').val() == true && root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('status').val() == 'accepted' && root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('audio').val() == true",
+          ".write": "auth != null && auth.uid == $viewer && root.child('sosSessions').child($sid).child('status').val() == 'active' && root.child('sosSessions').child($sid).child('audio').val() == true && root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('status').val() == 'accepted' && root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('audio').val() == true",
+          "request": { ".validate": "newData.isNumber() && newData.val() == now" },
+          "offer": {
+            ".validate": "newData.hasChildren(['type', 'sdp', 'n']) && newData.child('type').val() == 'offer' && newData.child('sdp').isString() && newData.child('sdp').val().length < 20000 && newData.child('n').isNumber()"
+          },
+          "answer": {
+            ".validate": "newData.hasChildren(['type', 'sdp', 'n']) && newData.child('type').val() == 'answer' && newData.child('sdp').isString() && newData.child('sdp').val().length < 20000 && newData.child('n').isNumber()"
+          },
+          "ownerIce": {
+            "$k": { ".validate": "newData.hasChildren(['candidate', 'sdpMid', 'sdpMLineIndex', 'n']) && newData.child('candidate').isString() && newData.child('candidate').val().length < 2000" }
+          },
+          "viewerIce": {
+            "$k": { ".validate": "newData.hasChildren(['candidate', 'sdpMid', 'sdpMLineIndex', 'n']) && newData.child('candidate').isString() && newData.child('candidate').val().length < 2000" }
+          },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "sosEvents": {
+      "$sid": {
+        ".read": "auth != null && root.child('sosSessions').child($sid).exists() && (root.child('sosSessions').child($sid).child('ownerUid').val() == auth.uid || (root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('status').val() == 'accepted' && (root.child('sosSessions').child($sid).child('status').val() == 'active' || root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('history').val() == true)))",
+        ".write": "auth != null && !newData.exists() && root.child('sosSessions').child($sid).child('ownerUid').val() == auth.uid && root.child('sosSessions').child($sid).child('status').val() == 'ended'",
+        "$eid": {
+          ".write": "auth != null && !data.exists() && root.child('sosSessions').child($sid).child('status').val() == 'active' && (root.child('sosSessions').child($sid).child('ownerUid').val() == auth.uid || root.child('sosAccess').child(root.child('sosSessions').child($sid).child('ownerUid').val()).child(auth.uid).child('status').val() == 'accepted')",
+          ".validate": "newData.hasChildren(['type', 'by', 'ts']) && newData.child('by').val() == auth.uid",
+          "type": { ".validate": "newData.isString() && newData.val().matches(/^(started|ended|audio_on|audio_off|viewer_opened|listening|recording_started|recording_stopped|access_revoked)$/)" },
+          "by": { ".validate": "newData.isString()" },
+          "name": { ".validate": "newData.isString() && newData.val().length <= 60" },
+          "ts": { ".validate": "newData.isNumber() && newData.val() == now" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "sosHistory": {
+      "$owner": {
+        ".read": "auth != null && (auth.uid == $owner || (root.child('sosAccess').child($owner).child(auth.uid).child('status').val() == 'accepted' && root.child('sosAccess').child($owner).child(auth.uid).child('history').val() == true))",
+        ".write": "auth != null && auth.uid == $owner",
+        "$sid": {
+          ".validate": "newData.hasChildren(['startedAt']) && $sid.matches(/^[a-f0-9]{32}$/)",
+          "startedAt": { ".validate": "newData.isNumber()" },
+          "endedAt": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "fcmTokens": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        "$tk": {
+          ".validate": "newData.hasChildren(['token', 'ts']) && newData.child('token').isString() && newData.child('token').val().length < 4096",
+          "token": { ".validate": "newData.isString()" },
+          "ts": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      }
+    }
+  }
+}

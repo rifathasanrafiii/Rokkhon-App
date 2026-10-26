@@ -78,7 +78,8 @@ import com.example.ui.viewmodel.UiState
 @Composable
 fun DonorProfileScreen(
     viewModel: RokkhonViewModel,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    onOpenSosAccess: (() -> Unit)? = null
 ) {
     val language by viewModel.language.collectAsStateWithLifecycle()
     val donorsState by viewModel.donorNodesState.collectAsStateWithLifecycle()
@@ -323,6 +324,17 @@ fun DonorProfileScreen(
                             { showProfileAreaPicker = true },
                             testTag = "profile_open_64_districts_button"
                         )
+                    }
+
+                    if (onOpenSosAccess != null) {
+                        Spacer(modifier = Modifier.height(20.dp))
+                        SettingsGroup {
+                            SettingsRow(
+                                UIcons.Shield, RokkhonPalette.Ink, if (bn) "SOS অ্যাক্সেস" else "SOS Access",
+                                if (bn) "কে দেখবে" else "Who sees it", onOpenSosAccess,
+                                testTag = "profile_sos_access"
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))

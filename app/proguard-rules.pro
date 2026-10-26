@@ -27,3 +27,9 @@
 # Credential Manager loads its Play Services provider by reflection.
 -if class androidx.credentials.CredentialManager
 -keep class androidx.credentials.playservices.** { *; }
+
+# WebRTC (private SOS live audio): native code calls into these classes by name.
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
+# MapLibre ships its own consumer rules for its JNI peers.
+-dontwarn org.maplibre.**

@@ -1,0 +1,15 @@
+{
+  "rewrites": [
+    { "source": "/live/:sessionId", "destination": "/live/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/live/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
+}

@@ -92,7 +92,9 @@ fun HomeMatchHubScreen(
     onSimulatePowerTap: () -> Unit = {},
     onOpenBloodRequestDialog: () -> Unit,
     onOpenSosVerification: () -> Unit,
-    onOpenTutorial: () -> Unit = {}
+    onOpenTutorial: () -> Unit = {},
+    onOpenPrivateSos: (() -> Unit)? = null,
+    sosAlertActive: Boolean = false
 ) {
     val context = LocalContext.current
     val language by viewModel.language.collectAsStateWithLifecycle()
@@ -164,7 +166,9 @@ fun HomeMatchHubScreen(
                     onStreakClick = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) },
                     onLanguageClick = { viewModel.toggleLanguage() },
                     onBellClick = { showNotificationCenterDialog = true },
-                    onAvatarClick = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) }
+                    onAvatarClick = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) },
+                    onSosClick = onOpenPrivateSos,
+                    sosAlert = sosAlertActive
                 )
 
                 Spacer(modifier = Modifier.height(22.dp))
@@ -714,7 +718,9 @@ private fun HomeTopBar(
     onStreakClick: () -> Unit,
     onLanguageClick: () -> Unit,
     onBellClick: () -> Unit,
-    onAvatarClick: () -> Unit
+    onAvatarClick: () -> Unit,
+    onSosClick: (() -> Unit)? = null,
+    sosAlert: Boolean = false
 ) {
     val bn = language == AppLanguage.BENGALI
     Row(
@@ -744,6 +750,22 @@ private fun HomeTopBar(
                 Icon(UIcons.Star, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("$points", color = RokkhonPalette.Ink, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+            }
+            if (onSosClick != null) {
+                // Private SOS: hold-to-start lives behind this, so a stray tap here starts nothing.
+                HeaderIconButton(onClick = onSosClick, testTag = "home_private_sos_button", description = "SOS") {
+                    Icon(UIcons.Shield, contentDescription = null, tint = if (sosAlert) RokkhonPalette.Sos else RokkhonPalette.Ink, modifier = Modifier.size(19.dp))
+                    if (sosAlert) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 8.dp, end = 9.dp)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(RokkhonPalette.Sos)
+                        )
+                    }
+                }
             }
             HeaderIconButton(onClick = onLanguageClick, testTag = "language_toggle_button", description = "Switch Language") {
                 Icon(UIcons.Translate, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(19.dp))

@@ -56,6 +56,14 @@
         tools:targetApi="34" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Private SOS: live microphone to trusted listeners, and listening with the screen off -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"
+        tools:targetApi="34" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+        tools:targetApi="34" />
+
     <!-- Android 11+ package visibility: needed to check for a navigation app before opening directions -->
     <queries>
         <intent>
@@ -84,12 +92,49 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.MyApplication.Launch">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Private SOS links: https://rokkhon.com/live/{sessionId}. Opening one still needs
+                 a signed-in, authorised account; the link alone shows nothing. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="rokkhon.com" android:pathPrefix="/live/" />
+            </intent-filter>
         </activity>
+
+        <service
+            android:name=".data.sos.PrivateSosService"
+            android:exported="false"
+            android:foregroundServiceType="location|microphone" />
+
+        <service
+            android:name=".data.sos.SosListenService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <service
+            android:name=".data.sos.SosMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.sosfiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/sos_file_paths" />
+        </provider>
 
         <service
             android:name=".data.guard.RokkhonGuardService"
