@@ -2,6 +2,7 @@ package com.example
 
 import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
@@ -11,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -53,11 +55,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -74,6 +83,7 @@ import com.example.data.location.LocationTracker
 import com.example.data.model.AppLanguage
 import com.example.data.notification.RokkhonNotificationHelper
 import com.example.data.repository.RokkhonRepository
+import com.example.ui.components.AdminEnforcementLockScreen
 import com.example.ui.components.HardwareSosCountdownOverlay
 import com.example.ui.components.LiveCameraAudioSosDialog
 import com.example.ui.screens.AuthScreen
@@ -110,7 +120,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        runCatching { enableEdgeToEdge() }
         RokkhonNotificationHelper.ensureChannel(this)
 
         hardwareSosDetector = HardwareSosDetector(
@@ -169,6 +179,8 @@ internal fun isFirebaseConfigured(context: Context): Boolean =
 
 private const val KEY_TUTORIAL_DONE = "tutorial_done"
 private const val KEY_GUEST_MODE = "guest_mode_chosen"
+internal const val KEY_OTP_VERIFIED_PHONE = "otp_verified_phone"
+internal const val KEY_OTP_VERIFIED_NAME = "otp_verified_name"
 
 @Composable
 fun RokkhonAppRoot(
@@ -188,62 +200,122 @@ fun RokkhonAppRoot(
 
     var showSplash by rememberSaveable { mutableStateOf(true) }
     var showTutorial by rememberSaveable { mutableStateOf(!appPrefs.getBoolean(KEY_TUTORIAL_DONE, false)) }
+    var otpVerifiedPhone by rememberSaveable {
+        mutableStateOf(appPrefs.getString(KEY_OTP_VERIFIED_PHONE, "") ?: "")
+    }
+    var otpVerifiedName by rememberSaveable {
+        mutableStateOf(appPrefs.getString(KEY_OTP_VERIFIED_NAME, "") ?: "")
+    }
     // The old code started with "guest = true", so the sign-in screen was never shown.
     var isGuestChosen by rememberSaveable {
         mutableStateOf(!firebaseReady || appPrefs.getBoolean(KEY_GUEST_MODE, false))
     }
     val user = currentUser
+    val isOtpAuthenticated = otpVerifiedPhone.isNotBlank()
+
+    var permissionsCallbackTick by remember { mutableStateOf(0) }
+
+    // Request all permissions (Camera, Voice/Microphone, Location, Bluetooth, Notifications) upfront right at app entry.
+    val upfrontPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        permissionsCallbackTick += 1
+    }
+
+    LaunchedEffect(showSplash) {
+        if (!showSplash) {
+            val missingPerms = runtimePermissionsToAsk().filter { perm ->
+                ContextCompat.checkSelfPermission(context, perm) != PackageManager.PERMISSION_GRANTED
+            }
+            if (missingPerms.isNotEmpty() && !appPrefs.getBoolean("startup_all_permissions_asked_v3", false)) {
+                appPrefs.edit().putBoolean("startup_all_permissions_asked_v3", true).apply()
+                try {
+                    upfrontPermissionLauncher.launch(missingPerms.toTypedArray())
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
 
     LaunchedEffect(hardwareTriggerMethod) {
         // An emergency press skips splash/tutorial/sign-in and goes straight to the SOS flow.
         if (hardwareTriggerMethod != null) {
             showSplash = false
             showTutorial = false
-            if (user == null) isGuestChosen = true
+            if (user == null && !isOtpAuthenticated) isGuestChosen = true
         }
     }
 
-    when {
-        showSplash -> RokkhonSplashScreen(onSplashFinished = { showSplash = false })
-        showTutorial -> RokkhonTutorialScreen(
-            onFinishTutorial = {
-                appPrefs.edit().putBoolean(KEY_TUTORIAL_DONE, true).apply()
-                showTutorial = false
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        when {
+            showSplash -> RokkhonSplashScreen(onSplashFinished = { showSplash = false })
+            showTutorial -> RokkhonTutorialScreen(
+                onFinishTutorial = {
+                    appPrefs.edit().putBoolean(KEY_TUTORIAL_DONE, true).apply()
+                    showTutorial = false
+                }
+            )
+            user == null && !isOtpAuthenticated && !isGuestChosen -> AuthScreen(
+                onAuthSuccess = {
+                    otpVerifiedPhone = appPrefs.getString(KEY_OTP_VERIFIED_PHONE, "") ?: ""
+                    otpVerifiedName = appPrefs.getString(KEY_OTP_VERIFIED_NAME, "") ?: ""
+                    appPrefs.edit().putBoolean(KEY_GUEST_MODE, false).apply()
+                    isGuestChosen = false
+                },
+                onSkipSignIn = {
+                    appPrefs.edit().putBoolean(KEY_GUEST_MODE, true).apply()
+                    isGuestChosen = true
+                }
+            )
+            else -> {
+                val resolvedUserId = when {
+                    user != null -> user.uid
+                    isOtpAuthenticated -> "bd_otp_${otpVerifiedPhone.filter { it.isDigit() }.takeLast(11)}"
+                    else -> "guest_rokkhon_bd"
+                }
+                val resolvedUserName = when {
+                    user != null -> user.displayName?.takeIf { it.isNotBlank() }
+                        ?: user.phoneNumber?.takeIf { it.isNotBlank() }
+                        ?: user.email?.substringBefore("@")
+                        ?: "Rokkhon User"
+                    isOtpAuthenticated -> otpVerifiedName.ifBlank { otpVerifiedPhone }
+                    firebaseReady -> "Guest"
+                    else -> "Demo User"
+                }
+                RokkhonAuthenticatedShell(
+                    currentUserId = resolvedUserId,
+                    currentUserName = resolvedUserName,
+                    isGuestSession = user == null && !isOtpAuthenticated,
+                    useCloud = firebaseReady && user != null,
+                    canSignIn = firebaseReady,
+                    permissionsCallbackTick = permissionsCallbackTick,
+                    hardwareTriggerMethod = hardwareTriggerMethod,
+                    recentPowerTaps = recentPowerTaps,
+                    onConsumeHardwareTrigger = onConsumeHardwareTrigger,
+                    onSimulatePowerTap = onSimulatePowerTap,
+                    onOpenTutorial = { showTutorial = true },
+                    onExitGuestOrSignOut = {
+                        appPrefs.edit()
+                            .putBoolean(KEY_GUEST_MODE, false)
+                            .remove(KEY_OTP_VERIFIED_PHONE)
+                            .remove(KEY_OTP_VERIFIED_NAME)
+                            .apply()
+                        otpVerifiedPhone = ""
+                        otpVerifiedName = ""
+                        isGuestChosen = !firebaseReady
+                    }
+                )
             }
-        )
-        user == null && !isGuestChosen -> AuthScreen(
-            onAuthSuccess = {
-                appPrefs.edit().putBoolean(KEY_GUEST_MODE, false).apply()
-                isGuestChosen = false
-            },
-            onSkipSignIn = {
-                appPrefs.edit().putBoolean(KEY_GUEST_MODE, true).apply()
-                isGuestChosen = true
-            }
-        )
-        else -> RokkhonAuthenticatedShell(
-            currentUserId = user?.uid ?: "guest_rokkhon_bd",
-            currentUserName = user?.displayName?.takeIf { it.isNotBlank() }
-                ?: user?.email?.substringBefore("@")
-                ?: if (firebaseReady) "Guest" else "Demo User",
-            isGuestSession = user == null,
-            useCloud = firebaseReady && user != null,
-            canSignIn = firebaseReady,
-            hardwareTriggerMethod = hardwareTriggerMethod,
-            recentPowerTaps = recentPowerTaps,
-            onConsumeHardwareTrigger = onConsumeHardwareTrigger,
-            onSimulatePowerTap = onSimulatePowerTap,
-            onOpenTutorial = { showTutorial = true },
-            onExitGuestOrSignOut = {
-                appPrefs.edit().putBoolean(KEY_GUEST_MODE, false).apply()
-                isGuestChosen = !firebaseReady
-            }
-        )
+        }
     }
 }
 
 private fun runtimePermissionsToAsk(): Array<String> {
     val perms = mutableListOf(
+        Manifest.permission.CAMERA,
+        Manifest.permission.RECORD_AUDIO,
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
@@ -265,6 +337,7 @@ fun RokkhonAuthenticatedShell(
     isGuestSession: Boolean = false,
     useCloud: Boolean = false,
     canSignIn: Boolean = true,
+    permissionsCallbackTick: Int = 0,
     hardwareTriggerMethod: String? = null,
     recentPowerTaps: Int = 0,
     onConsumeHardwareTrigger: () -> Unit = {},
@@ -306,6 +379,8 @@ fun RokkhonAuthenticatedShell(
     val donorsState by viewModel.donorNodesState.collectAsStateWithLifecycle()
     val pendingHardwareSos by viewModel.pendingHardwareSos.collectAsStateWithLifecycle()
     val liveDb by viewModel.audioVerifier.currentDecibels.collectAsStateWithLifecycle()
+    val isAccountSuspended by viewModel.isCurrentAccountSuspended.collectAsStateWithLifecycle()
+    val isDeviceBanned by viewModel.isCurrentDeviceBanned.collectAsStateWithLifecycle()
 
     val myDonor = (donorsState as? UiState.Success)?.data?.firstOrNull { it.userId == currentUserId }
 
@@ -319,17 +394,9 @@ fun RokkhonAuthenticatedShell(
         }
     }
 
-    // Ask once for location, Bluetooth and notification permissions, then restart BLE/GPS.
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ ->
-        viewModel.onPermissionsChanged()
-    }
-    LaunchedEffect(Unit) {
-        val prefs = context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("startup_permissions_asked", false)) {
-            prefs.edit().putBoolean("startup_permissions_asked", true).apply()
-            permissionLauncher.launch(runtimePermissionsToAsk())
+    LaunchedEffect(permissionsCallbackTick) {
+        if (permissionsCallbackTick > 0) {
+            viewModel.onPermissionsChanged()
         }
     }
 
@@ -498,6 +565,23 @@ fun RokkhonAuthenticatedShell(
             }
         )
     }
+
+    if (isAccountSuspended || isDeviceBanned) {
+        AdminEnforcementLockScreen(
+            viewModel = viewModel,
+            onSignOut = {
+                if (isGuestSession) {
+                    onExitGuestOrSignOut()
+                } else {
+                    signOutRokkhon(
+                        context = context,
+                        onSignOutComplete = onExitGuestOrSignOut,
+                        scope = coroutineScope
+                    )
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -579,8 +663,8 @@ private fun RokkhonFloatingBottomBar(
 
                 RokkhonBottomNavItem(
                     selected = currentTab == RokkhonTab.SOS_GUARDIAN,
-                    icon = Icons.Outlined.ChatBubbleOutline,
-                    label = "SOS + BLE",
+                    icon = Icons.Default.Shield,
+                    label = "SOS",
                     onClick = { onSelectTab(RokkhonTab.SOS_GUARDIAN) },
                     modifier = Modifier
                         .weight(1f)

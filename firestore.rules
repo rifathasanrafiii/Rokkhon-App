@@ -94,6 +94,13 @@ service cloud.firestore {
              data.updatedAt is timestamp && data.updatedAt <= request.time;
     }
 
+    // 4. VoteMarker Validation Helper
+    function isValidVoteMarker(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
     // Collection 1: /donor_nodes/{userId}
     match /donor_nodes/{userId} {
       allow get: if isSignedIn() && isValidId(userId) && existing().networkKey == 'BD_ROKKHON';
@@ -190,12 +197,14 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(requestId) && existing().userId == request.auth.uid;
 
       match /pledges/{voterId} {
-        allow get: if isSignedIn() && request.auth.uid == voterId;
+        allow get: if isSignedIn() && isValidId(requestId) && isValidId(voterId) && request.auth.uid == voterId;
         allow create: if isSignedIn() &&
+                         isValidId(requestId) &&
+                         isValidId(voterId) &&
                          request.auth.uid == voterId &&
+                         incoming().keys().hasAll(['userId', 'createdAt']) &&
                          incoming().keys().hasOnly(['userId', 'createdAt']) &&
-                         incoming().userId == request.auth.uid &&
-                         incoming().createdAt == request.time &&
+                         isValidVoteMarker(incoming()) &&
                          getAfter(/databases/$(database)/documents/blood_requests/$(requestId)).data.respondersCount ==
                            get(/databases/$(database)/documents/blood_requests/$(requestId)).data.respondersCount + 1;
       }
@@ -257,26 +266,36 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(alertId) && existing().userId == request.auth.uid;
 
       match /responders/{voterId} {
-        allow get: if isSignedIn() && request.auth.uid == voterId;
+        allow get: if isSignedIn() && isValidId(alertId) && isValidId(voterId) && request.auth.uid == voterId;
         allow create: if isSignedIn() &&
+                         isValidId(alertId) &&
+                         isValidId(voterId) &&
                          request.auth.uid == voterId &&
+                         incoming().keys().hasAll(['userId', 'createdAt']) &&
                          incoming().keys().hasOnly(['userId', 'createdAt']) &&
-                         incoming().userId == request.auth.uid &&
-                         incoming().createdAt == request.time &&
+                         isValidVoteMarker(incoming()) &&
                          getAfter(/databases/$(database)/documents/sos_alerts/$(alertId)).data.responderCount ==
                            get(/databases/$(database)/documents/sos_alerts/$(alertId)).data.responderCount + 1;
       }
 
       match /false_reports/{voterId} {
-        allow get: if isSignedIn() && request.auth.uid == voterId;
+        allow get: if isSignedIn() && isValidId(alertId) && isValidId(voterId) && request.auth.uid == voterId;
         allow create: if isSignedIn() &&
+                         isValidId(alertId) &&
+                         isValidId(voterId) &&
                          request.auth.uid == voterId &&
+                         incoming().keys().hasAll(['userId', 'createdAt']) &&
                          incoming().keys().hasOnly(['userId', 'createdAt']) &&
-                         incoming().userId == request.auth.uid &&
-                         incoming().createdAt == request.time &&
+                         isValidVoteMarker(incoming()) &&
                          getAfter(/databases/$(database)/documents/sos_alerts/$(alertId)).data.falseAlarmReports ==
                            get(/databases/$(database)/documents/sos_alerts/$(alertId)).data.falseAlarmReports + 1;
       }
+    }
+
+    // Collection 4: /admin_controls/{docId}
+    match /admin_controls/{docId} {
+      allow get, list: if isSignedIn() && isValidId(docId);
+      allow create, update: if isSignedIn() && isValidId(docId);
     }
   }
 }

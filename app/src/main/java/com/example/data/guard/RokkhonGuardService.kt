@@ -88,9 +88,14 @@ class RokkhonGuardService : Service() {
         val hasLocation = LocationTracker(this).hasPermission()
         if (!hasBle && !hasLocation) return false
         val notification = buildOngoingNotification()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            startForeground(ONGOING_ID, notification)
-            return true
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            return try {
+                startForeground(ONGOING_ID, notification)
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "startForeground failed on API ${Build.VERSION.SDK_INT}", e)
+                false
+            }
         }
         var types = 0
         if (hasBle && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
@@ -194,14 +199,18 @@ class RokkhonGuardService : Service() {
         fun start(context: Context) {
             if (!GuardPrefs.isEnabled(context) || !canRun(context)) return
             try {
-                ContextCompat.startForegroundService(context, Intent(context, RokkhonGuardService::class.java))
+                context.startService(Intent(context, RokkhonGuardService::class.java))
             } catch (e: Exception) {
                 Log.w(TAG, "Could not start guard service", e)
             }
         }
 
         fun stop(context: Context) {
-            context.stopService(Intent(context, RokkhonGuardService::class.java))
+            try {
+                context.stopService(Intent(context, RokkhonGuardService::class.java))
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not stop guard service", e)
+            }
         }
     }
 }

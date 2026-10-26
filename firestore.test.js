@@ -5,8 +5,6 @@ const {
 } = require("@firebase/rules-unit-testing");
 const { test, before, after, beforeEach } = require("node:test");
 const fs = require("node:fs");
-const firebase = require("firebase/compat/app").default;
-require("firebase/compat/firestore");
 
 let testEnv;
 const PROJECT_ID = process.env.GCP_PROJECT || "demo-no-project";
@@ -135,15 +133,16 @@ async function seed(path, data) {
   });
 }
 
-function vote(db, parentPath, markerCollection, voterUid, counterField) {
+function vote(db, parentPath, markerCollection, voterUid, counterField, nextCount = 1) {
+  const now = new Date();
   const batch = db.batch();
   batch.set(db.doc(`${parentPath}/${markerCollection}/${voterUid}`), {
     userId: voterUid,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdAt: now,
   });
   batch.update(db.doc(parentPath), {
-    [counterField]: firebase.firestore.FieldValue.increment(1),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    [counterField]: nextCount,
+    updatedAt: now,
   });
   return batch.commit();
 }
@@ -166,19 +165,19 @@ test("SOS responder and false votes: one per account, never by the sender", asyn
   // A bare counter bump without a marker is rejected.
   await assertFails(
     bobDb.doc("sos_alerts/sos_vote_1").update({
-      responderCount: firebase.firestore.FieldValue.increment(1),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      responderCount: 1,
+      updatedAt: new Date(),
     })
   );
-  await assertSucceeds(vote(bobDb, "sos_alerts/sos_vote_1", "responders", BOB_UID, "responderCount"));
+  await assertSucceeds(vote(bobDb, "sos_alerts/sos_vote_1", "responders", BOB_UID, "responderCount", 1));
   // Second vote from the same account is rejected.
-  await assertFails(vote(bobDb, "sos_alerts/sos_vote_1", "responders", BOB_UID, "responderCount"));
-  await assertSucceeds(vote(bobDb, "sos_alerts/sos_vote_1", "false_reports", BOB_UID, "falseAlarmReports"));
-  await assertFails(vote(bobDb, "sos_alerts/sos_vote_1", "false_reports", BOB_UID, "falseAlarmReports"));
+  await assertFails(vote(bobDb, "sos_alerts/sos_vote_1", "responders", BOB_UID, "responderCount", 2));
+  await assertSucceeds(vote(bobDb, "sos_alerts/sos_vote_1", "false_reports", BOB_UID, "falseAlarmReports", 1));
+  await assertFails(vote(bobDb, "sos_alerts/sos_vote_1", "false_reports", BOB_UID, "falseAlarmReports", 2));
   // The sender cannot vote on their own SOS.
-  await assertFails(vote(aliceDb, "sos_alerts/sos_vote_1", "responders", ALICE_UID, "responderCount"));
+  await assertFails(vote(aliceDb, "sos_alerts/sos_vote_1", "responders", ALICE_UID, "responderCount", 2));
   // Nobody can write a marker for someone else.
-  await assertFails(vote(bobDb, "sos_alerts/sos_vote_1", "responders", "carol_789", "responderCount"));
+  await assertFails(vote(bobDb, "sos_alerts/sos_vote_1", "responders", "carol_789", "responderCount", 2));
 });
 
 test("Blood pledge: one per account, requester cannot inflate the count", async () => {
@@ -186,25 +185,26 @@ test("Blood pledge: one per account, requester cannot inflate the count", async 
   const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
   const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
 
-  await assertSucceeds(vote(bobDb, "blood_requests/req_pledge_1", "pledges", BOB_UID, "respondersCount"));
-  await assertFails(vote(bobDb, "blood_requests/req_pledge_1", "pledges", BOB_UID, "respondersCount"));
+  await assertSucceeds(vote(bobDb, "blood_requests/req_pledge_1", "pledges", BOB_UID, "respondersCount", 1));
+  await assertFails(vote(bobDb, "blood_requests/req_pledge_1", "pledges", BOB_UID, "respondersCount", 2));
   await assertFails(
     aliceDb.doc("blood_requests/req_pledge_1").update({
       respondersCount: 50,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: new Date(),
     })
   );
   // Requester can still close the request.
   await assertSucceeds(
     aliceDb.doc("blood_requests/req_pledge_1").update({
       status: "FULFILLED",
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: new Date(),
     })
   );
 });
 
 test("Donors cannot set or raise their own trust score", async () => {
   const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const now = new Date();
   const base = {
     userId: ALICE_UID,
     displayName: "Alice",
@@ -218,21 +218,21 @@ test("Donors cannot set or raise their own trust score", async () => {
     trustScore: 100,
     verifiedSosCount: 0,
     networkKey: "BD_ROKKHON",
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdAt: now,
+    updatedAt: now,
   };
   await assertFails(aliceDb.doc(`donor_nodes/${ALICE_UID}`).set({ ...base, verifiedSosCount: 50 }));
   await assertSucceeds(aliceDb.doc(`donor_nodes/${ALICE_UID}`).set(base));
   await assertFails(
     aliceDb.doc(`donor_nodes/${ALICE_UID}`).update({
       verifiedSosCount: 9,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: new Date(),
     })
   );
   await assertSucceeds(
     aliceDb.doc(`donor_nodes/${ALICE_UID}`).update({
       isAvailableDonor: false,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: new Date(),
     })
   );
 });

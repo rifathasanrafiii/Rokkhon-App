@@ -107,12 +107,16 @@ fun InteractiveBangladeshRadarMap(
     /** The user's real GPS position, or null when there is no fix yet. */
     userLat: Double? = null,
     userLng: Double? = null,
+    userBearing: Float = 0f,
+    onRefreshLiveGps: () -> Unit = {},
+    initialUseOsmTiles: Boolean = true,
     bengali: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var zoomLevel by remember { mutableFloatStateOf(1.15f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
-    var useOsmRealTiles by remember { mutableStateOf(true) }
+    var useOsmRealTiles by remember { mutableStateOf(initialUseOsmTiles) }
+    var followUserGps by remember { mutableStateOf(true) }
     val mapController = remember { RokkhonMapController() }
     val textMeasurer = rememberTextMeasurer()
 
@@ -440,13 +444,28 @@ fun InteractiveBangladeshRadarMap(
                 )
             }
 
-            // Live User GPS Dot
-            val gpsCenter = Offset(mapCenter.x, mapCenter.y)
+            // Live User GPS Dot + Directional Heading Arrow
+            val gpsCenter = latLngToOffset(userLat ?: centerLat, userLng ?: centerLng)
             drawCircle(
                 color = IosSystemBlue.copy(alpha = 0.25f),
                 radius = 22.dp.toPx(),
                 center = gpsCenter
             )
+            val rad = Math.toRadians(userBearing.toDouble())
+            val dirX = kotlin.math.sin(rad).toFloat()
+            val dirY = -kotlin.math.cos(rad).toFloat()
+            val perpX = -dirY
+            val perpY = dirX
+            val tip = Offset(gpsCenter.x + dirX * 20.dp.toPx(), gpsCenter.y + dirY * 20.dp.toPx())
+            val baseCenter = Offset(gpsCenter.x + dirX * 5.dp.toPx(), gpsCenter.y + dirY * 5.dp.toPx())
+            val wing = 6.5.dp.toPx()
+            val dirArrow = Path().apply {
+                moveTo(tip.x, tip.y)
+                lineTo(baseCenter.x + perpX * wing, baseCenter.y + perpY * wing)
+                lineTo(baseCenter.x - perpX * wing, baseCenter.y - perpY * wing)
+                close()
+            }
+            drawPath(path = dirArrow, color = IosSystemBlue)
             drawCircle(
                 color = Color.White,
                 radius = 9.dp.toPx(),
@@ -470,7 +489,10 @@ fun InteractiveBangladeshRadarMap(
                 sosAlerts = filteredSos,
                 userLat = userLat ?: centerLat,
                 userLng = userLng ?: centerLng,
-                showUser = userLat != null && userLng != null,
+                userBearing = userBearing,
+                showUser = true,
+                followUser = followUserGps,
+                onUserGesture = { followUserGps = false },
                 onPinSelected = onPinSelected,
                 controller = mapController,
                 modifier = Modifier.fillMaxSize()
@@ -519,7 +541,7 @@ fun InteractiveBangladeshRadarMap(
                 }
             }
             Surface(
-                color = RadarObsidianBg.copy(alpha = 0.88f),
+                color = if (followUserGps || isLiveLocationActive) IosSystemBlue else RadarObsidianBg.copy(alpha = 0.88f),
                 shape = CircleShape,
                 modifier = Modifier.border(0.8.dp, Color.White.copy(alpha = 0.16f), CircleShape)
             ) {
@@ -527,7 +549,9 @@ fun InteractiveBangladeshRadarMap(
                     onClick = {
                         panOffset = Offset.Zero
                         zoomLevel = 1.15f
-                        mapController.animateTo(userLat ?: centerLat, userLng ?: centerLng, 15.0)
+                        followUserGps = true
+                        onRefreshLiveGps()
+                        mapController.animateTo(userLat ?: centerLat, userLng ?: centerLng, 16.0)
                     },
                     modifier = Modifier
                         .size(38.dp)
@@ -583,14 +607,15 @@ fun InteractiveBangladeshRadarMap(
                                     .background(if (isLiveLocationActive) PinCrimsonRed else IosSystemGreen)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
+                            val dirLabel = compassDirectionLabel(userBearing, bengali)
                             Text(
                                 text = if (isLiveLocationActive) {
-                                    if (bengali) "লাইভ SOS লোকেশন • $selectedAreaName" else "LIVE SOS GPS STREAMING • $selectedAreaName"
+                                    if (bengali) "লাইভ SOS লোকেশন ($dirLabel) • $selectedAreaName" else "LIVE SOS ($dirLabel) • $selectedAreaName"
                                 } else {
-                                    if (bengali) "রিয়েল-টাইম এলাকা ম্যাপ • $selectedAreaName" else "REAL-TIME AREA MAP • $selectedAreaName"
+                                    if (bengali) "লাইভ লোকেশন ($dirLabel) • $selectedAreaName" else "LIVE GPS ($dirLabel) • $selectedAreaName"
                                 },
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.82f),
+                                color = Color.White.copy(alpha = 0.85f),
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -697,3 +722,33 @@ fun OverlappingDonorAvatarRow(
         }
     }
 }
+
+fun compassDirectionLabel(bearingDegrees: Float, bengali: Boolean): String {
+    val deg = ((bearingDegrees % 360f) + 360f) % 360f
+    val sector = ((deg + 22.5f) / 45f).toInt() % 8
+    val dir = if (bengali) {
+        when (sector) {
+            0 -> "উত্তর"
+            1 -> "উত্তর-পূর্ব"
+            2 -> "পূর্ব"
+            3 -> "দক্ষিণ-পূর্ব"
+            4 -> "দক্ষিণ"
+            5 -> "দক্ষিণ-পশ্চিম"
+            6 -> "পশ্চিম"
+            else -> "উত্তর-পশ্চিম"
+        }
+    } else {
+        when (sector) {
+            0 -> "N"
+            1 -> "NE"
+            2 -> "E"
+            3 -> "SE"
+            4 -> "S"
+            5 -> "SW"
+            6 -> "W"
+            else -> "NW"
+        }
+    }
+    return "$dir ${deg.toInt()}°"
+}
+

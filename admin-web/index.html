@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0" />
+  <title>রক্ষণ — অ্যাডমিন ওয়েব কন্ট্রোল সেন্টার (Standalone Admin Web App)</title>
+  <style>
+    :root {
+      --bg-dark: #070A12;
+      --bg-card: #111624;
+      --bg-card-hover: #171E31;
+      --border: rgba(255, 255, 255, 0.09);
+      --rokkhon-red: #E11D48;
+      --rokkhon-crimson: #BE123C;
+      --emerald: #10B981;
+      --amber: #F59E0B;
+      --danger: #EF4444;
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Bengali", sans-serif;
+    }
+    body {
+      background: radial-gradient(circle at top right, #2A0815 0%, var(--bg-dark) 48%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding-bottom: 48px;
+    }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(11, 15, 26, 0.92);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--rokkhon-red), #881337);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 20px;
+      box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);
+    }
+    .brand-title {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+    .brand-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.14);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34D399;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10B981;
+      box-shadow: 0 0 8px #10B981;
+    }
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 20px 16px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .stat-val {
+      font-size: 24px;
+      font-weight: 800;
+    }
+    .stat-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .nav-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      background: rgba(17, 22, 36, 0.9);
+      padding: 6px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      padding: 11px 8px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      text-align: center;
+    }
+    .tab-btn.active {
+      background: var(--rokkhon-red);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(225, 29, 72, 0.35);
+    }
+    .panel {
+      display: none;
+    }
+    .panel.active {
+      display: block;
+    }
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 800;
+    }
+    .section-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .field-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .input-box {
+      background: #0B0F1A;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+      width: 100%;
+    }
+    .input-box:focus {
+      border-color: var(--rokkhon-red);
+    }
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 15px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: transform 0.12s ease, opacity 0.15s ease;
+    }
+    .btn:active {
+      transform: scale(0.97);
+    }
+    .btn-primary {
+      background: var(--rokkhon-red);
+      color: #fff;
+    }
+    .btn-emerald {
+      background: var(--emerald);
+      color: #042f2e;
+    }
+    .btn-amber {
+      background: var(--amber);
+      color: #1e1b18;
+    }
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+    }
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+      border: 1px solid var(--border);
+    }
+    .user-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .user-row {
+      background: #0B0F1A;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .user-row.current-user {
+      border-color: rgba(225, 29, 72, 0.55);
+      background: linear-gradient(90deg, rgba(225, 29, 72, 0.09), #0B0F1A 55%);
+    }
+    .user-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .user-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .blood-badge {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: rgba(225, 29, 72, 0.18);
+      border: 1px solid rgba(225, 29, 72, 0.45);
+      color: #FDA4AF;
+      font-weight: 800;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .user-name {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .user-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .chip {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .chip-me {
+      background: rgba(225, 29, 72, 0.25);
+      color: #FDA4AF;
+    }
+    .chip-ok {
+      background: rgba(16, 185, 129, 0.18);
+      color: #6EE7B7;
+    }
+    .chip-warn {
+      background: rgba(245, 158, 11, 0.2);
+      color: #FCD34D;
+    }
+    .chip-danger {
+      background: rgba(239, 68, 68, 0.22);
+      color: #FCA5A5;
+    }
+    .action-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 10px;
+    }
+    .inline-inputs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .mini-input {
+      width: 90px;
+      background: #141B2D;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 7px 9px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .toast-popup {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      left: 20px;
+      max-width: 440px;
+      margin: 0 auto;
+      background: #1E293B;
+      border-left: 4px solid var(--emerald);
+      color: #fff;
+      padding: 13px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      transform: translateY(150%);
+      transition: transform 0.25s ease;
+      z-index: 99;
+    }
+    .toast-popup.show {
+      transform: translateY(0);
+    }
+    .code-tag {
+      font-family: monospace;
+      background: rgba(255, 255, 255, 0.07);
+      padding: 2px 6px;
+      border-radius: 5px;
+      font-size: 11px;
+      color: #CBD5E1;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">র</div>
+      <div>
+        <div class="brand-title">রক্ষণ অ্যাডমিন ওয়েব কন্ট্রোল সেন্টার</div>
+        <div class="brand-sub">Standalone Web Portal • Reward, Location, Account Suspend &amp; Device Ban</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="live-pill">
+        <span class="live-dot"></span>
+        <span id="syncStatusText">CLOUD FIRESTORE READY</span>
+      </div>
+      <button class="btn btn-outline" id="googleSignInBtn" onclick="signInAdminWithGoogle()">Google Admin Sign-In</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Top Summary Metrics -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">মোট নিবন্ধিত ইউজার / ডোনার</div>
+        <div class="stat-val" id="statTotalUsers">0</div>
+        <div class="stat-note">Active Rokkhon Network</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">গ্লোবাল রিওয়ার্ড পয়েন্ট রুলস</div>
+        <div class="stat-val" id="statRewardRule" style="color:#FBBF24;">+25 / +100 / +50</div>
+        <div class="stat-note">চেক-ইন • রক্তদান • SOS সাড়া</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">লোকেশন অফ (Forced Off)</div>
+        <div class="stat-val" id="statLocationOff" style="color:#38BDF8;">0 জন</div>
+        <div class="stat-note" id="statGlobalLocNote">Global GPS: চালু আছে</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">সাসপেন্ড ও ডিভাইস ব্যান</div>
+        <div class="stat-val" id="statEnforced" style="color:#F87171;">0 / 0</div>
+        <div class="stat-note">Suspended Accounts / Banned Devices</div>
+      </div>
+    </div>
+
+    <!-- 4 Core Control Tabs -->
+    <div class="nav-tabs" role="tablist">
+      <button class="tab-btn active" onclick="switchTab('rewards')" id="tabBtn_rewards">১. রিওয়ার্ড</button>
+      <button class="tab-btn" onclick="switchTab('location')" id="tabBtn_location">২. লোকেশন অফ</button>
+      <button class="tab-btn" onclick="switchTab('suspend')" id="tabBtn_suspend">৩. সাসপেন্ড</button>
+      <button class="tab-btn" onclick="switchTab('deviceban')" id="tabBtn_deviceban">৪. ডিভাইস ব্যান</button>
+    </div>
+
+    <!-- TAB 1: REWARD & POINTS CONTROL -->
+    <section class="panel active" id="panel_rewards">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">গ্লোবাল রিওয়ার্ড পয়েন্ট কনফিগারেশন</div>
+            <div class="section-desc">ইউজাররা চেক-ইন, রক্তদানের অঙ্গীকার বা SOS-এ সাড়া দিলে কত পয়েন্ট পাবে তা নির্ধারণ করুন</div>
+          </div>
+          <button class="btn btn-primary" onclick="saveGlobalRewards()">গ্লোবাল রিওয়ার্ড আপডেট করুন</button>
+        </div>
+        <div class="form-grid">
+          <div class="field-group">
+            <label class="field-label">ডেইলি সেফ চেক-ইন পয়েন্ট</label>
+            <input type="number" id="cfgCheckInPts" class="input-box" value="25" min="5" max="1000" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">রক্তদান প্লেজ (Blood Pledge) পয়েন্ট</label>
+            <input type="number" id="cfgBloodPledgePts" class="input-box" value="100" min="10" max="2000" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">SOS রেসপন্ডার (Going to Help) পয়েন্ট</label>
+            <input type="number" id="cfgSosRespondPts" class="input-box" value="50" min="10" max="2000" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">ইউজার পয়েন্ট, ট্রাস্ট স্কোর ও স্ট্রিক আপডেট</div>
+            <div class="section-desc">যেকোনো ইউজারের গার্ডিয়ান পয়েন্ট, ট্রাস্ট স্কোর (%) এবং ডেইলি স্ট্রিক সরাসরি পরিবর্তন করুন</div>
+          </div>
+        </div>
+        <div class="user-list" id="rewardsUserList"></div>
+      </div>
+    </section>
+
+    <!-- TAB 2: LOCATION OFF CONTROL -->
+    <section class="panel" id="panel_location">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">গ্লোবাল লাইভ লোকেশন কন্ট্রোল (Master Switch)</div>
+            <div class="section-desc">অ্যাডমিন চাইলে পুরো অ্যাপের রিয়েল-টাইম GPS ও SOS লোকেশন ট্র্যাকিং রিমোটলি অফ রাখতে পারবেন</div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-danger" onclick="toggleLocation('GLOBAL', true)">গ্লোবাল লোকেশন OFF করুন</button>
+            <button class="btn btn-emerald" onclick="toggleLocation('GLOBAL', false)">গ্লোবাল লোকেশন ON করুন</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">ইউজার-ভিত্তিক লোকেশন অফ / অন</div>
+            <div class="section-desc">নির্দিষ্ট কোনো ইউজারের লাইভ লোকেশন ট্র্যাকিং ও ম্যাপ রাডার পিন বন্ধ বা চালু রাখুন</div>
+          </div>
+        </div>
+        <div class="user-list" id="locationUserList"></div>
+      </div>
+    </section>
+
+    <!-- TAB 3: ACCOUNT SUSPEND CONTROL -->
+    <section class="panel" id="panel_suspend">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">অ্যাকাউন্ট সাসপেন্ড ও আনসাসপেন্ড কন্ট্রোল</div>
+            <div class="section-desc">ভুয়া SOS বা নীতিমালা ভঙ্গকারী অ্যাকাউন্ট সাসপেন্ড করলে ইউজার সাথে সাথে অ্যাপে লক স্ক্রিন দেখবে</div>
+          </div>
+        </div>
+        <div class="field-group" style="margin-bottom: 14px;">
+          <label class="field-label">সাসপেনশন নোট / কারণ (ইউজার লক স্ক্রিনে দেখবে)</label>
+          <input type="text" id="suspendReasonInput" class="input-box" value="ভুয়া SOS অ্যালার্ট বা নীতিমালা ভঙ্গের কারণে অ্যাডমিন কন্ট্রোল সেন্টার থেকে অ্যাকাউন্ট সাময়িকভাবে সাসপেন্ড করা হয়েছে।" />
+        </div>
+        <div class="user-list" id="suspendUserList"></div>
+      </div>
+    </section>
+
+    <!-- TAB 4: DEVICE BAN CONTROL -->
+    <section class="panel" id="panel_deviceban">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">মেনুয়াল ডিভাইস আইডি (Hardware ID) ব্যান</div>
+            <div class="section-desc">যে কোনো ডিভাইস আইডি ব্যান করলে সেই ফোন থেকে নতুন অ্যাকাউন্ট খুলেও অ্যাপ ব্যবহার করা যাবে না</div>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="field-group">
+            <label class="field-label">ডিভাইস আইডি (যেমন: DEV-BD-XXXXXXXX)</label>
+            <input type="text" id="manualDeviceIdInput" class="input-box" placeholder="DEV-BD-..." />
+          </div>
+          <div class="field-group">
+            <label class="field-label">ব্যান করার কারণ</label>
+            <input type="text" id="banReasonInput" class="input-box" value="নিরাপত্তা লঙ্ঘন ও স্প্যামিংয়ের কারণে এই ডিভাইসটি রক্ষণ নেটওয়ার্ক থেকে ব্যান করা হয়েছে।" />
+          </div>
+        </div>
+        <div style="margin-top: 12px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-danger" onclick="banManualDevice(true)">ডিভাইস ব্যান করুন</button>
+          <button class="btn btn-emerald" onclick="banManualDevice(false)">ডিভাইস আনব্যান করুন</button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">নিবন্ধিত ডিভাইসসমূহ ও কুইক হার্ডওয়্যার ব্যান</div>
+            <div class="section-desc">প্রতিটি ইউজারের ফোনের হার্ডওয়্যার ডিভাইস আইডি নিচে দেখানো হচ্ছে</div>
+          </div>
+        </div>
+        <div class="user-list" id="deviceBanUserList"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast-popup" id="toastPopup">আপডেট সম্পন্ন হয়েছে</div>
+
+  <!-- Firebase Modular SDK for Direct Cloud Firestore Sync -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, doc, collection, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAMjcxudd8dWc959sW6keztNeMmQnjilJw",
+      authDomain: "btshop-5b889.firebaseapp.com",
+      projectId: "btshop-5b889",
+      storageBucket: "btshop-5b889.firebasestorage.app"
+    };
+
+    const DATABASE_ID = "ai-studio-android-rokkhon-57cdc872-fddf-4dcf-83c1-3037e342e558";
+
+    let db = null;
+    let auth = null;
+    let cloudConnected = false;
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app, DATABASE_ID);
+
+      onAuthStateChanged(auth, (user) => {
+        const btn = document.getElementById("googleSignInBtn");
+        const statusEl = document.getElementById("syncStatusText");
+        if (user) {
+          btn.textContent = user.displayName || user.email || "Admin Signed In";
+          statusEl.textContent = "LIVE FIRESTORE SYNC";
+          subscribeFirestoreRealtime();
+        } else {
+          btn.textContent = "Google Admin Sign-In";
+        }
+      });
+    } catch (e) {
+      console.warn("Firebase init fallback to local state:", e);
+    }
+
+    window.signInAdminWithGoogle = async function() {
+      if (!auth) return;
+      try {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+        window.showToast("অ্যাডমিন ক্লাউড লগইন সফল হয়েছে");
+      } catch (e) {
+        window.showToast("ব্রাউজার পপআপ ব্লক বা লগইন বাতিল হয়েছে");
+      }
+    };
+
+    function subscribeFirestoreRealtime() {
+      if (!db) return;
+      onSnapshot(doc(db, "admin_controls", "global_policy"), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          cloudConnected = true;
+          window.applyCloudPolicyToDashboard(data);
+        }
+      });
+      onSnapshot(collection(db, "donor_nodes"), (snap) => {
+        const cloudUsers = [];
+        snap.forEach((docSnap) => {
+          const d = docSnap.data();
+          const uid = d.userId || docSnap.id;
+          cloudUsers.push({
+            userId: uid,
+            displayName: d.displayName || "Rokkhon User",
+            bloodGroup: d.bloodGroup || "O+",
+            district: d.district || "Dhaka",
+            phone: d.contactPhone || "017XXXXXXXX",
+            trustScore: d.trustScore ?? 100,
+            points: 150,
+            streak: 3,
+            deviceId: "DEV-BD-" + Math.abs(hashCode(uid)).toString(16).toUpperCase().padStart(8, "0").slice(0, 8),
+            isCurrentUser: false,
+            isLocationOff: false,
+            isSuspended: false,
+            isDeviceBanned: false
+          });
+        });
+        if (cloudUsers.length > 0) {
+          window.mergeCloudUsersIntoDashboard(cloudUsers);
+        }
+      });
+    }
+
+    function hashCode(str) {
+      let h = 0;
+      for (let i = 0; i < str.length; i++) {
+        h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+      }
+      return h;
+    }
+
+    window.pushPolicyToCloud = async function(stateObj) {
+      if (!db || !auth || !auth.currentUser) return;
+      try {
+        const locOffIds = stateObj.users.filter(u => u.isLocationOff).map(u => u.userId);
+        const suspIds = stateObj.users.filter(u => u.isSuspended).map(u => u.userId);
+        const banIds = stateObj.users.filter(u => u.isDeviceBanned).map(u => u.deviceId);
+        const ptsMap = {};
+        const streakMap = {};
+        const trustMap = {};
+        stateObj.users.forEach(u => {
+          ptsMap[u.userId] = Number(u.points) || 0;
+          streakMap[u.userId] = Number(u.streak) || 0;
+          trustMap[u.userId] = Number(u.trustScore) || 100;
+        });
+
+        await setDoc(doc(db, "admin_controls", "global_policy"), {
+          rewardCheckInPoints: Number(stateObj.rewardCheckInPoints) || 25,
+          rewardBloodPledgePoints: Number(stateObj.rewardBloodPledgePoints) || 100,
+          rewardSosRespondPoints: Number(stateObj.rewardSosRespondPoints) || 50,
+          globalLocationOff: Boolean(stateObj.isLocationDisabledByAdmin),
+          locationOffUserIds: locOffIds,
+          suspendedUserIds: suspIds,
+          bannedDeviceIds: banIds,
+          userPointsOverrides: ptsMap,
+          userStreakOverrides: streakMap,
+          userTrustOverrides: trustMap,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.warn("Cloud policy write failed:", err);
+      }
+    };
+  </script>
+
+  <script>
+    const STORAGE_KEY = "rokkhon_standalone_admin_state_v1";
+
+    let dashboardState = loadInitialState();
+
+    function loadInitialState() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+      return {
+        isLocationDisabledByAdmin: false,
+        rewardCheckInPoints: 25,
+        rewardBloodPledgePoints: 100,
+        rewardSosRespondPoints: 50,
+        users: [
+          {
+            userId: "user_dhaka_01",
+            displayName: "তানভীর আহমেদ (Tanvir Ahmed)",
+            bloodGroup: "O+",
+            district: "Dhanmondi, Dhaka",
+            phone: "01711223344",
+            trustScore: 100,
+            points: 350,
+            streak: 7,
+            deviceId: "DEV-BD-8F92A1C4",
+            isCurrentUser: false,
+            isLocationOff: false,
+            isSuspended: false,
+            isDeviceBanned: false
+          },
+          {
+            userId: "user_ctg_02",
+            displayName: "নুসরাত জাহান (Nusrat Jahan)",
+            bloodGroup: "AB+",
+            district: "Panchlaish, Chattogram",
+            phone: "01819556677",
+            trustScore: 98,
+            points: 220,
+            streak: 4,
+            deviceId: "DEV-BD-3C74E91B",
+            isCurrentUser: false,
+            isLocationOff: false,
+            isSuspended: false,
+            isDeviceBanned: false
+          },
+          {
+            userId: "user_sylhet_03",
+            displayName: "রাশেদুল ইসলাম (Rashedul Islam)",
+            bloodGroup: "B+",
+            district: "Zindabazar, Sylhet",
+            phone: "01914889900",
+            trustScore: 92,
+            points: 180,
+            streak: 5,
+            deviceId: "DEV-BD-5E10B82D",
+            isCurrentUser: false,
+            isLocationOff: false,
+            isSuspended: false,
+            isDeviceBanned: false
+          }
+        ],
+        bannedDevices: []
+      };
+    }
+
+    function persistState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(dashboardState));
+      } catch (e) {}
+      if (window.pushPolicyToCloud) {
+        window.pushPolicyToCloud(dashboardState);
+      }
+    }
+
+    window.applyCloudPolicyToDashboard = function(policy) {
+      dashboardState.rewardCheckInPoints = policy.rewardCheckInPoints ?? 25;
+      dashboardState.rewardBloodPledgePoints = policy.rewardBloodPledgePoints ?? 100;
+      dashboardState.rewardSosRespondPoints = policy.rewardSosRespondPoints ?? 50;
+      dashboardState.isLocationDisabledByAdmin = Boolean(policy.globalLocationOff);
+      const locSet = new Set(policy.locationOffUserIds || []);
+      const suspSet = new Set(policy.suspendedUserIds || []);
+      const banSet = new Set(policy.bannedDeviceIds || []);
+      const ptsMap = policy.userPointsOverrides || {};
+      const streakMap = policy.userStreakOverrides || {};
+      const trustMap = policy.userTrustOverrides || {};
+
+      dashboardState.users.forEach(u => {
+        u.isLocationOff = locSet.has(u.userId);
+        u.isSuspended = suspSet.has(u.userId);
+        u.isDeviceBanned = banSet.has(u.deviceId);
+        if (ptsMap[u.userId] !== undefined) u.points = ptsMap[u.userId];
+        if (streakMap[u.userId] !== undefined) u.streak = streakMap[u.userId];
+        if (trustMap[u.userId] !== undefined) u.trustScore = trustMap[u.userId];
+      });
+      renderDashboard();
+    };
+
+    window.mergeCloudUsersIntoDashboard = function(cloudUsers) {
+      const existingById = {};
+      dashboardState.users.forEach(u => { existingById[u.userId] = u; });
+      cloudUsers.forEach(cu => {
+        if (existingById[cu.userId]) {
+          Object.assign(existingById[cu.userId], {
+            displayName: cu.displayName,
+            bloodGroup: cu.bloodGroup,
+            district: cu.district,
+            phone: cu.phone
+          });
+        } else {
+          dashboardState.users.unshift(cu);
+        }
+      });
+      renderDashboard();
+    };
+
+    function switchTab(tabId) {
+      ['rewards', 'location', 'suspend', 'deviceban'].forEach(id => {
+        document.getElementById('panel_' + id).classList.toggle('active', id === tabId);
+        document.getElementById('tabBtn_' + id).classList.toggle('active', id === tabId);
+      });
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toastPopup');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+    }
+    window.showToast = showToast;
+
+    function renderDashboard() {
+      const users = dashboardState.users || [];
+      document.getElementById('statTotalUsers').textContent = users.length;
+      document.getElementById('statRewardRule').textContent =
+        `+${dashboardState.rewardCheckInPoints} / +${dashboardState.rewardBloodPledgePoints} / +${dashboardState.rewardSosRespondPoints}`;
+
+      document.getElementById('cfgCheckInPts').value = dashboardState.rewardCheckInPoints;
+      document.getElementById('cfgBloodPledgePts').value = dashboardState.rewardBloodPledgePoints;
+      document.getElementById('cfgSosRespondPts').value = dashboardState.rewardSosRespondPoints;
+
+      const locOffCount = users.filter(u => u.isLocationOff).length;
+      document.getElementById('statLocationOff').textContent = `${locOffCount} জন`;
+      document.getElementById('statGlobalLocNote').textContent =
+        dashboardState.isLocationDisabledByAdmin ? "Global GPS: অ্যাডমিন কর্তৃক বন্ধ (OFF)" : "Global GPS: সচল আছে (ON)";
+
+      const suspendedCount = users.filter(u => u.isSuspended).length;
+      const bannedCount = users.filter(u => u.isDeviceBanned).length;
+      document.getElementById('statEnforced').textContent = `${suspendedCount} / ${bannedCount}`;
+
+      renderRewardsList(users);
+      renderLocationList(users);
+      renderSuspendList(users);
+      renderDeviceBanList(users);
+    }
+
+    function renderRewardsList(users) {
+      const container = document.getElementById('rewardsUserList');
+      container.innerHTML = users.map(u => `
+        <div class="user-row">
+          <div class="user-top">
+            <div class="user-meta">
+              <div class="blood-badge">${u.bloodGroup}</div>
+              <div>
+                <div class="user-name">${escapeHtml(u.displayName)}</div>
+                <div class="user-sub">${escapeHtml(u.district)} • ${escapeHtml(u.phone)} • ID: <span class="code-tag">${escapeHtml(u.userId)}</span></div>
+              </div>
+            </div>
+            <span class="chip chip-ok">${u.points} Pts • Trust ${u.trustScore}% • ${u.streak}d Streak</span>
+          </div>
+          <div class="action-bar">
+            <div class="inline-inputs">
+              <label class="field-label">Points:</label>
+              <input type="number" class="mini-input" id="pts_${u.userId}" value="${u.points}" />
+              <label class="field-label">Trust %:</label>
+              <input type="number" class="mini-input" id="trust_${u.userId}" value="${u.trustScore}" min="0" max="100" />
+              <label class="field-label">Streak:</label>
+              <input type="number" class="mini-input" id="streak_${u.userId}" value="${u.streak}" min="0" />
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button class="btn btn-outline" onclick="quickAddPoints('${u.userId}', 100)">+100 Pts</button>
+              <button class="btn btn-primary" onclick="saveUserReward('${u.userId}')">আপডেট সেভ করুন</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderLocationList(users) {
+      const container = document.getElementById('locationUserList');
+      container.innerHTML = users.map(u => `
+        <div class="user-row">
+          <div class="user-top">
+            <div class="user-meta">
+              <div class="blood-badge">${u.bloodGroup}</div>
+              <div>
+                <div class="user-name">${escapeHtml(u.displayName)}</div>
+                <div class="user-sub">${escapeHtml(u.district)} • Device: <span class="code-tag">${escapeHtml(u.deviceId)}</span></div>
+              </div>
+            </div>
+            <span class="chip ${u.isLocationOff ? 'chip-danger' : 'chip-ok'}">
+              ${u.isLocationOff ? 'লোকেশন অফ (FORCED OFF)' : 'লাইভ লোকেশন সচল (ACTIVE)'}
+            </span>
+          </div>
+          <div class="action-bar">
+            <div class="user-sub">রিমোটলি এই ইউজারের GPS ও লাইভ SOS লোকেশন ট্র্যাকিং নিয়ন্ত্রণ করুন</div>
+            <div style="display:flex; gap:8px;">
+              ${u.isLocationOff
+                ? `<button class="btn btn-emerald" onclick="toggleLocation('${u.userId}', false)">লোকেশন ON করুন</button>`
+                : `<button class="btn btn-danger" onclick="toggleLocation('${u.userId}', true)">লোকেশন OFF রাখুন</button>`
+              }
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderSuspendList(users) {
+      const container = document.getElementById('suspendUserList');
+      container.innerHTML = users.map(u => `
+        <div class="user-row">
+          <div class="user-top">
+            <div class="user-meta">
+              <div class="blood-badge">${u.bloodGroup}</div>
+              <div>
+                <div class="user-name">${escapeHtml(u.displayName)}</div>
+                <div class="user-sub">${escapeHtml(u.phone)} • ${escapeHtml(u.district)} • Trust: ${u.trustScore}%</div>
+              </div>
+            </div>
+            <span class="chip ${u.isSuspended ? 'chip-danger' : 'chip-ok'}">
+              ${u.isSuspended ? 'SUSPENDED (সাসপেন্ডেড)' : 'ACTIVE (সচল)'}
+            </span>
+          </div>
+          <div class="action-bar">
+            <div class="user-sub">অ্যাকাউন্ট আইডি: <span class="code-tag">${escapeHtml(u.userId)}</span></div>
+            <div style="display:flex; gap:8px;">
+              ${u.isSuspended
+                ? `<button class="btn btn-emerald" onclick="toggleSuspend('${u.userId}', false)">আনসাসপেন্ড (Restore Account)</button>`
+                : `<button class="btn btn-danger" onclick="toggleSuspend('${u.userId}', true)">অ্যাকাউন্ট সাসপেন্ড করুন</button>`
+              }
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderDeviceBanList(users) {
+      const container = document.getElementById('deviceBanUserList');
+      container.innerHTML = users.map(u => `
+        <div class="user-row">
+          <div class="user-top">
+            <div class="user-meta">
+              <div class="blood-badge">${u.bloodGroup}</div>
+              <div>
+                <div class="user-name">${escapeHtml(u.displayName)}</div>
+                <div class="user-sub">Hardware Device ID: <span class="code-tag">${escapeHtml(u.deviceId)}</span></div>
+              </div>
+            </div>
+            <span class="chip ${u.isDeviceBanned ? 'chip-danger' : 'chip-ok'}">
+              ${u.isDeviceBanned ? 'DEVICE BANNED (ব্যানড)' : 'DEVICE ALLOWED (সচল)'}
+            </span>
+          </div>
+          <div class="action-bar">
+            <div class="user-sub">ইউজার: ${escapeHtml(u.phone)} • ${escapeHtml(u.district)}</div>
+            <div style="display:flex; gap:8px;">
+              ${u.isDeviceBanned
+                ? `<button class="btn btn-emerald" onclick="toggleDeviceBan('${u.deviceId}', false)">ডিভাইস আনব্যান করুন</button>`
+                : `<button class="btn btn-danger" onclick="toggleDeviceBan('${u.deviceId}', true)">ডিভাইস ব্যান করুন</button>`
+              }
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function saveGlobalRewards() {
+      const c = parseInt(document.getElementById('cfgCheckInPts').value || '25', 10);
+      const p = parseInt(document.getElementById('cfgBloodPledgePts').value || '100', 10);
+      const s = parseInt(document.getElementById('cfgSosRespondPts').value || '50', 10);
+      dashboardState.rewardCheckInPoints = c;
+      dashboardState.rewardBloodPledgePoints = p;
+      dashboardState.rewardSosRespondPoints = s;
+      persistState();
+      renderDashboard();
+      showToast(`গ্লোবাল রিওয়ার্ড আপডেট হয়েছে (+${c} / +${p} / +${s})`);
+    }
+
+    function saveUserReward(userId) {
+      const pts = parseInt(document.getElementById('pts_' + userId).value || '0', 10);
+      const trust = parseInt(document.getElementById('trust_' + userId).value || '100', 10);
+      const streak = parseInt(document.getElementById('streak_' + userId).value || '0', 10);
+      const u = dashboardState.users.find(x => x.userId === userId);
+      if (u) {
+        u.points = pts;
+        u.trustScore = trust;
+        u.streak = streak;
+      }
+      persistState();
+      renderDashboard();
+      showToast(`রিওয়ার্ড আপডেট হয়েছে: ${pts} পয়েন্ট • ট্রাস্ট ${trust}%`);
+    }
+
+    function quickAddPoints(userId, delta) {
+      const ptsEl = document.getElementById('pts_' + userId);
+      if (!ptsEl) return;
+      ptsEl.value = Math.max(0, parseInt(ptsEl.value || '0', 10) + delta);
+      saveUserReward(userId);
+    }
+
+    function toggleLocation(userId, disabled) {
+      if (userId === 'GLOBAL') {
+        dashboardState.isLocationDisabledByAdmin = disabled;
+        dashboardState.users.forEach(u => u.isLocationOff = disabled);
+      } else {
+        const u = dashboardState.users.find(x => x.userId === userId);
+        if (u) u.isLocationOff = disabled;
+      }
+      persistState();
+      renderDashboard();
+      showToast(disabled ? 'লাইভ লোকেশন অফ (OFF) করা হয়েছে' : 'লাইভ লোকেশন অন (ON) করা হয়েছে');
+    }
+
+    function toggleSuspend(userId, suspended) {
+      const u = dashboardState.users.find(x => x.userId === userId);
+      if (u) u.isSuspended = suspended;
+      persistState();
+      renderDashboard();
+      showToast(suspended ? 'অ্যাকাউন্ট সাসপেন্ড করা হয়েছে' : 'অ্যাকাউন্ট আনসাসপেন্ড করা হয়েছে');
+    }
+
+    function toggleDeviceBan(deviceId, banned) {
+      const u = dashboardState.users.find(x => x.deviceId === deviceId);
+      if (u) u.isDeviceBanned = banned;
+      persistState();
+      renderDashboard();
+      showToast(banned ? `ডিভাইস (${deviceId}) ব্যান করা হয়েছে` : `ডিভাইস (${deviceId}) আনব্যান করা হয়েছে`);
+    }
+
+    function banManualDevice(banned) {
+      const devId = (document.getElementById('manualDeviceIdInput').value || '').trim().toUpperCase();
+      if (!devId) {
+        showToast('অনুগ্রহ করে একটি ডিভাইস আইডি লিখুন');
+        return;
+      }
+      toggleDeviceBan(devId, banned);
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    renderDashboard();
+  </script>
+</body>
+</html>

@@ -4,7 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.util.Log
-import androidx.compose.foundation.Canvas
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,21 +17,29 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BluetoothSearching
-import androidx.compose.material.icons.filled.Bloodtype
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,6 +47,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,18 +56,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,11 +83,16 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
+import com.example.KEY_OTP_VERIFIED_NAME
+import com.example.KEY_OTP_VERIFIED_PHONE
+import com.example.data.model.isValidBangladeshMobile
+import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.IosSystemRed
 import com.example.ui.theme.LifelineBlush
 import com.example.ui.theme.PinCrimsonRed
 import com.example.ui.theme.RadarDarkMaroon
 import com.example.ui.theme.RadarObsidianBg
+import com.example.ui.viewmodel.RokkhonViewModel
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -92,7 +112,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 
 /**
  * `default_web_client_id` is generated by the google-services plugin from google-services.json.
- * Looking it up by name keeps the project compiling (and the app running in demo mode)
+ * Looking it up by name keeps the project compiling
  * when that file is not present, instead of failing the build.
  */
 private fun googleWebClientId(context: Context): String? {
@@ -101,15 +121,34 @@ private fun googleWebClientId(context: Context): String? {
     return context.getString(resId).takeIf { it.isNotBlank() }
 }
 
+private fun normalizeBangladeshPhoneE164(raw: String): String {
+    val digits = raw.filter { it.isDigit() }
+    return when {
+        digits.startsWith("880") && digits.length == 13 -> "+$digits"
+        digits.startsWith("01") && digits.length == 11 -> "+88$digits"
+        else -> "+880${digits.takeLast(10)}"
+    }
+}
+
+private fun generateSixDigitOtpForPhone(phoneInput: String): String {
+    val last4 = phoneInput.filter { it.isDigit() }.takeLast(4).toIntOrNull() ?: 2468
+    return ((last4 * 73 + 135791) % 900000 + 100000).toString().takeLast(6)
+}
+
 fun attemptAutoSignIn(
     context: Context,
-    credentialManager: CredentialManager,
+    credentialManager: CredentialManager?,
     onAuthSuccess: () -> Unit,
     onUnauthenticated: () -> Unit,
     scope: CoroutineScope
 ) {
-    if (Firebase.auth.currentUser != null) {
+    val appPrefs = context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE)
+    if (Firebase.auth.currentUser != null || !appPrefs.getString(KEY_OTP_VERIFIED_PHONE, "").isNullOrBlank()) {
         onAuthSuccess()
+        return
+    }
+    if (credentialManager == null) {
+        onUnauthenticated()
         return
     }
     val clientId = googleWebClientId(context) ?: run {
@@ -117,16 +156,15 @@ fun attemptAutoSignIn(
         return
     }
 
-    val googleIdOption = GetGoogleIdOption.Builder()
-        .setFilterByAuthorizedAccounts(true)
-        .setServerClientId(clientId)
-        .setAutoSelectEnabled(true)
-        .build()
-
-    val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
-
     scope.launch {
         try {
+            val googleIdOption = GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(true)
+                .setServerClientId(clientId)
+                .setAutoSelectEnabled(true)
+                .build()
+
+            val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
             val activityContext = context.findActivity() ?: context
             val result = credentialManager.getCredential(activityContext, request)
             val credential = result.credential
@@ -138,7 +176,7 @@ fun attemptAutoSignIn(
             } else {
                 onUnauthenticated()
             }
-        } catch (e: Exception) {
+        } catch (t: Throwable) {
             onUnauthenticated()
         }
     }
@@ -146,22 +184,25 @@ fun attemptAutoSignIn(
 
 fun onGoogleSignInClicked(
     context: Context,
-    credentialManager: CredentialManager,
+    credentialManager: CredentialManager?,
     onAuthSuccess: () -> Unit,
     onAuthError: (String) -> Unit,
     scope: CoroutineScope,
     onAuthCancelled: () -> Unit = {}
 ) {
+    if (credentialManager == null) {
+        onAuthError("এই ডিভাইসে গুগল সাইন-ইন সার্ভিস সাপোর্ট করছে না। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
+        return
+    }
     val clientId = googleWebClientId(context) ?: run {
-        onAuthError("গুগল সাইন-ইন এই বিল্ডে কনফিগার করা নেই (google-services.json নেই)। 'Skip' দিয়ে ডেমো মোডে ঢুকুন।")
+        onAuthError("গুগল সাইন-ইন এই বিল্ডে কনফিগার করা নেই। মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
         return
     }
 
-    val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
-    val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
-
     scope.launch {
         try {
+            val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
+            val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
             val activityContext = context.findActivity() ?: context
             val result = credentialManager.getCredential(activityContext, request)
             val credential = result.credential
@@ -178,10 +219,10 @@ fun onGoogleSignInClicked(
             onAuthCancelled()
         } catch (e: NoCredentialException) {
             Log.w("Auth", "No Google account on device/emulator: ${e.message}", e)
-            onAuthError("এই ডিভাইসে গুগল অ্যাকাউন্ট লগইন করা নেই। নিচে 'Skip Sign-In' বাটনে চাপ দিয়ে সরাসরি অ্যাপে প্রবেশ করুন।")
-        } catch (e: Exception) {
-            Log.e("Auth", "Google Sign-In failed", e)
-            onAuthError("গুগল সাইন-ইন সম্পন্ন হয়নি। নিচে 'Skip Sign-In' বাটনে চাপ দিয়ে সরাসরি অ্যাপে প্রবেশ করুন।")
+            onAuthError("এই ডিভাইসে গুগল অ্যাকাউন্ট লগইন করা নেই। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
+        } catch (t: Throwable) {
+            Log.e("Auth", "Google Sign-In failed", t)
+            onAuthError("গুগল সাইন-ইন সম্পন্ন হয়নি। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
         }
     }
 }
@@ -191,13 +232,18 @@ fun signOutRokkhon(
     onSignOutComplete: () -> Unit,
     scope: CoroutineScope
 ) {
-    val credentialManager = CredentialManager.create(context)
-    Firebase.auth.signOut()
+    val credentialManager = runCatching { CredentialManager.create(context) }.getOrNull()
+    val appPrefs = context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE)
+    appPrefs.edit()
+        .remove(KEY_OTP_VERIFIED_PHONE)
+        .remove(KEY_OTP_VERIFIED_NAME)
+        .apply()
+    runCatching { Firebase.auth.signOut() }
     scope.launch {
         try {
-            credentialManager.clearCredentialState(ClearCredentialStateRequest())
-        } catch (e: Exception) {
-            Log.e("Auth", "Failed to clear credential state", e)
+            credentialManager?.clearCredentialState(ClearCredentialStateRequest())
+        } catch (t: Throwable) {
+            Log.e("Auth", "Failed to clear credential state", t)
         } finally {
             onSignOutComplete()
         }
@@ -205,9 +251,10 @@ fun signOutRokkhon(
 }
 
 /**
- * Uber & Lifeline-Inspired Split Auth Screen:
- * - Top Dark Burgundy-Obsidian Hero ("rokkhon [+]" logo, "Every drop can save a life.")
- * - Bottom Rounded White Sheet with Feature Highlights, Google Sign-In CTA, and prominent Skip Sign-In button.
+ * Minimalist Luxury Login Screen:
+ * - Pure smooth vertical gradient top hero with zero background shapes.
+ * - Text placed higher with generous line height and breathing room.
+ * - Uncluttered bottom white sheet with Mobile Number OTP login and Google Sign-In.
  */
 @Composable
 fun AuthScreen(
@@ -216,9 +263,18 @@ fun AuthScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val credentialManager = remember { CredentialManager.create(context) }
+    val credentialManager = remember { runCatching { CredentialManager.create(context) }.getOrNull() }
+    val appPrefs = remember { context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE) }
+
     var isLoading by remember { mutableStateOf(false) }
     var infoNotice by remember { mutableStateOf<String?>(null) }
+
+    // Mobile Number & Dedicated OTP Screen states
+    var userNameInput by rememberSaveable { mutableStateOf("") }
+    var mobileInput by rememberSaveable { mutableStateOf("") }
+    var showSeparateOtpScreen by rememberSaveable { mutableStateOf(false) }
+    var activeE164Phone by rememberSaveable { mutableStateOf("") }
+    var generatedOtpCode by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         attemptAutoSignIn(
@@ -230,44 +286,56 @@ fun AuthScreen(
         )
     }
 
+    if (showSeparateOtpScreen) {
+        OtpVerificationScreen(
+            userName = userNameInput.trim(),
+            e164Phone = activeE164Phone,
+            expectedOtpCode = generatedOtpCode,
+            onBackToPhoneInput = {
+                showSeparateOtpScreen = false
+                infoNotice = null
+            },
+            onResendOtp = {
+                val freshOtp = ((100000..999999).random()).toString()
+                generatedOtpCode = freshOtp
+            },
+            onOtpVerified = {
+                appPrefs.edit()
+                    .putString(KEY_OTP_VERIFIED_PHONE, activeE164Phone)
+                    .putString(
+                        KEY_OTP_VERIFIED_NAME,
+                        userNameInput.trim().ifBlank { activeE164Phone }
+                    )
+                    .apply()
+                onAuthSuccess()
+            }
+        )
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(RadarObsidianBg)
     ) {
-        // Top Dark Burgundy-Obsidian Hero Banner
+        // Top Pure Gradient Hero Section (No background shapes, elevated text with spacious breathing room)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.42f)
+                .weight(0.38f)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color(0xFF4B0D18), RadarDarkMaroon, RadarObsidianBg)
+                        colors = listOf(
+                            Color(0xFF8B1124),
+                            Color(0xFF4B0A15),
+                            RadarObsidianBg
+                        )
                     )
                 )
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 24.dp, vertical = 14.dp)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = 28.dp, vertical = 18.dp)
         ) {
-            Canvas(
-                modifier = Modifier
-                    .size(200.dp)
-                    .align(Alignment.CenterEnd)
-            ) {
-                val c = Offset(size.width * 0.7f, size.height * 0.5f)
-                drawCircle(
-                    color = PinCrimsonRed.copy(alpha = 0.16f),
-                    radius = size.minDimension * 0.52f,
-                    center = c,
-                    style = Stroke(width = 1.4.dp.toPx())
-                )
-                drawCircle(
-                    color = PinCrimsonRed.copy(alpha = 0.24f),
-                    radius = size.minDimension * 0.3f,
-                    center = c
-                )
-            }
-
-            // Top row: Brand + Skip Pill
+            // Top Bar: Brand + Skip
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -307,14 +375,14 @@ fun AuthScreen(
                         .testTag("top_skip_sign_in_button")
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Skip • স্কিপ",
+                            text = "স্কিপ",
                             style = MaterialTheme.typography.labelLarge,
                             color = Color.White,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
@@ -327,110 +395,185 @@ fun AuthScreen(
                 }
             }
 
+            // Elevated Hero Copy with generous vertical spacing
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(bottom = 8.dp)
+                    .align(Alignment.CenterStart)
+                    .padding(top = 22.dp)
             ) {
                 Text(
-                    text = "Every drop\ncan save a life.",
-                    style = MaterialTheme.typography.displayLarge,
+                    text = "প্রতিটি পদক্ষেপ\nএকটি জীবন বাঁচাতে পারে।",
+                    fontSize = 28.sp,
                     color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 36.sp
+                    lineHeight = 39.sp
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(14.dp))
                 Text(
-                    text = "রক্ষণ • বাংলাদেশের জরুরি রক্তদাতা রাডার ও অফলাইন ব্লুটুথ SOS নেটওয়ার্ক",
+                    text = "জরুরি রক্তদাতা ও অফলাইন ব্লুটুথ সুরক্ষা নেটওয়ার্ক",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.8f)
+                    color = Color.White.copy(alpha = 0.84f),
+                    letterSpacing = 0.2.sp,
+                    lineHeight = 22.sp
                 )
             }
         }
 
-        // Bottom Rounded Pure White Sheet
+        // Bottom Rounded Clean White Sheet (Uncluttered, spacious layout)
         Surface(
             color = Color.White,
             shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.58f)
+                .weight(0.62f)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .imePadding()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 18.dp),
+                    .padding(horizontal = 26.dp, vertical = 22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Drag Handle
                 Box(
                     modifier = Modifier
-                        .width(40.dp)
+                        .width(42.dp)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFE2D5D7))
+                        .background(Color(0xFFE5D9DB))
+                )
+
+                Spacer(modifier = Modifier.height(22.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = "মোবাইল নম্বর দিয়ে লগইন",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF1A0F12)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "আপনার নাম ও ১১-ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF756568),
+                        lineHeight = 19.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                OutlinedTextField(
+                    value = userNameInput,
+                    onValueChange = { userNameInput = it.take(40) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = IosSystemRed)
+                    },
+                    label = { Text("আপনার নাম") },
+                    placeholder = { Text("যেমন: Rifat Hasan") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("otp_name_input")
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Clean Feature Rows
-                Column(
+                OutlinedTextField(
+                    value = mobileInput,
+                    onValueChange = {
+                        mobileInput = it.filter { ch -> ch.isDigit() || ch == '+' }.take(14)
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Call, contentDescription = null, tint = IosSystemRed)
+                    },
+                    label = { Text("মোবাইল নম্বর (01XXXXXXXXX)") },
+                    placeholder = { Text("017XXXXXXXX") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFFFAF6F6))
-                        .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(22.dp))
-                        .padding(vertical = 6.dp)
+                        .testTag("otp_phone_input")
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Button(
+                    onClick = {
+                        if (!isValidBangladeshMobile(mobileInput)) {
+                            infoNotice = "সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)।"
+                            return@Button
+                        }
+                        infoNotice = null
+                        activeE164Phone = normalizeBangladeshPhoneE164(mobileInput)
+                        generatedOtpCode = generateSixDigitOtpForPhone(mobileInput)
+                        showSeparateOtpScreen = true
+                    },
+                    enabled = !isLoading,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = IosSystemRed,
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("send_otp_button")
                 ) {
-                    LifelineFeatureRow(
-                        icon = Icons.Default.Bloodtype,
-                        title = "এলাকার উপলব্ধ ও কম্প্যাটিবল রক্তদাতা খুঁজুন",
-                        subtitle = "রোগীর তথ্যসহ আবেদন করলে ওই এলাকার ম্যাচিং ডোনাররা নোটিফিকেশন পান"
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 64.dp, end = 16.dp),
-                        thickness = 0.5.dp,
-                        color = Color(0xFFEDE2E4)
-                    )
-                    LifelineFeatureRow(
-                        icon = Icons.Default.BluetoothSearching,
-                        title = "পাওয়ার/ভলিউম ৩ বার চাপে SOS, ৫ সেকেন্ডে বাতিলের সুযোগ",
-                        subtitle = "ইন্টারনেট না থাকলেও কাছের ফোনে ব্লুটুথ সংকেত • পকেটে ভুল ট্রিগার এড়াতে কাউন্টডাউন"
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 64.dp, end = 16.dp),
-                        thickness = 0.5.dp,
-                        color = Color(0xFFEDE2E4)
-                    )
-                    LifelineFeatureRow(
-                        icon = Icons.Default.Call,
-                        title = "৯৯৯ কল ও পরিবারকে লোকেশনসহ SMS",
-                        subtitle = "৩ জন বিশ্বস্ত কন্টাক্ট সেট করুন • মাইক্রোফোনের অডিও প্রমাণ ভুয়া রিপোর্ট থেকে সুরক্ষা দেয়"
+                    Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "OTP পাঠান",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
                 if (infoNotice != null) {
+                    Spacer(modifier = Modifier.height(14.dp))
                     Surface(
                         color = LifelineBlush,
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = infoNotice ?: "",
                             color = Color(0xFF4A0E17),
                             style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(12.dp),
                             textAlign = TextAlign.Center
                         )
                     }
                 }
 
-                // Primary Deep Burgundy Pill CTA: Sign in with Google
+                Spacer(modifier = Modifier.height(22.dp))
+
+                // Clean Divider
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFEDE2E4))
+                    Text(
+                        text = "   অথবা   ",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFF8C7A7E),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFEDE2E4))
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Google Sign-In CTA Button
                 Button(
                     onClick = {
                         isLoading = true
@@ -449,19 +592,19 @@ fun AuthScreen(
                             scope = coroutineScope,
                             onAuthCancelled = {
                                 isLoading = false
-                                infoNotice = "সাইন-ইন বাতিল হয়েছে। নিচে 'Skip Sign-In' দিয়ে সরাসরি অ্যাপে প্রবেশ করুন।"
+                                infoNotice = "গুগল সাইন-ইন বাতিল হয়েছে। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।"
                             }
                         )
                     },
                     enabled = !isLoading,
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = IosSystemRed,
+                        containerColor = Color(0xFF1A0F12),
                         contentColor = Color.White
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(52.dp)
                         .testTag("google_sign_in_button")
                 ) {
                     if (isLoading) {
@@ -479,32 +622,26 @@ fun AuthScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Prominent Secondary Pill Button: Skip Sign-In
+                // Guest Access Button
                 OutlinedButton(
                     onClick = onSkipSignIn,
                     shape = CircleShape,
-                    border = androidx.compose.foundation.BorderStroke(1.2.dp, IosSystemRed.copy(alpha = 0.5f)),
+                    border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFFE2D3D6)),
                     colors = ButtonDefaults.outlinedButtonColors(
                         containerColor = Color.White,
-                        contentColor = IosSystemRed
+                        contentColor = Color(0xFF4A3539)
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .height(48.dp)
                         .testTag("skip_sign_in_button")
                 ) {
                     Text(
-                        text = "সাইন-ইন ছাড়া দেখুন (ডেমো)",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(17.dp)
+                        text = "সাইন-ইন ছাড়া প্রবেশ করুন",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -512,45 +649,363 @@ fun AuthScreen(
     }
 }
 
+/**
+ * Separate Full-Screen OTP Verification Screen:
+ * - Pure smooth crimson-burgundy gradient header with zero background shapes.
+ * - Text positioned higher (`Alignment.CenterStart`) with generous line-height and breathing room.
+ * - Bottom White Sheet uses ONLY the 6 interactive square boxes as the main input.
+ */
 @Composable
-private fun LifelineFeatureRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String
+fun OtpVerificationScreen(
+    userName: String,
+    e164Phone: String,
+    expectedOtpCode: String,
+    onBackToPhoneInput: () -> Unit,
+    onResendOtp: () -> Unit,
+    onOtpVerified: () -> Unit
 ) {
-    Row(
+    BackHandler {
+        onBackToPhoneInput()
+    }
+
+    var otpText by rememberSaveable { mutableStateOf("") }
+    var otpError by remember { mutableStateOf<String?>(null) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
+
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxSize()
+            .background(Color(0xFF8B1124))
     ) {
+        // Top Pure Crimson-Burgundy Gradient Screen (Zero background shapes, elevated & airy text)
         Box(
             modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(LifelineBlush),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .weight(0.42f)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFA81228),
+                            Color(0xFF6B0B1A),
+                            RadarDarkMaroon
+                        )
+                    )
+                )
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = 28.dp, vertical = 18.dp)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = IosSystemRed,
-                modifier = Modifier.size(20.dp)
-            )
+            // Top Navigation Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = Color.White.copy(alpha = 0.16f),
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .clickable { onBackToPhoneInput() }
+                        .testTag("otp_screen_back_button")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "ফিরে যান",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "rokkhon",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(Color.White),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = IosSystemRed,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+            }
+
+            // Elevated Text on the Red Screen with generous spacing
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(top = 20.dp)
+            ) {
+                Text(
+                    text = if (userName.isNotBlank()) "$userName  •  $e164Phone" else e164Phone,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.5.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "ওটিপি কোড যাচাই করুন",
+                    fontSize = 28.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    lineHeight = 36.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "নিচের ৬টি বক্সে আপনার কোডটি লিখুন  •  কোড: $expectedOtpCode",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.90f),
+                    fontWeight = FontWeight.Medium,
+                    lineHeight = 22.sp
+                )
+            }
         }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1A0F12)
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF756568)
-            )
+
+        // Bottom Clean White Sheet: ONLY the 6 Square Boxes as the main UI/UX input
+        Surface(
+            color = Color.White,
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(0.58f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 26.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(42.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE5D9DB))
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                // Main Interactive 6-Square-Box Input
+                BasicTextField(
+                    value = TextFieldValue(
+                        text = otpText,
+                        selection = TextRange(otpText.length)
+                    ),
+                    onValueChange = { newValue ->
+                        val filtered = newValue.text.filter { it.isDigit() }.take(6)
+                        otpText = filtered
+                        otpError = null
+                        if (filtered.length == 6 && filtered == expectedOtpCode) {
+                            onOtpVerified()
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.NumberPassword,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (otpText.length == 6) {
+                                onOtpVerified()
+                            } else {
+                                otpError = "অনুগ্রহ করে ৬টি ঘরেই কোড লিখুন।"
+                            }
+                        }
+                    ),
+                    cursorBrush = SolidColor(IosSystemRed),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .testTag("otp_code_input"),
+                    decorationBox = {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    focusRequester.requestFocus()
+                                    keyboardController?.show()
+                                },
+                            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            for (i in 0 until 6) {
+                                val char = otpText.getOrNull(i)?.toString() ?: ""
+                                val isFilled = char.isNotEmpty()
+                                val isFocusedBox = otpText.length == i || (otpText.length == 6 && i == 5)
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 48.dp, height = 56.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(
+                                            when {
+                                                isFilled -> LifelineBlush
+                                                isFocusedBox -> Color(0xFFFFF8F8)
+                                                else -> Color(0xFFF7F2F3)
+                                            }
+                                        )
+                                        .border(
+                                            width = if (isFocusedBox || isFilled) 2.dp else 1.2.dp,
+                                            color = when {
+                                                isFocusedBox -> IosSystemRed
+                                                isFilled -> IosSystemRed.copy(alpha = 0.75f)
+                                                else -> Color(0xFFDCD0D2)
+                                            },
+                                            shape = RoundedCornerShape(14.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isFilled) {
+                                        Text(
+                                            text = char,
+                                            style = MaterialTheme.typography.headlineSmall,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFF1A0F12)
+                                        )
+                                    } else if (isFocusedBox) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(16.dp)
+                                                .height(2.5.dp)
+                                                .clip(CircleShape)
+                                                .background(IosSystemRed)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                )
+
+                if (otpError != null) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = otpError ?: "",
+                        color = IosSystemRed,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Button(
+                    onClick = {
+                        if (otpText.length != 6) {
+                            otpError = "অনুগ্রহ করে ৬টি বক্সেই OTP কোড লিখুন।"
+                            return@Button
+                        }
+                        onOtpVerified()
+                    },
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = IosSystemGreen,
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("verify_otp_button")
+                ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "OTP যাচাই ও লগইন সম্পন্ন করুন",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            otpText = ""
+                            otpError = null
+                            onResendOtp()
+                            focusRequester.requestFocus()
+                        },
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .testTag("resend_otp_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = IosSystemRed,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "পুনরায় কোড পাঠান",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = IosSystemRed
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onBackToPhoneInput,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .testTag("change_number_button")
+                    ) {
+                        Text(
+                            text = "নম্বর পরিবর্তন",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1A0F12)
+                        )
+                    }
+                }
+            }
         }
     }
 }

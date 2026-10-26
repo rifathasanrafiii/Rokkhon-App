@@ -191,7 +191,14 @@ fun DonorProfileScreen(
                 Surface(
                     color = Color.White.copy(alpha = 0.12f),
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable {
+                            if (!checkedInToday) {
+                                viewModel.performDailySafeCheckIn()
+                            }
+                        }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
