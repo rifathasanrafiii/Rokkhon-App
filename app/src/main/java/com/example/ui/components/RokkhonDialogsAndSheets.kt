@@ -560,6 +560,20 @@ fun RokkhonNotificationCenterDialog(
                             .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        if (notifications.isEmpty()) {
+                            item {
+                                RokkhonEmptyState(
+                                    icon = Icons.Default.NotificationsActive,
+                                    title = if (language == AppLanguage.BENGALI) "কোনো নোটিফিকেশন নেই" else "No notifications yet",
+                                    body = if (language == AppLanguage.BENGALI) {
+                                        "এলাকায় নতুন রক্তের আবেদন, ১ কি.মি.-এর মধ্যে SOS বা কেউ সাড়া দিলে এখানে জানানো হবে।"
+                                    } else {
+                                        "New blood requests in your area, SOS within 1 km and responder updates show up here."
+                                    },
+                                    testTag = "notifications_empty"
+                                )
+                            }
+                        }
                         items(notifications, key = { it.id }) { item ->
                             val (accentColor, iconVec) = when (item.kind) {
                                 NotificationKind.SOS_ALERT -> PinCrimsonRed to Icons.Default.Shield

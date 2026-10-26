@@ -29,12 +29,14 @@ import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.WaterDrop
@@ -78,6 +80,7 @@ import com.example.ui.components.BangladeshAreaPickerDialog
 import com.example.ui.components.ClinicalBloodRequestCard
 import com.example.ui.components.LifelineResponderCard
 import com.example.ui.components.OverlappingDonorAvatarRow
+import com.example.ui.components.RokkhonEmptyState
 import com.example.ui.components.RokkhonIntents
 import com.example.ui.components.RokkhonNotificationCenterDialog
 import com.example.ui.theme.IosSystemGreen
@@ -124,6 +127,9 @@ fun HomeMatchHubScreen(
     val unreadNotificationCount by viewModel.unreadNotificationCount.collectAsStateWithLifecycle()
     val falseSosWarningBanner by viewModel.falseSosWarningBanner.collectAsStateWithLifecycle()
     val falseSosPenaltyCount by viewModel.falseSosPenaltyCount.collectAsStateWithLifecycle()
+    val hasGpsFix by viewModel.hasRealGpsFix.collectAsStateWithLifecycle()
+    val guardNetworkOn by viewModel.guardNetworkEnabled.collectAsStateWithLifecycle()
+    val trustedContacts by viewModel.trustedContacts.collectAsStateWithLifecycle()
 
     var homeFeedTab by remember { mutableStateOf(MapLayerFilter.BLOOD_REQUESTS_ONLY) }
     var showAreaPickerDialog by remember { mutableStateOf(false) }
@@ -195,6 +201,50 @@ fun HomeMatchHubScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Streak + points, as in the design mockup
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.22f),
+                            shape = CircleShape,
+                            modifier = Modifier
+                                .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                                .clip(CircleShape)
+                                .clickable { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) }
+                                .testTag("header_streak_points_pill")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocalFireDepartment,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFA726),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = if (language == AppLanguage.BENGALI) "${dailyStreakCount}দি" else "${dailyStreakCount}d",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFC94D),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "$guardianPoints",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
                         // Language Toggle Pill
                         Surface(
                             color = Color.Black.copy(alpha = 0.22f),
@@ -276,16 +326,40 @@ fun HomeMatchHubScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Clean, Minimal Headline (Decluttered per user request)
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Text(
-                    text = if (language == AppLanguage.BENGALI) "প্রতিটি পদক্ষেপ একটি জীবন বাঁচাতে পারে" else "Every step can save a life",
-                    fontSize = 22.sp,
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 29.sp
+                    text = if (language == AppLanguage.BENGALI) "রক্ত দিন  •  জীবন বাঁচান  •  একসাথে" else "DONATE  •  SAVE  •  TOGETHER",
+                    fontSize = 10.5.sp,
+                    color = Color.White.copy(alpha = 0.66f),
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = if (language == AppLanguage.BENGALI) 0.6.sp else 2.4.sp
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = if (language == AppLanguage.BENGALI) "প্রতিটি পদক্ষেপ\nএকটি জীবন বাঁচাতে পারে" else "Every step\ncan save a life",
+                    fontSize = 28.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    lineHeight = 35.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = if (language == AppLanguage.BENGALI) {
+                        "এলাকাভিত্তিক রক্তদাতা ও ৫ সেকেন্ডের অডিও SOS"
+                    } else {
+                        "Area-based available blood donors & 5-second audio/video emergency SOS."
+                    },
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    color = Color.White.copy(alpha = 0.78f)
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // Hero CTA Row: White "Request Blood (->)" Capsule + Prominent Home "SOS" Capsule
                 Row(
@@ -504,6 +578,7 @@ fun HomeMatchHubScreen(
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
+
 
                     // Card 2: Select Area Card with "This Area Only" Badge & Searchable All-Bangladesh Area Selector
                     Surface(
@@ -998,7 +1073,41 @@ fun HomeMatchHubScreen(
                     }
                 }
 
-                if (homeFeedTab == MapLayerFilter.DONORS_ONLY) {
+                if (homeFeedTab == MapLayerFilter.DONORS_ONLY && matchingDonors.isEmpty()) {
+                    item(key = "empty_donors") {
+                        Box(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
+                            RokkhonEmptyState(
+                                icon = Icons.Default.People,
+                                title = if (language == AppLanguage.BENGALI) "এই এলাকায় এখনো কোনো ডোনার নেই" else "No donors in this area yet",
+                                body = if (language == AppLanguage.BENGALI) {
+                                    "প্রথম ডোনার হয়ে আপনার এলাকার মানুষকে সাহায্য করুন। প্রোফাইলে রক্তের গ্রুপ ও ফোন নম্বর দিলেই আপনি তালিকায় আসবেন।"
+                                } else {
+                                    "Be the first donor here. Add your blood group and phone in your profile to appear in the list."
+                                },
+                                actionLabel = if (language == AppLanguage.BENGALI) "ডোনার হোন" else "Become a donor",
+                                onAction = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) },
+                                testTag = "home_empty_donors"
+                            )
+                        }
+                    }
+                } else if (homeFeedTab != MapLayerFilter.DONORS_ONLY && openRequests.isEmpty()) {
+                    item(key = "empty_requests") {
+                        Box(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
+                            RokkhonEmptyState(
+                                icon = Icons.Default.LocalHospital,
+                                title = if (language == AppLanguage.BENGALI) "কোনো খোলা রক্তের আবেদন নেই" else "No open blood requests",
+                                body = if (language == AppLanguage.BENGALI) {
+                                    "এই এলাকায় এখন কেউ রক্ত খুঁজছেন না। কারও রক্ত লাগলে আবেদন করলে মিলে যাওয়া ডোনারদের জানানো হবে।"
+                                } else {
+                                    "Nobody is looking for blood here right now. Post a request and matching donors are notified."
+                                },
+                                actionLabel = if (language == AppLanguage.BENGALI) "রক্তের আবেদন করুন" else "Request blood",
+                                onAction = { onOpenBloodRequestDialog() },
+                                testTag = "home_empty_requests"
+                            )
+                        }
+                    }
+                } else if (homeFeedTab == MapLayerFilter.DONORS_ONLY) {
                     items(matchingDonors, key = { "home_donor_${it.id.ifBlank { it.userId }}" }) { donor ->
                     Box(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
                         LifelineResponderCard(
@@ -1026,6 +1135,51 @@ fun HomeMatchHubScreen(
                             onFulfillClick = { viewModel.fulfillOwnBloodRequest(req.id) }
                         )
                     }
+                    }
+                }
+
+                // Last on the page so the mockup's order (streak, area, match, counts) stays on top.
+                item(key = "safety_readiness") {
+                    Box(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp)) {
+                    SafetyReadinessCard(
+                        language = language,
+                        items = listOf(
+                            ReadinessItem(
+                                icon = Icons.Default.MyLocation,
+                                titleBn = "লাইভ লোকেশন", titleEn = "Live location",
+                                okBn = "জিপিএস ফিক্স পাওয়া গেছে", okEn = "GPS fix acquired",
+                                todoBn = if (isLocationDisabledByAdmin) "অ্যাডমিন বন্ধ রেখেছেন" else "জিপিএস চালু করুন",
+                                todoEn = if (isLocationDisabledByAdmin) "Turned off by admin" else "Turn on GPS",
+                                ok = hasGpsFix && !isLocationDisabledByAdmin,
+                                onClick = { viewModel.selectTab(RokkhonTab.RADAR_MAP) }
+                            ),
+                            ReadinessItem(
+                                icon = Icons.Default.Shield,
+                                titleBn = "১ কি.মি. সুরক্ষা নেটওয়ার্ক", titleEn = "1 km safety network",
+                                okBn = "ব্লুটুথ রিলে চালু", okEn = "Bluetooth relay on",
+                                todoBn = "চালু করুন — অ্যাপ বন্ধেও অ্যালার্ট পাবেন", todoEn = "Turn on to get alerts when the app is closed",
+                                ok = guardNetworkOn,
+                                onClick = { viewModel.selectTab(RokkhonTab.SOS_GUARDIAN) }
+                            ),
+                            ReadinessItem(
+                                icon = Icons.Default.People,
+                                titleBn = "বিশ্বস্ত কন্টাক্ট", titleEn = "Trusted contacts",
+                                okBn = "${trustedContacts.size}/৩ জন যোগ করা আছে", okEn = "${trustedContacts.size}/3 added",
+                                todoBn = "পরিবারের ১-৩ জনকে যোগ করুন", todoEn = "Add 1-3 family members",
+                                ok = trustedContacts.isNotEmpty(),
+                                onClick = { viewModel.selectTab(RokkhonTab.SOS_GUARDIAN) }
+                            ),
+                            ReadinessItem(
+                                icon = Icons.Default.WaterDrop,
+                                titleBn = "ডোনার প্রোফাইল", titleEn = "Donor profile",
+                                okBn = "রক্তদাতা হিসেবে নিবন্ধিত", okEn = "Registered as a donor",
+                                todoBn = "রক্তের গ্রুপ ও ফোন নম্বর দিন", todoEn = "Add blood group and phone",
+                                ok = allDonors.any { it.userId == viewModel.currentUserId && it.contactPhone.isNotBlank() },
+                                onClick = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) }
+                            )
+                        )
+                    )
+
                     }
                 }
 
@@ -1389,6 +1543,159 @@ fun BloodGroupPillGrid2x4(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+
+/** One line of the readiness card: a real status from the phone, and where to fix it when it is not OK. */
+internal class ReadinessItem(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val titleBn: String,
+    val titleEn: String,
+    val okBn: String,
+    val okEn: String,
+    val todoBn: String,
+    val todoEn: String,
+    val ok: Boolean,
+    val onClick: () -> Unit
+)
+
+/**
+ * "How ready is this phone to keep you safe": location, Bluetooth safety network, trusted contacts
+ * and donor profile. Every row reflects live state, nothing is placeholder.
+ */
+@Composable
+internal fun SafetyReadinessCard(language: AppLanguage, items: List<ReadinessItem>) {
+    val bn = language == AppLanguage.BENGALI
+    val readyCount = items.count { it.ok }
+    val allReady = readyCount == items.size
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(22.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Color(0xFFEEE6E8), RoundedCornerShape(22.dp))
+            .testTag("safety_readiness_card")
+    ) {
+        Column(modifier = Modifier.padding(15.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (bn) "আপনার সুরক্ষা প্রস্তুতি" else "Your safety readiness",
+                        fontSize = 15.5.sp,
+                        color = Color(0xFF1A1113),
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = if (allReady) {
+                            if (bn) "সব প্রস্তুত — আপনি সুরক্ষিত" else "All set — you are covered"
+                        } else {
+                            if (bn) "বিপদে পুরো সুরক্ষা পেতে বাকিগুলো চালু করুন" else "Finish the rest to be fully covered"
+                        },
+                        fontSize = 12.sp,
+                        color = Color(0xFF7B6F72)
+                    )
+                }
+                Surface(
+                    color = if (allReady) Color(0xFFE8F5EC) else Color(0xFFFDF0F1),
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = "$readyCount/${items.size}",
+                        fontSize = 12.5.sp,
+                        color = if (allReady) IosSystemGreen else Color(0xFFB80F24),
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF2E6E8))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(readyCount.toFloat() / items.size)
+                        .height(6.dp)
+                        .clip(CircleShape)
+                        .background(if (allReady) IosSystemGreen else Color(0xFFB80F24))
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            items.forEachIndexed { index, item ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { item.onClick() }
+                        .padding(vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (item.ok) Color(0xFFE8F5EC) else Color(0xFFF5DDE0)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = null,
+                            tint = if (item.ok) IosSystemGreen else Color(0xFFB80F24),
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (bn) item.titleBn else item.titleEn,
+                            fontSize = 13.5.sp,
+                            color = Color(0xFF1A1113),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (item.ok) (if (bn) item.okBn else item.okEn) else (if (bn) item.todoBn else item.todoEn),
+                            fontSize = 11.5.sp,
+                            lineHeight = 15.sp,
+                            color = if (item.ok) Color(0xFF7B6F72) else Color(0xFF9A4A55)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    if (item.ok) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = IosSystemGreen,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = Color(0xFFB80F24),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                if (index < items.lastIndex) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 46.dp)
+                            .height(1.dp)
+                            .background(Color(0xFFF4ECEE))
+                    )
                 }
             }
         }

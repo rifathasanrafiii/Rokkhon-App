@@ -78,6 +78,7 @@ import com.example.data.model.SosAlert
 import com.example.data.model.TrustedContact
 import com.example.ui.components.FalseSosAccountWarningBanner
 import com.example.ui.components.InteractiveBangladeshRadarMap
+import com.example.ui.components.RokkhonEmptyState
 import com.example.ui.components.RokkhonIntents
 import com.example.ui.components.SosPostCardItem
 import com.example.ui.components.SosVideoAudioInspectorDialog
@@ -731,24 +732,16 @@ fun SosGuardianAndBleScreen(
 
                 if (myHistorySosList.isEmpty()) {
                     item {
-                        Surface(
-                            color = Color.White,
-                            shape = RoundedCornerShape(18.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(18.dp))
-                        ) {
-                            Text(
-                                text = if (language == AppLanguage.BENGALI) {
-                                    "আপনার অ্যাকাউন্ট থেকে পূর্বে পাঠানো কোনো SOS হিস্ট্রি নেই।"
-                                } else {
-                                    "No past SOS history found for your account."
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFF756568),
-                                modifier = Modifier.padding(18.dp)
-                            )
-                        }
+                        RokkhonEmptyState(
+                            icon = Icons.Default.History,
+                            title = if (language == AppLanguage.BENGALI) "এখনো কোনো SOS পাঠাননি" else "No SOS sent yet",
+                            body = if (language == AppLanguage.BENGALI) {
+                                "আপনার পাঠানো সব SOS এখানে সংরক্ষিত থাকবে। আশা করি এর দরকার কখনো না পড়ুক।"
+                            } else {
+                                "Every SOS you send is kept here. We hope you never need it."
+                            },
+                            testTag = "sos_empty_history"
+                        )
                     }
                 } else {
                     items(myHistorySosList, key = { "my_history_sos_${it.id}" }) { alert ->

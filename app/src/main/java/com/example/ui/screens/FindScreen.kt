@@ -27,8 +27,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +62,7 @@ import com.example.ui.components.FalseSosAccountWarningBanner
 import com.example.ui.components.InteractiveBangladeshRadarMap
 import com.example.ui.components.LifelineResponderCard
 import com.example.ui.components.MapPinDetailOverlayCard
+import com.example.ui.components.RokkhonEmptyState
 import com.example.ui.components.RokkhonIntents
 import com.example.ui.components.SelectedMapPin
 import com.example.ui.components.SosPostCardItem
@@ -69,6 +73,7 @@ import com.example.ui.theme.LifelineBlush
 import com.example.ui.theme.PinCrimsonRed
 import com.example.ui.theme.RadarObsidianBg
 import com.example.ui.viewmodel.MapLayerFilter
+import com.example.ui.viewmodel.RokkhonTab
 import com.example.ui.viewmodel.RokkhonViewModel
 import com.example.ui.viewmodel.UiState
 
@@ -454,22 +459,14 @@ fun RadarMapHubScreen(
                     MapLayerFilter.BLOOD_REQUESTS_ONLY -> {
                         if (areaOpenRequests.isEmpty()) {
                             item {
-                                Surface(
-                                    color = Color(0xFFFAF6F6),
-                                    shape = RoundedCornerShape(18.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = if (language == AppLanguage.BENGALI) {
-                                            "এই এলাকায় বর্তমানে কোনো খোলা রক্তের আবেদন নেই।"
-                                        } else {
-                                            "No active patient blood requests in this area."
-                                        },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color(0xFF756568),
-                                        modifier = Modifier.padding(18.dp)
-                                    )
-                                }
+                                RokkhonEmptyState(
+                                    icon = Icons.Default.LocalHospital,
+                                    title = if (language == AppLanguage.BENGALI) "কোনো খোলা রক্তের আবেদন নেই" else "No open blood requests",
+                                    body = if (language == AppLanguage.BENGALI) "এই এলাকায় এখন কেউ রক্ত খুঁজছেন না। কারও রক্ত লাগলে আবেদন করুন, মিলে যাওয়া ডোনারদের জানানো হবে।" else "Nobody is looking for blood here right now. Post a request and matching donors are notified.",
+                                    actionLabel = if (language == AppLanguage.BENGALI) "রক্তের আবেদন করুন" else "Request blood",
+                                    onAction = { onOpenBloodRequestDialog() },
+                                    testTag = "find_empty_requests"
+                                )
                             }
                         } else {
                             items(areaOpenRequests, key = { "map_req_${it.id}" }) { req ->
@@ -503,22 +500,14 @@ fun RadarMapHubScreen(
 
                         if (activeSosAlerts.isEmpty()) {
                             item {
-                                Surface(
-                                    color = Color(0xFFFAF6F6),
-                                    shape = RoundedCornerShape(18.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = if (language == AppLanguage.BENGALI) {
-                                            "এই এলাকায় বর্তমানে কোনো সক্রিয় SOS বিপদ সংকেত নেই।"
-                                        } else {
-                                            "No active SOS alerts in this area right now."
-                                        },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color(0xFF756568),
-                                        modifier = Modifier.padding(18.dp)
-                                    )
-                                }
+                                RokkhonEmptyState(
+                                    icon = Icons.Default.Shield,
+                                    title = if (language == AppLanguage.BENGALI) "এখন কোনো সক্রিয় SOS নেই" else "No active SOS right now",
+                                    body = if (language == AppLanguage.BENGALI) "এই এলাকাটি এই মুহূর্তে নিরাপদ। বিপদে পড়লে SOS পাঠান, ১ কি.মি.-এর মধ্যে সবাই ব্লুটুথ ও ইন্টারনেটে জানতে পারবে।" else "This area is quiet. If you are in danger, send an SOS and everyone within 1 km is alerted over Bluetooth and internet.",
+                                    actionLabel = if (language == AppLanguage.BENGALI) "SOS পাঠান" else "Send SOS",
+                                    onAction = { viewModel.selectTab(RokkhonTab.SOS_GUARDIAN) },
+                                    testTag = "find_empty_sos"
+                                )
                             }
                         } else {
                             items(activeSosAlerts, key = { "find_sos_${it.id}" }) { alert ->
@@ -559,6 +548,22 @@ fun RadarMapHubScreen(
                     }
 
                     else -> {
+                        if (areaDonors.isEmpty()) {
+                            item {
+                                RokkhonEmptyState(
+                                    icon = Icons.Default.People,
+                                    title = if (language == AppLanguage.BENGALI) "এই এলাকায় এখনো কোনো ডোনার নেই" else "No donors in this area yet",
+                                    body = if (language == AppLanguage.BENGALI) {
+                                        "অন্য এলাকা বেছে দেখুন, অথবা নিজে ডোনার হয়ে প্রোফাইলে রক্তের গ্রুপ ও ফোন নম্বর দিন।"
+                                    } else {
+                                        "Try another area, or become a donor by adding your blood group and phone in your profile."
+                                    },
+                                    actionLabel = if (language == AppLanguage.BENGALI) "ডোনার হোন" else "Become a donor",
+                                    onAction = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) },
+                                    testTag = "find_empty_donors"
+                                )
+                            }
+                        }
                         items(areaDonors, key = { it.id.ifBlank { it.userId } }) { donor ->
                             LifelineResponderCard(
                                 donor = donor,
