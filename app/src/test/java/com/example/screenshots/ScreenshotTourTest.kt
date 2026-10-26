@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.test.core.app.ApplicationProvider
@@ -181,10 +182,6 @@ class ScreenshotTourTest {
         save("07_sos")
         swipeUp()
         save("08_sos_scrolled")
-        tap("nav_tab_sos")
-        tap("sos_guardian_main_button")
-        composeRule.mainClock.advanceTimeBy(800)
-        save("09_sos_send_dialog")
     }
 
     @Test
@@ -201,7 +198,8 @@ class ScreenshotTourTest {
     @Test
     fun rewards() {
         startApp()
-        tap("nav_tab_rewards")
+        tap("nav_tab_profile")
+        tap("profile_open_rewards")
         composeRule.mainClock.advanceTimeBy(1_500)
         save("19_rewards")
         swipeUp()
@@ -231,6 +229,15 @@ class ScreenshotTourTest {
         startApp()
         tap("area_dropdown_selector")
         save("15_area_picker")
+        tap("division_chip_Dhaka")
+        save("15b_area_districts")
+        tap("district_row_Tangail")
+        save("15c_area_upazilas")
+        tap("area_picker_back")
+        tap("area_picker_back")
+        composeRule.onNodeWithTag("area_search_input").performTextInput("savar")
+        composeRule.mainClock.advanceTimeBy(900)
+        save("15d_area_search")
     }
 
     @Test

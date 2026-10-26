@@ -60,6 +60,7 @@ import com.example.R
 import com.example.data.model.AppLanguage
 import com.example.data.model.BANGLADESH_AREAS
 import com.example.data.model.DONATION_GAP_DAYS
+import com.example.data.model.GUARDIAN_REWARD_TIERS
 import com.example.data.model.daysUntilEligible
 import com.example.data.model.isValidBangladeshMobile
 import com.example.data.model.parseDonationDateMillis
@@ -113,7 +114,6 @@ fun DonorProfileScreen(
     }
 
     val bn = language == AppLanguage.BENGALI
-    val trustScore = (myDonor?.trustScore ?: 100L).toInt()
     var showEditSheet by remember { mutableStateOf(false) }
     var showDonatedConfirm by remember { mutableStateOf(false) }
     var showProfileAreaPicker by remember { mutableStateOf(false) }
@@ -165,10 +165,6 @@ fun DonorProfileScreen(
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(UIcons.VerifiedUser, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text("$trustScore%", color = RokkhonPalette.Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Spacer(modifier = Modifier.width(8.dp))
                             Icon(UIcons.LocationOn, contentDescription = null, tint = RokkhonPalette.Muted, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(district.substringBefore(","), color = RokkhonPalette.Muted, fontSize = 13.sp, maxLines = 1)
@@ -217,12 +213,12 @@ fun DonorProfileScreen(
                         modifier = Modifier.weight(1f)
                     )
                     HeroStat(
-                        icon = UIcons.VerifiedUser,
-                        value = trustScore,
-                        suffix = "%",
-                        label = if (bn) "ট্রাস্ট" else "trust",
-                        onClick = {},
-                        modifier = Modifier.weight(1f)
+                        icon = UIcons.CardGiftcard,
+                        value = GUARDIAN_REWARD_TIERS.count { guardianPoints >= it.requiredPoints },
+                        label = if (bn) "ব্যাজ" else "badges",
+                        onClick = { viewModel.selectTab(RokkhonTab.REWARDS) },
+                        modifier = Modifier.weight(1f),
+                        testTag = "profile_open_rewards"
                     )
                 }
             }
@@ -326,9 +322,16 @@ fun DonorProfileScreen(
                         )
                     }
 
-                    if (onOpenSosAccess != null) {
-                        Spacer(modifier = Modifier.height(20.dp))
-                        SettingsGroup {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    SettingsGroup {
+                        SettingsRow(
+                            UIcons.CardGiftcard, RokkhonPalette.Ink, if (bn) "রিওয়ার্ড ও ব্যাজ" else "Rewards & badges",
+                            if (bn) "${bnDigits(guardianPoints)} পয়েন্ট" else "$guardianPoints pts",
+                            { viewModel.selectTab(RokkhonTab.REWARDS) },
+                            testTag = "profile_rewards_row"
+                        )
+                        if (onOpenSosAccess != null) {
+                            SettingsDivider()
                             SettingsRow(
                                 UIcons.Shield, RokkhonPalette.Ink, if (bn) "SOS অ্যাক্সেস" else "SOS Access",
                                 if (bn) "কে দেখবে" else "Who sees it", onOpenSosAccess,

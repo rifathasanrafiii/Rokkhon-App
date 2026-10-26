@@ -104,7 +104,7 @@ internal fun rememberNow(periodMs: Long = 1000L): Long {
 }
 
 @Composable
-internal fun SosTopBar(title: String, onBack: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+internal fun SosTopBar(title: String, onBack: (() -> Unit)?, trailing: (@Composable () -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -112,8 +112,12 @@ internal fun SosTopBar(title: String, onBack: () -> Unit, trailing: (@Composable
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RoundIconButton(icon = UIcons.ArrowBack, onClick = onBack, contentDescription = "Back", testTag = "sos_back")
-        Spacer(Modifier.width(12.dp))
+        if (onBack != null) {
+            RoundIconButton(icon = UIcons.ArrowBack, onClick = onBack, contentDescription = "Back", testTag = "sos_back")
+            Spacer(Modifier.width(12.dp))
+        } else {
+            Spacer(Modifier.width(4.dp))
+        }
         Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink, modifier = Modifier.weight(1f))
         trailing?.invoke()
     }

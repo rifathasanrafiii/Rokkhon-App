@@ -104,6 +104,7 @@ import com.example.ui.sos.PrivateSosScreen
 import com.example.ui.sos.SosAccessScreen
 import com.example.ui.sos.SosMonitorScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.RokkhonPalette
 import com.example.ui.viewmodel.PrivateSosViewModel
 import com.example.ui.viewmodel.RokkhonTab
 import com.example.ui.viewmodel.RokkhonViewModel
@@ -420,14 +421,14 @@ fun RokkhonAuthenticatedShell(
 
     // Private SOS (trusted accounts only). Needs a signed-in Firebase account to share anything.
     // Shown to everyone; without a signed-in account the SOS screen explains why and offers 999.
-    val sosVm: PrivateSosViewModel? = viewModel(key = "private_sos_${currentUserId}_$useCloud")
+    val sosVm: PrivateSosViewModel = viewModel(key = "private_sos_${currentUserId}_$useCloud")
     var sosRoute by remember { mutableStateOf<SosRoute?>(null) }
     val watchedSos by (sosVm?.watched ?: remember { MutableStateFlow(emptyList<com.example.data.sos.WatchedSos>()) }).collectAsStateWithLifecycle()
     val ownerSos by SosRuntime.owner.collectAsStateWithLifecycle()
     LaunchedEffect(sosLaunch) {
         when (val l = sosLaunch) {
             is SosLaunch.Session -> { sosRoute = SosRoute.Monitor(l.sessionId); onConsumeSosLaunch() }
-            SosLaunch.Owner -> { sosRoute = SosRoute.Home; onConsumeSosLaunch() }
+            SosLaunch.Owner -> { sosRoute = null; viewModel.selectTab(RokkhonTab.SOS_GUARDIAN); onConsumeSosLaunch() }
             null -> Unit
         }
     }
@@ -465,7 +466,7 @@ fun RokkhonAuthenticatedShell(
 
     if (currentTab != RokkhonTab.HOME_MATCH) {
         BackHandler {
-            viewModel.selectTab(RokkhonTab.HOME_MATCH)
+            viewModel.selectTab(if (currentTab == RokkhonTab.REWARDS) RokkhonTab.DONOR_PROFILE else RokkhonTab.HOME_MATCH)
         }
     }
 
@@ -478,7 +479,8 @@ fun RokkhonAuthenticatedShell(
                 currentTab = currentTab,
                 language = language,
                 onSelectTab = { viewModel.selectTab(it) },
-                onPlusClick = { showPostBloodRequestDialog = true }
+                onPlusClick = { showPostBloodRequestDialog = true },
+                sosAlert = watchedSos.isNotEmpty() || ownerSos.active
             )
         }
     ) { innerPadding ->
@@ -489,8 +491,7 @@ fun RokkhonAuthenticatedShell(
         ) {
             // Tab switch: quick fade with a slight scale, like a native tab bar.
             AnimatedContent(
-                // With SOS hidden, an old saved SOS tab opens Home instead.
-                targetState = if (!FeatureFlags.SOS_ENABLED && currentTab == RokkhonTab.SOS_GUARDIAN) RokkhonTab.HOME_MATCH else currentTab,
+                targetState = currentTab,
                 transitionSpec = {
                     (fadeIn(tween(220, delayMillis = 40)) + scaleIn(tween(220, delayMillis = 40), initialScale = 0.985f)) togetherWith
                         fadeOut(tween(120))
@@ -505,25 +506,31 @@ fun RokkhonAuthenticatedShell(
                     onSimulatePowerTap = onSimulatePowerTap,
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true },
                     onOpenSosVerification = openSosVerification,
-                    onOpenTutorial = onOpenTutorial,
-                    onOpenPrivateSos = if (sosVm != null) ({ sosRoute = SosRoute.Home }) else null,
-                    sosAlertActive = watchedSos.isNotEmpty() || ownerSos.active
+                    onOpenTutorial = onOpenTutorial
                 )
                 RokkhonTab.RADAR_MAP -> FindScreen(
                     viewModel = viewModel,
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true }
                 )
-                RokkhonTab.SOS_GUARDIAN -> SosGuardianAndBleScreen(
+                // The SOS tab is the private SOS; the old community SOS stays behind its flag.
+                RokkhonTab.SOS_GUARDIAN -> if (FeatureFlags.SOS_ENABLED) SosGuardianAndBleScreen(
                     viewModel = viewModel,
                     recentPowerTaps = recentPowerTaps,
                     onSimulatePowerTap = onSimulatePowerTap,
                     onOpenSosVerification = openSosVerification
+                ) else PrivateSosScreen(
+                    vm = sosVm,
+                    bn = language == AppLanguage.BENGALI,
+                    onBack = { viewModel.selectTab(RokkhonTab.HOME_MATCH) },
+                    onOpenAccess = { sosRoute = SosRoute.Access },
+                    onOpenSession = { sosRoute = SosRoute.Monitor(it) },
+                    showBack = false
                 )
-                RokkhonTab.REWARDS -> RewardsScreen(viewModel = viewModel)
+                RokkhonTab.REWARDS -> RewardsScreen(viewModel = viewModel, onBack = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) })
                 RokkhonTab.DONOR_PROFILE -> Column(modifier = Modifier.fillMaxSize()) {
                     DonorProfileScreen(
                         viewModel = viewModel,
-                        onOpenSosAccess = if (sosVm != null) ({ sosRoute = SosRoute.Access }) else null,
+                        onOpenSosAccess = { sosRoute = SosRoute.Access },
                         onSignOut = {
                             if (isGuestSession) {
                                 onExitGuestOrSignOut()
@@ -644,18 +651,12 @@ fun RokkhonAuthenticatedShell(
     val bn = language == AppLanguage.BENGALI
     when (val route = sosRoute) {
         null -> Unit
-        SosRoute.Home -> if (sosVm != null) PrivateSosScreen(
+        SosRoute.Access -> SosAccessScreen(
             vm = sosVm, bn = bn,
             onBack = { sosRoute = null },
-            onOpenAccess = { sosRoute = SosRoute.Access },
-            onOpenSession = { sosRoute = SosRoute.Monitor(it) }
-        )
-        SosRoute.Access -> if (sosVm != null) SosAccessScreen(
-            vm = sosVm, bn = bn,
-            onBack = { sosRoute = SosRoute.Home },
             onOpenHistory = { g -> sosRoute = SosRoute.History(g.ownerUid, g.ownerName) }
         )
-        is SosRoute.History -> if (sosVm != null) {
+        is SosRoute.History -> {
             val history by remember(route.ownerUid) { sosVm.historyOf(route.ownerUid) }
                 .collectAsStateWithLifecycle(initialValue = com.example.data.sos.Live.Loading)
             HistorySheet(bn, history, onDismiss = { sosRoute = SosRoute.Access },
@@ -667,7 +668,7 @@ fun RokkhonAuthenticatedShell(
                 key = "sos_monitor_${route.sessionId}",
                 factory = viewModelFactory { initializer { SosMonitorViewModel(app, route.sessionId) } }
             )
-            SosMonitorScreen(vm = monitorVm, bn = bn, onBack = { sosRoute = if (sosVm != null) SosRoute.Home else null })
+            SosMonitorScreen(vm = monitorVm, bn = bn, onBack = { sosRoute = null })
         }
     }
 
@@ -694,7 +695,8 @@ private fun RokkhonFloatingBottomBar(
     currentTab: RokkhonTab,
     language: AppLanguage,
     onSelectTab: (RokkhonTab) -> Unit,
-    onPlusClick: () -> Unit
+    onPlusClick: () -> Unit,
+    sosAlert: Boolean = false
 ) {
     val isBn = language == AppLanguage.BENGALI
     val haptics = LocalHapticFeedback.current
@@ -766,28 +768,32 @@ private fun RokkhonFloatingBottomBar(
                     }
                 }
 
-                if (FeatureFlags.SOS_ENABLED) RokkhonBottomNavItem(
-                    selected = currentTab == RokkhonTab.SOS_GUARDIAN,
-                    icon = UIcons.Shield,
-                    label = "SOS",
-                    onClick = { onSelectTab(RokkhonTab.SOS_GUARDIAN) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("nav_tab_sos")
-                )
+                Box(modifier = Modifier.weight(1f)) {
+                    RokkhonBottomNavItem(
+                        selected = currentTab == RokkhonTab.SOS_GUARDIAN,
+                        icon = UIcons.Shield,
+                        label = "SOS",
+                        onClick = { onSelectTab(RokkhonTab.SOS_GUARDIAN) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("nav_tab_sos")
+                    )
+                    // Someone who trusts you (or you) has an SOS running.
+                    if (sosAlert) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 8.dp, start = 22.dp)
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(RokkhonPalette.Sos)
+                        )
+                    }
+                }
 
+                // Rewards live inside Profile now, so Profile stays selected there.
                 RokkhonBottomNavItem(
-                    selected = currentTab == RokkhonTab.REWARDS,
-                    icon = UIcons.CardGiftcard,
-                    label = if (isBn) "রিওয়ার্ড" else "Rewards",
-                    onClick = { onSelectTab(RokkhonTab.REWARDS) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("nav_tab_rewards")
-                )
-
-                RokkhonBottomNavItem(
-                    selected = currentTab == RokkhonTab.DONOR_PROFILE,
+                    selected = currentTab == RokkhonTab.DONOR_PROFILE || currentTab == RokkhonTab.REWARDS,
                     icon = UIcons.PersonOutline,
                     label = if (isBn) "প্রোফাইল" else "Profile",
                     onClick = { onSelectTab(RokkhonTab.DONOR_PROFILE) },
@@ -858,7 +864,6 @@ private fun RokkhonBottomNavItem(
 }
 
 private sealed interface SosRoute {
-    data object Home : SosRoute
     data object Access : SosRoute
     data class History(val ownerUid: String, val ownerName: String) : SosRoute
     data class Monitor(val sessionId: String) : SosRoute

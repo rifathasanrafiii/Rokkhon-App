@@ -1070,7 +1070,6 @@ internal fun DonorDetail(donor: DonorNode, language: AppLanguage, onCall: () -> 
             tint = if (donor.isEligibleNow) RokkhonPalette.Positive else RokkhonPalette.Muted
         )
         DetailLine(icon = UIcons.Event, text = lastDonationLabel(donor.lastDonationDate, bn))
-        DetailLine(icon = UIcons.VerifiedUser, text = if (bn) "ট্রাস্ট স্কোর ${bnDigits(donor.trustScore.toInt())}%" else "Trust score ${donor.trustScore}%")
     }
     Spacer(modifier = Modifier.height(18.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

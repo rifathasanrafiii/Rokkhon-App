@@ -76,7 +76,8 @@ fun PrivateSosScreen(
     bn: Boolean,
     onBack: () -> Unit,
     onOpenAccess: () -> Unit,
-    onOpenSession: (String) -> Unit
+    onOpenSession: (String) -> Unit,
+    showBack: Boolean = true
 ) {
     BackHandler(onBack = onBack)
     val owner by vm.owner.collectAsStateWithLifecycle()
@@ -86,7 +87,7 @@ fun PrivateSosScreen(
         Column(Modifier.fillMaxSize()) {
             SosTopBar(
                 title = if (owner.active) t(bn, "SOS চালু আছে", "SOS is on") else t(bn, "জরুরি SOS", "Emergency SOS"),
-                onBack = onBack
+                onBack = if (showBack) onBack else null
             ) {
                 com.example.ui.components.RoundIconButton(icon = UIcons.People, onClick = onOpenAccess, contentDescription = "SOS Access", testTag = "sos_open_access")
             }

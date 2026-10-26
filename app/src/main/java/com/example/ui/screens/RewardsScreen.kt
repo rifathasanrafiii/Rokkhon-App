@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.FeatureFlags
 import com.example.data.model.AppLanguage
 import com.example.data.model.GUARDIAN_REWARD_TIERS
+import com.example.ui.components.RoundIconButton
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.enterOnce
 import com.example.ui.components.springClick
@@ -69,7 +70,7 @@ import kotlinx.coroutines.launch
 
 /** Points, streak, daily check-in, how to earn more, and the badges to unlock. */
 @Composable
-fun RewardsScreen(viewModel: RokkhonViewModel) {
+fun RewardsScreen(viewModel: RokkhonViewModel, onBack: (() -> Unit)? = null) {
     val language by viewModel.language.collectAsStateWithLifecycle()
     val points by viewModel.guardianPoints.collectAsStateWithLifecycle()
     val streak by viewModel.dailyStreakCount.collectAsStateWithLifecycle()
@@ -96,6 +97,15 @@ fun RewardsScreen(viewModel: RokkhonViewModel) {
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)
             ) {
+                if (onBack != null) {
+                    RoundIconButton(
+                        icon = UIcons.ArrowBack,
+                        onClick = onBack,
+                        contentDescription = if (bn) "প্রোফাইলে ফিরুন" else "Back to profile",
+                        testTag = "rewards_back"
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
                 Text(if (bn) "রিওয়ার্ড" else "Rewards", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
                 Text(
                     text = if (bn) "প্রতিদিনের ছোট সাহায্যেও পয়েন্ট জমে" else "Every small bit of help earns points",
