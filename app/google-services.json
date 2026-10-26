@@ -1,0 +1,92 @@
+{
+  "project_info": {
+    "project_number": "531346450679",
+    "project_id": "btshop-5b889",
+    "storage_bucket": "btshop-5b889.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:531346450679:android:44435787b5d3726db88bf2",
+        "android_client_info": {
+          "package_name": "com.aistudio.rokkhon.bdxqpz"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "531346450679-cr5pr5mpmr88ga8s2e03i6chog70gp16.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.rokkhon.bdxqpz",
+            "certificate_hash": "20f2b91154e6bbf82422b3e2e390df915540c8a1"
+          }
+        },
+        {
+          "client_id": "531346450679-r4m38qcc9nnr2rvr48ghspntjmj4d5ds.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.rokkhon.bdxqpz",
+            "certificate_hash": "e9e0edf5a3e2202e06134fe71393c0a661183920"
+          }
+        },
+        {
+          "client_id": "531346450679-4pcug21vdrgk7h5jteac0lrnp1463thv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMjcxudd8dWc959sW6keztNeMmQnjilJw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "531346450679-4pcug21vdrgk7h5jteac0lrnp1463thv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:531346450679:android:b446fd5af9e2124db88bf2",
+        "android_client_info": {
+          "package_name": "com.aistudio.roktoseba.bdxkmp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "531346450679-pqs7p73st1mtnou6cnin0le1qn0id7tj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.roktoseba.bdxkmp",
+            "certificate_hash": "bf5388df7df3fc264bcec4ec76b6a8461a8393a1"
+          }
+        },
+        {
+          "client_id": "531346450679-4pcug21vdrgk7h5jteac0lrnp1463thv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMjcxudd8dWc959sW6keztNeMmQnjilJw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "531346450679-4pcug21vdrgk7h5jteac0lrnp1463thv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
