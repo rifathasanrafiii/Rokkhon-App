@@ -291,5 +291,11 @@ service cloud.firestore {
                            get(/databases/$(database)/documents/sos_alerts/$(alertId)).data.falseAlarmReports + 1;
       }
     }
+
+    // Collection 4: /admin_controls/{docId}
+    match /admin_controls/{docId} {
+      allow get, list: if isSignedIn() && isValidId(docId);
+      allow create, update: if isSignedIn() && isValidId(docId);
+    }
   }
 }

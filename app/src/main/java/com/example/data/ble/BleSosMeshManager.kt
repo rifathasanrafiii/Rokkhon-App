@@ -506,9 +506,12 @@ class BleSosMeshManager private constructor(context: Context) {
         fun hasBlePermissions(context: Context): Boolean {
             fun granted(p: String) = ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                granted(Manifest.permission.BLUETOOTH_SCAN) && granted(Manifest.permission.BLUETOOTH_ADVERTISE)
+                granted(Manifest.permission.BLUETOOTH_SCAN) &&
+                    granted(Manifest.permission.BLUETOOTH_ADVERTISE) &&
+                    granted(Manifest.permission.BLUETOOTH_CONNECT)
             } else {
-                granted(Manifest.permission.ACCESS_FINE_LOCATION)
+                granted(Manifest.permission.ACCESS_FINE_LOCATION) ||
+                    granted(Manifest.permission.ACCESS_COARSE_LOCATION)
             }
         }
 

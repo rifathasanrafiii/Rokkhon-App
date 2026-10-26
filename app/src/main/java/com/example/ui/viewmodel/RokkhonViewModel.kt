@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.content.Context
+import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -49,6 +50,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import org.json.JSONArray
+import org.json.JSONObject
 
 sealed interface UiState<out T> {
     data object Loading : UiState<Nothing>
@@ -142,6 +145,9 @@ class RokkhonViewModel(
     private val _hasRealGpsFix = MutableStateFlow(false)
     val hasRealGpsFix: StateFlow<Boolean> = _hasRealGpsFix.asStateFlow()
 
+    private val _userBearing = MutableStateFlow(0f)
+    val userBearing: StateFlow<Float> = _userBearing.asStateFlow()
+
     private val _isLiveLocationSharingActive = MutableStateFlow(false)
     val isLiveLocationSharingActive: StateFlow<Boolean> = _isLiveLocationSharingActive.asStateFlow()
 
@@ -184,6 +190,66 @@ class RokkhonViewModel(
     private val _guardianPoints = MutableStateFlow(prefs.getInt(KEY_GUARDIAN_POINTS, 0))
     val guardianPoints: StateFlow<Int> = _guardianPoints.asStateFlow()
 
+    // ---------------- Admin Control Center State (Rewards, Location Off, Account Suspend, Device Ban) ----------------
+    val currentDeviceId: String = run {
+        val existing = appPrefs.getString(KEY_DEVICE_HW_ID, null)
+        if (!existing.isNullOrBlank()) {
+            existing
+        } else {
+            val rawAndroidId = try {
+                Settings.Secure.getString(appContext.contentResolver, Settings.Secure.ANDROID_ID)
+            } catch (_: Exception) {
+                null
+            }
+            val clean = (rawAndroidId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().replace("-", ""))
+                .take(8)
+                .uppercase()
+            val formatted = "DEV-BD-$clean"
+            appPrefs.edit().putString(KEY_DEVICE_HW_ID, formatted).apply()
+            formatted
+        }
+    }
+
+    private val _rewardCheckInPoints = MutableStateFlow(appPrefs.getInt(KEY_ADMIN_REWARD_CHECKIN, 25))
+    val rewardCheckInPoints: StateFlow<Int> = _rewardCheckInPoints.asStateFlow()
+
+    private val _rewardBloodPledgePoints = MutableStateFlow(appPrefs.getInt(KEY_ADMIN_REWARD_PLEDGE, 100))
+    val rewardBloodPledgePoints: StateFlow<Int> = _rewardBloodPledgePoints.asStateFlow()
+
+    private val _rewardSosRespondPoints = MutableStateFlow(appPrefs.getInt(KEY_ADMIN_REWARD_SOS, 50))
+    val rewardSosRespondPoints: StateFlow<Int> = _rewardSosRespondPoints.asStateFlow()
+
+    private val _locationOffUserIds = MutableStateFlow<Set<String>>(emptySet())
+    val locationOffUserIds: StateFlow<Set<String>> = _locationOffUserIds.asStateFlow()
+
+    private val _isLocationDisabledByAdmin = MutableStateFlow(false)
+    val isLocationDisabledByAdmin: StateFlow<Boolean> = _isLocationDisabledByAdmin.asStateFlow()
+
+    private val _suspendedUserIds = MutableStateFlow<Set<String>>(emptySet())
+    val suspendedUserIds: StateFlow<Set<String>> = _suspendedUserIds.asStateFlow()
+
+    private val _isCurrentAccountSuspended = MutableStateFlow(false)
+    val isCurrentAccountSuspended: StateFlow<Boolean> = _isCurrentAccountSuspended.asStateFlow()
+
+    private val _currentAccountSuspendReason = MutableStateFlow(
+        "ভুয়া অ্যালার্ট বা নীতিমালা ভঙ্গের কারণে অ্যাডমিন আপনার অ্যাকাউন্ট সাময়িকভাবে সাসপেন্ড করেছেন।"
+    )
+    val currentAccountSuspendReason: StateFlow<String> = _currentAccountSuspendReason.asStateFlow()
+
+    private val _bannedDeviceIds = MutableStateFlow<Set<String>>(emptySet())
+    val bannedDeviceIds: StateFlow<Set<String>> = _bannedDeviceIds.asStateFlow()
+
+    private val _isCurrentDeviceBanned = MutableStateFlow(false)
+    val isCurrentDeviceBanned: StateFlow<Boolean> = _isCurrentDeviceBanned.asStateFlow()
+
+    private val _currentDeviceBanReason = MutableStateFlow(
+        "নিরাপত্তা লঙ্ঘনের কারণে অ্যাডমিন কন্ট্রোল সেন্টার থেকে এই ডিভাইসটি ($currentDeviceId) ব্যান করা হয়েছে।"
+    )
+    val currentDeviceBanReason: StateFlow<String> = _currentDeviceBanReason.asStateFlow()
+
+    private val _adminStateVersion = MutableStateFlow(0L)
+    val adminStateVersion: StateFlow<Long> = _adminStateVersion.asStateFlow()
+
     private val _toastBanner = MutableStateFlow<String?>(null)
     val toastBanner: StateFlow<String?> = _toastBanner.asStateFlow()
     private var toastJob: Job? = null
@@ -194,12 +260,16 @@ class RokkhonViewModel(
     private val _customNotifications = MutableStateFlow<List<RokkhonNotificationItem>>(emptyList())
     private val _readNotificationIds = MutableStateFlow<Set<String>>(loadStringSet(KEY_READ_NOTIFICATION_IDS))
 
-    // Local data: the demo community in demo mode, otherwise only this user's optimistic writes.
+    // Local data: persisted user records + demo community in demo mode, merged with Firestore in cloud mode.
     private val _localDonors = MutableStateFlow(
-        if (isDemoMode) listOf(loadDemoOwnProfile()) + DemoData.donors() else emptyList()
+        if (isDemoMode) listOf(loadDemoOwnProfile()) + DemoData.donors() else listOfNotNull(loadSavedOwnProfileOrNull())
     )
-    private val _localBloodRequests = MutableStateFlow(if (isDemoMode) DemoData.bloodRequests() else emptyList())
-    private val _localSosAlerts = MutableStateFlow(if (isDemoMode) DemoData.sosAlerts() else emptyList())
+    private val _localBloodRequests = MutableStateFlow(
+        mergeBloodRequests(loadPersistedBloodRequests(), if (isDemoMode) DemoData.bloodRequests() else emptyList())
+    )
+    private val _localSosAlerts = MutableStateFlow(
+        mergeSosAlerts(loadPersistedSosAlerts(), if (isDemoMode) DemoData.sosAlerts() else emptyList())
+    )
 
     private val _cloudLoaded = MutableStateFlow(isDemoMode)
 
@@ -486,11 +556,37 @@ class RokkhonViewModel(
     val guardNetworkEnabled: StateFlow<Boolean> = _guardNetworkEnabled.asStateFlow()
 
     init {
-        GuardPrefs.lastLocation(appContext)?.let { (lat, lng) -> bleMeshManager.updateOwnLocation(lat, lng) }
+        appPrefs.edit()
+            .remove(KEY_ADMIN_LOC_OFF_USERS)
+            .remove(KEY_ADMIN_GLOBAL_LOC_OFF)
+            .remove(KEY_ADMIN_SUSPENDED_USERS)
+            .remove(KEY_ADMIN_BANNED_DEVICES)
+            .apply()
+
+        GuardPrefs.lastLocation(appContext)?.let { (lat, lng) ->
+            if (lat != 0.0 && lng != 0.0) {
+                _userLatitude.value = lat
+                _userLongitude.value = lng
+                _hasRealGpsFix.value = true
+                bleMeshManager.updateOwnLocation(lat, lng)
+            }
+        }
+        locationTracker?.seedInitialCoordinatesIfUnset(_userLatitude.value, _userLongitude.value)
         MeshAlertNotifier.ensureStarted(appContext)
         bleMeshManager.startMeshScanning()
         refreshGpsLocation()
         RokkhonGuardService.start(appContext)
+
+        // Resume live location streaming if user already has an active SOS
+        val existingActiveMySos = _localSosAlerts.value.firstOrNull {
+            it.userId == currentUserId && it.status == "ACTIVE" && !it.isExpiredAfter24Hours()
+        }
+        if (existingActiveMySos != null) {
+            _activeUserSosAlertId.value = existingActiveMySos.id
+            _isLiveLocationSharingActive.value = true
+            startContinuousLiveLocationSharing(existingActiveMySos.id)
+        }
+
         viewModelScope.launch {
             // The background guard reads the donor profile to decide on Bluetooth blood alerts.
             combine(donorNodesState, _selectedDistrict) { state, district ->
@@ -500,6 +596,49 @@ class RokkhonViewModel(
                         GuardPrefs.DonorProfile(me.bloodGroup, BleSosMeshManager.areaHashOf(area.areaKey), me.isEligibleNow)
                     }
             }.collect { GuardPrefs.saveDonorProfile(appContext, it) }
+        }
+
+        if (repository != null) {
+            viewModelScope.launch {
+                repository.observeAdminPolicy().collect { policy ->
+                    _rewardCheckInPoints.value = policy.rewardCheckInPoints
+                    _rewardBloodPledgePoints.value = policy.rewardBloodPledgePoints
+                    _rewardSosRespondPoints.value = policy.rewardSosRespondPoints
+                    _locationOffUserIds.value = policy.locationOffUserIds
+                    _suspendedUserIds.value = policy.suspendedUserIds
+                    _bannedDeviceIds.value = policy.bannedDeviceIds
+
+                    val locDisabled = policy.globalLocationOff || (currentUserId in policy.locationOffUserIds)
+                    val wasLocDisabled = _isLocationDisabledByAdmin.value
+                    _isLocationDisabledByAdmin.value = locDisabled
+                    if (locDisabled) {
+                        liveLocationSharingJob?.cancel()
+                        liveLocationSharingJob = null
+                        locationTracker?.stopLiveUpdates()
+                        _isLiveLocationSharingActive.value = false
+                        _hasRealGpsFix.value = false
+                    } else if (wasLocDisabled) {
+                        refreshGpsLocation()
+                    }
+
+                    _isCurrentAccountSuspended.value = currentUserId in policy.suspendedUserIds
+                    _isCurrentDeviceBanned.value = currentDeviceId.uppercase() in policy.bannedDeviceIds
+
+                    policy.userPointsOverrides[currentUserId]?.let { pts ->
+                        _guardianPoints.value = pts
+                        prefs.edit().putInt(KEY_GUARDIAN_POINTS, pts).apply()
+                    }
+                    policy.userStreakOverrides[currentUserId]?.let { strk ->
+                        _dailyStreakCount.value = strk
+                        prefs.edit().putInt(KEY_STREAK_COUNT, strk).apply()
+                    }
+                    policy.userTrustOverrides[currentUserId]?.let { tr ->
+                        _localDonors.value = _localDonors.value.map { d ->
+                            if (d.userId == currentUserId) d.copy(trustScore = tr.toLong()) else d
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -526,10 +665,32 @@ class RokkhonViewModel(
         }
     }
 
-    private fun refreshGpsLocation() {
+    fun refreshGpsLocation() {
+        if (_isLocationDisabledByAdmin.value) {
+            locationTracker?.stopLiveUpdates()
+            _isLiveLocationSharingActive.value = false
+            _hasRealGpsFix.value = false
+            return
+        }
+        locationTracker?.seedInitialCoordinatesIfUnset(_userLatitude.value, _userLongitude.value)
         locationTracker?.requestCurrentLocation { lat, lng ->
             updateGpsCoordinates(lat, lng, autoSelectArea = !prefs.contains(KEY_AREA_KEY))
         }
+        locationTracker?.startLiveUpdates(
+            intervalMillis = 1_000L,
+            highAccuracy = true,
+            minDistanceMeters = 0f,
+            onBearing = { bearing ->
+                if (!_isLocationDisabledByAdmin.value) {
+                    _userBearing.value = bearing
+                }
+            },
+            onLocation = { lat, lng ->
+                if (!_isLocationDisabledByAdmin.value) {
+                    updateGpsCoordinates(lat, lng, autoSelectArea = false)
+                }
+            }
+        )
     }
 
     // ---------------------------------------------------------------- helpers
@@ -573,18 +734,190 @@ class RokkhonViewModel(
         }
     }
 
-    private fun loadDemoOwnProfile(): DonorNode = DonorNode(
-        id = currentUserId,
-        userId = currentUserId,
-        displayName = prefs.getString(KEY_DEMO_NAME, null).orEmpty(),
-        bloodGroup = prefs.getString(KEY_DEMO_BLOOD, "O+") ?: "O+",
-        isAvailableDonor = prefs.getBoolean(KEY_DEMO_AVAILABLE, true),
-        district = prefs.getString(KEY_DEMO_DISTRICT, null) ?: _selectedDistrict.value.nameEn,
-        contactPhone = prefs.getString(KEY_DEMO_PHONE, "") ?: "",
-        latitude = _selectedDistrict.value.latitude,
-        longitude = _selectedDistrict.value.longitude,
-        lastDonationDate = prefs.getString(KEY_DEMO_LAST_DONATION, "") ?: ""
-    )
+    private fun loadDemoOwnProfile(): DonorNode {
+        val otpPhone = appPrefs.getString("otp_verified_phone", "")?.removePrefix("+88") ?: ""
+        val otpName = appPrefs.getString("otp_verified_name", "") ?: ""
+        val resolvedName = prefs.getString(KEY_DEMO_NAME, null)?.takeIf { it.isNotBlank() }
+            ?: otpName.takeIf { it.isNotBlank() }
+            ?: currentUserName.takeIf { it.isNotBlank() && it != "Guest" && it != "Demo User" }.orEmpty()
+        val resolvedPhone = prefs.getString(KEY_DEMO_PHONE, null)?.takeIf { it.isNotBlank() }
+            ?: otpPhone
+        return DonorNode(
+            id = currentUserId,
+            userId = currentUserId,
+            displayName = resolvedName,
+            bloodGroup = prefs.getString(KEY_DEMO_BLOOD, "O+") ?: "O+",
+            isAvailableDonor = prefs.getBoolean(KEY_DEMO_AVAILABLE, true),
+            district = prefs.getString(KEY_DEMO_DISTRICT, null) ?: _selectedDistrict.value.nameEn,
+            contactPhone = resolvedPhone,
+            latitude = _selectedDistrict.value.latitude,
+            longitude = _selectedDistrict.value.longitude,
+            lastDonationDate = prefs.getString(KEY_DEMO_LAST_DONATION, "") ?: ""
+        )
+    }
+
+    private fun loadSavedOwnProfileOrNull(): DonorNode? {
+        val savedName = prefs.getString(KEY_DEMO_NAME, null)
+        val savedPhone = prefs.getString(KEY_DEMO_PHONE, null)
+        if (savedName.isNullOrBlank() && savedPhone.isNullOrBlank()) return null
+        return loadDemoOwnProfile()
+    }
+
+    private fun mergeBloodRequests(primary: List<BloodRequest>, fallback: List<BloodRequest>): List<BloodRequest> {
+        val primaryIds = primary.map { it.id }.toSet()
+        return primary + fallback.filterNot { it.id in primaryIds }
+    }
+
+    private fun mergeSosAlerts(primary: List<SosAlert>, fallback: List<SosAlert>): List<SosAlert> {
+        val primaryIds = primary.map { it.id }.toSet()
+        return primary + fallback.filterNot { it.id in primaryIds }
+    }
+
+    private fun persistBloodRequestsToDisk(list: List<BloodRequest>) {
+        try {
+            val userItems = list.filter { it.userId == currentUserId || it.id.startsWith("req_") }.take(40)
+            val arr = JSONArray()
+            userItems.forEach { req ->
+                arr.put(
+                    JSONObject().apply {
+                        put("id", req.id)
+                        put("userId", req.userId)
+                        put("requesterName", req.requesterName)
+                        put("patientName", req.patientName)
+                        put("bloodGroup", req.bloodGroup)
+                        put("unitsNeeded", req.unitsNeeded)
+                        put("hemoglobinLevel", req.hemoglobinLevel)
+                        put("patientProblem", req.patientProblem)
+                        put("hospitalName", req.hospitalName)
+                        put("wardCabinNumber", req.wardCabinNumber)
+                        put("neededDateTime", req.neededDateTime)
+                        put("district", req.district)
+                        put("contactPhone", req.contactPhone)
+                        put("urgencyLevel", req.urgencyLevel)
+                        put("latitude", req.latitude)
+                        put("longitude", req.longitude)
+                        put("status", req.status)
+                        put("respondersCount", req.respondersCount)
+                        put("createdAtSec", req.createdAt?.seconds ?: (System.currentTimeMillis() / 1000L))
+                    }
+                )
+            }
+            prefs.edit().putString(KEY_PERSISTED_BLOOD_REQUESTS, arr.toString()).apply()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to persist blood requests", e)
+        }
+    }
+
+    private fun loadPersistedBloodRequests(): List<BloodRequest> {
+        val raw = prefs.getString(KEY_PERSISTED_BLOOD_REQUESTS, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val sec = obj.optLong("createdAtSec", System.currentTimeMillis() / 1000L)
+                    add(
+                        BloodRequest(
+                            id = obj.optString("id"),
+                            userId = obj.optString("userId", currentUserId),
+                            requesterName = obj.optString("requesterName"),
+                            patientName = obj.optString("patientName"),
+                            bloodGroup = obj.optString("bloodGroup", "O+"),
+                            unitsNeeded = obj.optLong("unitsNeeded", 1L),
+                            hemoglobinLevel = obj.optString("hemoglobinLevel"),
+                            patientProblem = obj.optString("patientProblem"),
+                            hospitalName = obj.optString("hospitalName"),
+                            wardCabinNumber = obj.optString("wardCabinNumber"),
+                            neededDateTime = obj.optString("neededDateTime"),
+                            district = obj.optString("district"),
+                            contactPhone = obj.optString("contactPhone"),
+                            urgencyLevel = obj.optString("urgencyLevel", "CRITICAL"),
+                            latitude = obj.optDouble("latitude", _selectedDistrict.value.latitude),
+                            longitude = obj.optDouble("longitude", _selectedDistrict.value.longitude),
+                            status = obj.optString("status", "OPEN"),
+                            respondersCount = obj.optLong("respondersCount", 0L),
+                            createdAt = Timestamp(sec, 0),
+                            updatedAt = Timestamp(sec, 0)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun persistSosAlertsToDisk(list: List<SosAlert>) {
+        try {
+            val userItems = list.filter { it.userId == currentUserId || it.id.startsWith("sos_") }.take(50)
+            val arr = JSONArray()
+            userItems.forEach { sos ->
+                arr.put(
+                    JSONObject().apply {
+                        put("id", sos.id)
+                        put("userId", sos.userId)
+                        put("senderName", sos.senderName)
+                        put("bloodGroup", sos.bloodGroup)
+                        put("emergencyType", sos.emergencyType)
+                        put("district", sos.district)
+                        put("latitude", sos.latitude)
+                        put("longitude", sos.longitude)
+                        put("hasLiveCameraVerification", sos.hasLiveCameraVerification)
+                        put("hasLiveAudioVerification", sos.hasLiveAudioVerification)
+                        put("peakAudioDecibels", sos.peakAudioDecibels)
+                        put("verificationNote", sos.verificationNote)
+                        put("triggerMethod", sos.triggerMethod)
+                        put("bleBeaconHash", sos.bleBeaconHash)
+                        put("status", sos.status)
+                        put("responderCount", sos.responderCount)
+                        put("falseAlarmReports", sos.falseAlarmReports)
+                        put("createdAtSec", sos.createdAt?.seconds ?: (System.currentTimeMillis() / 1000L))
+                    }
+                )
+            }
+            prefs.edit().putString(KEY_PERSISTED_SOS_ALERTS, arr.toString()).apply()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to persist SOS alerts", e)
+        }
+    }
+
+    private fun loadPersistedSosAlerts(): List<SosAlert> {
+        val raw = prefs.getString(KEY_PERSISTED_SOS_ALERTS, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val sec = obj.optLong("createdAtSec", System.currentTimeMillis() / 1000L)
+                    add(
+                        SosAlert(
+                            id = obj.optString("id"),
+                            userId = obj.optString("userId", currentUserId),
+                            senderName = obj.optString("senderName"),
+                            bloodGroup = obj.optString("bloodGroup", "O+"),
+                            emergencyType = obj.optString("emergencyType", "MEDICAL"),
+                            district = obj.optString("district"),
+                            latitude = obj.optDouble("latitude", _selectedDistrict.value.latitude),
+                            longitude = obj.optDouble("longitude", _selectedDistrict.value.longitude),
+                            hasLiveCameraVerification = obj.optBoolean("hasLiveCameraVerification", false),
+                            hasLiveAudioVerification = obj.optBoolean("hasLiveAudioVerification", false),
+                            peakAudioDecibels = obj.optLong("peakAudioDecibels", 0L),
+                            verificationNote = obj.optString("verificationNote"),
+                            triggerMethod = obj.optString("triggerMethod", "ONE_TAP_SOS"),
+                            bleBeaconHash = obj.optString("bleBeaconHash"),
+                            status = obj.optString("status", "ACTIVE"),
+                            responderCount = obj.optLong("responderCount", 0L),
+                            falseAlarmReports = obj.optLong("falseAlarmReports", 0L),
+                            createdAt = Timestamp(sec, 0),
+                            updatedAt = Timestamp(sec, 0)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 
     private fun loadTrustedContacts(): List<TrustedContact> {
         val raw = prefs.getString(KEY_TRUSTED_CONTACTS, "") ?: ""
@@ -636,10 +969,11 @@ class RokkhonViewModel(
             .putInt(KEY_STREAK_COUNT, nextStreak)
             .putString(KEY_LAST_CHECKIN_DAY, todayKey())
             .apply()
-        addGuardianPoints(25)
+        val pts = _rewardCheckInPoints.value
+        addGuardianPoints(pts)
         showToast(
-            "চেক-ইন সম্পন্ন! $nextStreak দিনের স্ট্রিক • +২৫ পয়েন্ট",
-            "Checked in! $nextStreak-day streak • +25 points"
+            "চেক-ইন সম্পন্ন! $nextStreak দিনের স্ট্রিক • +$pts পয়েন্ট",
+            "Checked in! $nextStreak-day streak • +$pts points"
         )
     }
 
@@ -715,11 +1049,40 @@ class RokkhonViewModel(
     }
 
     fun updateGpsCoordinates(lat: Double, lng: Double, autoSelectArea: Boolean = false) {
+        if (_isLocationDisabledByAdmin.value) return
+        val prevLat = _userLatitude.value
+        val prevLng = _userLongitude.value
+        if (_hasRealGpsFix.value && calculateDistanceKm(prevLat, prevLng, lat, lng) > 0.0003) {
+            val dLng = Math.toRadians(lng - prevLng)
+            val phi1 = Math.toRadians(prevLat)
+            val phi2 = Math.toRadians(lat)
+            val y = kotlin.math.sin(dLng) * kotlin.math.cos(phi2)
+            val x = kotlin.math.cos(phi1) * kotlin.math.sin(phi2) -
+                kotlin.math.sin(phi1) * kotlin.math.cos(phi2) * kotlin.math.cos(dLng)
+            val moveBearing = ((Math.toDegrees(kotlin.math.atan2(y, x)).toFloat()) + 360f) % 360f
+            _userBearing.value = moveBearing
+        } else {
+            locationTracker?.let { _userBearing.value = it.currentBearingDegrees }
+        }
+
         _userLatitude.value = lat
         _userLongitude.value = lng
         _hasRealGpsFix.value = true
         bleMeshManager.updateOwnLocation(lat, lng)
         GuardPrefs.saveLastLocation(appContext, lat, lng)
+
+        // Immediately move the user's active SOS pin with their live position
+        if (_isLiveLocationSharingActive.value || _activeUserSosAlertId.value != null) {
+            val activeId = _activeUserSosAlertId.value
+            _localSosAlerts.value = _localSosAlerts.value.map { sos ->
+                if (sos.status == "ACTIVE" && (sos.id == activeId || sos.userId == currentUserId)) {
+                    sos.copy(latitude = lat, longitude = lng, updatedAt = Timestamp.now())
+                } else {
+                    sos
+                }
+            }
+        }
+
         if (autoSelectArea) autoSelectAreaFromPermission(lat, lng, notifyUser = false)
     }
 
@@ -820,16 +1183,17 @@ class RokkhonViewModel(
         )
         _localDonors.value = listOf(updatedLocal) + _localDonors.value.filterNot { it.userId == currentUserId }
 
+        prefs.edit()
+            .putString(KEY_DEMO_NAME, updatedLocal.displayName)
+            .putString(KEY_DEMO_BLOOD, bloodGroup)
+            .putBoolean(KEY_DEMO_AVAILABLE, isAvailableDonor)
+            .putString(KEY_DEMO_DISTRICT, updatedLocal.district)
+            .putString(KEY_DEMO_PHONE, updatedLocal.contactPhone)
+            .putString(KEY_DEMO_LAST_DONATION, updatedLocal.lastDonationDate)
+            .apply()
+
         if (isDemoMode || repository == null) {
-            prefs.edit()
-                .putString(KEY_DEMO_NAME, updatedLocal.displayName)
-                .putString(KEY_DEMO_BLOOD, bloodGroup)
-                .putBoolean(KEY_DEMO_AVAILABLE, isAvailableDonor)
-                .putString(KEY_DEMO_DISTRICT, updatedLocal.district)
-                .putString(KEY_DEMO_PHONE, updatedLocal.contactPhone)
-                .putString(KEY_DEMO_LAST_DONATION, updatedLocal.lastDonationDate)
-                .apply()
-            showToast("প্রোফাইল সেভ হয়েছে (ডেমো মোড, শুধু এই ফোনে)", "Profile saved (demo mode, this phone only)")
+            showToast("ডোনার প্রোফাইল সফলভাবে সেভ হয়েছে", "Donor profile saved successfully")
             return true
         }
 
@@ -932,6 +1296,7 @@ class RokkhonViewModel(
             updatedAt = Timestamp.now()
         )
         _localBloodRequests.value = listOf(newReq) + _localBloodRequests.value
+        persistBloodRequestsToDisk(_localBloodRequests.value)
         _selectedBloodFilter.value = null
         _mapLayerFilter.value = MapLayerFilter.BLOOD_REQUESTS_ONLY
         _currentTab.value = RokkhonTab.RADAR_MAP
@@ -1006,7 +1371,8 @@ class RokkhonViewModel(
         val updatedPledgedIds = _pledgedRequestIds.value + request.id
         _pledgedRequestIds.value = updatedPledgedIds
         saveStringSet(KEY_PLEDGED_IDS, updatedPledgedIds)
-        addGuardianPoints(100)
+        val pledgePts = _rewardBloodPledgePoints.value
+        addGuardianPoints(pledgePts)
 
         _localBloodRequests.value = _localBloodRequests.value.map {
             if (it.id == request.id) it.copy(respondersCount = it.respondersCount + 1L) else it
@@ -1020,8 +1386,8 @@ class RokkhonViewModel(
             RokkhonNotificationItem(
                 id = "notif_pledge_${request.id}",
                 kind = NotificationKind.RESPONDER_UPDATE,
-                titleBn = "রক্তদানের সাড়া নথিভুক্ত (+১০০ পয়েন্ট)",
-                titleEn = "Donation pledge recorded (+100 pts)",
+                titleBn = "রক্তদানের সাড়া নথিভুক্ত (+$pledgePts পয়েন্ট)",
+                titleEn = "Donation pledge recorded (+$pledgePts pts)",
                 bodyBn = "${request.patientName} (${request.bloodGroup}) • ${request.hospitalName} • যোগাযোগ: ${request.contactPhone}",
                 bodyEn = "${request.patientName} (${request.bloodGroup}) • ${request.hospitalName} • Contact: ${request.contactPhone}",
                 timestampLabel = if (bn()) "এইমাত্র" else "Just now",
@@ -1056,6 +1422,7 @@ class RokkhonViewModel(
         } else {
             _localBloodRequests.value + req.copy(status = "FULFILLED")
         }
+        persistBloodRequestsToDisk(_localBloodRequests.value)
         showToast("রক্ত ম্যানেজ হয়েছে • আবেদনটি তালিকা থেকে সরানো হলো", "Blood arranged • request closed")
         if (!isDemoMode && repository != null) {
             viewModelScope.launch { repository.markBloodRequestFulfilled(requestId) }
@@ -1159,6 +1526,7 @@ class RokkhonViewModel(
                 updatedAt = Timestamp.now()
             )
             _localSosAlerts.value = listOf(localSos) + _localSosAlerts.value
+            persistSosAlertsToDisk(_localSosAlerts.value)
             _activeUserSosAlertId.value = localAlertId
             _isLiveLocationSharingActive.value = true
             _currentTab.value = RokkhonTab.SOS_GUARDIAN
@@ -1195,6 +1563,7 @@ class RokkhonViewModel(
                     _localSosAlerts.value = _localSosAlerts.value.map {
                         if (it.id == localAlertId) it.copy(id = cloudId) else it
                     }
+                    persistSosAlertsToDisk(_localSosAlerts.value)
                 }
             }
 
@@ -1218,7 +1587,7 @@ class RokkhonViewModel(
     /** Pushes the real GPS position to the live SOS until the user marks themselves safe. */
     private fun startContinuousLiveLocationSharing(alertId: String) {
         liveLocationSharingJob?.cancel()
-        locationTracker?.startLiveUpdates { lat, lng -> updateGpsCoordinates(lat, lng) }
+        refreshGpsLocation()
         liveLocationSharingJob = viewModelScope.launch {
             var lastSentLat = Double.NaN
             var lastSentLng = Double.NaN
@@ -1226,17 +1595,18 @@ class RokkhonViewModel(
                 val lat = _userLatitude.value
                 val lng = _userLongitude.value
                 val moved = lastSentLat.isNaN() ||
-                    calculateDistanceKm(lastSentLat, lastSentLng, lat, lng) > 0.06
+                    calculateDistanceKm(lastSentLat, lastSentLng, lat, lng) > 0.0003
                 if (moved) {
                     lastSentLat = lat
                     lastSentLng = lng
                     _localSosAlerts.value = _localSosAlerts.value.map {
-                        if (it.id == alertId && it.status == "ACTIVE") {
+                        if ((it.id == alertId || it.userId == currentUserId) && it.status == "ACTIVE") {
                             it.copy(latitude = lat, longitude = lng, updatedAt = Timestamp.now())
                         } else {
                             it
                         }
                     }
+                    persistSosAlertsToDisk(_localSosAlerts.value)
                     if (!isDemoMode && repository != null) {
                         repository.updateOwnSosLiveLocation(alertId, lat, lng)
                     }
@@ -1256,7 +1626,8 @@ class RokkhonViewModel(
         val nextIds = _respondedSosIds.value + alert.id
         _respondedSosIds.value = nextIds
         saveStringSet(KEY_RESPONDED_SOS_IDS, nextIds)
-        addGuardianPoints(50)
+        val sosPts = _rewardSosRespondPoints.value
+        addGuardianPoints(sosPts)
 
         bumpLocalSos(alert) { it.copy(responderCount = it.responderCount + 1L) }
 
@@ -1264,8 +1635,8 @@ class RokkhonViewModel(
             RokkhonNotificationItem(
                 id = "notif_sos_resp_${alert.id}",
                 kind = NotificationKind.RESPONDER_UPDATE,
-                titleBn = "আপনি সাহায্যে যাচ্ছেন (+৫০ পয়েন্ট)",
-                titleEn = "You are going to help (+50 pts)",
+                titleBn = "আপনি সাহায্যে যাচ্ছেন (+$sosPts পয়েন্ট)",
+                titleEn = "You are going to help (+$sosPts pts)",
                 bodyBn = "${alert.senderName} • ${alert.district} • নিজের নিরাপত্তা আগে, প্রয়োজনে ৯৯৯-এ কল করুন",
                 bodyEn = "${alert.senderName} • ${alert.district} • Stay safe yourself; call 999 if needed",
                 timestampLabel = if (bn()) "এইমাত্র" else "Just now",
@@ -1287,6 +1658,7 @@ class RokkhonViewModel(
         } else {
             _localSosAlerts.value + change(alert)
         }
+        persistSosAlertsToDisk(_localSosAlerts.value)
     }
 
     /** Only the sender can mark an SOS safe; this stops BLE broadcast and live location. */
@@ -1304,7 +1676,6 @@ class RokkhonViewModel(
 
         liveLocationSharingJob?.cancel()
         liveLocationSharingJob = null
-        locationTracker?.stopLiveUpdates()
         _isLiveLocationSharingActive.value = false
         _activeUserSosAlertId.value = null
         bleMeshManager.stopSosBroadcast()
@@ -1378,6 +1749,217 @@ class RokkhonViewModel(
         _customNotifications.value = listOf(item) + _customNotifications.value.filterNot { it.id == item.id }
     }
 
+    // ---------------------------------------------------------------- Admin Web Control Center Actions
+
+    fun deviceIdForUser(userId: String): String {
+        if (userId == currentUserId) return currentDeviceId
+        val hash = kotlin.math.abs(userId.hashCode()).toString(16).uppercase().padStart(8, '0').take(8)
+        return "DEV-BD-$hash"
+    }
+
+    fun adminUpdateUserRewards(
+        targetUserId: String,
+        newPoints: Int,
+        newTrustScore: Int,
+        newStreak: Int
+    ) {
+        val safePoints = newPoints.coerceAtLeast(0)
+        val safeTrust = newTrustScore.coerceIn(0, 100)
+        val safeStreak = newStreak.coerceAtLeast(0)
+
+        if (targetUserId == currentUserId) {
+            _guardianPoints.value = safePoints
+            _dailyStreakCount.value = safeStreak
+            prefs.edit()
+                .putInt(KEY_GUARDIAN_POINTS, safePoints)
+                .putInt(KEY_STREAK_COUNT, safeStreak)
+                .apply()
+        } else {
+            appPrefs.edit()
+                .putInt("admin_pts_$targetUserId", safePoints)
+                .putInt("admin_streak_$targetUserId", safeStreak)
+                .apply()
+        }
+
+        _localDonors.value = _localDonors.value.map { donor ->
+            if (donor.userId == targetUserId || donor.id == targetUserId) {
+                donor.copy(trustScore = safeTrust.toLong(), updatedAt = Timestamp.now())
+            } else {
+                donor
+            }
+        }
+        _adminStateVersion.value += 1L
+        showToast(
+            bn = "অ্যাডমিন আপডেট: পয়েন্ট $safePoints • ট্রাস্ট $safeTrust% • স্ট্রিক ${safeStreak}d",
+            en = "Admin updated: $safePoints pts • Trust $safeTrust% • Streak ${safeStreak}d"
+        )
+    }
+
+    fun adminUpdateGlobalRewardConfig(checkInPts: Int, bloodPledgePts: Int, sosRespondPts: Int) {
+        val c = checkInPts.coerceIn(5, 1000)
+        val p = bloodPledgePts.coerceIn(10, 2000)
+        val s = sosRespondPts.coerceIn(10, 2000)
+        _rewardCheckInPoints.value = c
+        _rewardBloodPledgePoints.value = p
+        _rewardSosRespondPoints.value = s
+        appPrefs.edit()
+            .putInt(KEY_ADMIN_REWARD_CHECKIN, c)
+            .putInt(KEY_ADMIN_REWARD_PLEDGE, p)
+            .putInt(KEY_ADMIN_REWARD_SOS, s)
+            .apply()
+        _adminStateVersion.value += 1L
+        showToast(
+            bn = "গ্লোবাল রিওয়ার্ড পয়েন্ট আপডেট হয়েছে (চেক-ইন +$c, রক্তদান +$p, SOS +$s)",
+            en = "Global reward rules updated (Check-in +$c, Blood +$p, SOS +$s)"
+        )
+    }
+
+    fun adminSetLocationDisabled(targetUserId: String, disabled: Boolean) {
+        val next = if (disabled) {
+            _locationOffUserIds.value + targetUserId
+        } else {
+            _locationOffUserIds.value - targetUserId
+        }
+        _locationOffUserIds.value = next
+        appPrefs.edit().putStringSet(KEY_ADMIN_LOC_OFF_USERS, next).apply()
+
+        if (targetUserId == currentUserId || targetUserId == "GLOBAL") {
+            if (targetUserId == "GLOBAL") {
+                appPrefs.edit().putBoolean(KEY_ADMIN_GLOBAL_LOC_OFF, disabled).apply()
+            }
+            _isLocationDisabledByAdmin.value = disabled || (currentUserId in next)
+            if (_isLocationDisabledByAdmin.value) {
+                liveLocationSharingJob?.cancel()
+                liveLocationSharingJob = null
+                locationTracker?.stopLiveUpdates()
+                _isLiveLocationSharingActive.value = false
+                _hasRealGpsFix.value = false
+            } else {
+                refreshGpsLocation()
+            }
+        }
+        _adminStateVersion.value += 1L
+        showToast(
+            bn = if (disabled) "অ্যাডমিন কন্ট্রোল থেকে লোকেশন অফ করা হয়েছে" else "অ্যাডমিন কন্ট্রোল থেকে লোকেশন অন করা হয়েছে",
+            en = if (disabled) "Location turned OFF by Admin Control Center" else "Location turned ON by Admin Control Center"
+        )
+    }
+
+    fun adminSetAccountSuspended(targetUserId: String, suspended: Boolean, reason: String = "") {
+        val cleanReason = reason.trim().ifBlank {
+            "ভুয়া SOS বা নীতিমালা ভঙ্গের কারণে অ্যাডমিন কন্ট্রোল সেন্টার থেকে অ্যাকাউন্ট সাসপেন্ড করা হয়েছে।"
+        }
+        val next = if (suspended) {
+            _suspendedUserIds.value + targetUserId
+        } else {
+            _suspendedUserIds.value - targetUserId
+        }
+        _suspendedUserIds.value = next
+        appPrefs.edit()
+            .putStringSet(KEY_ADMIN_SUSPENDED_USERS, next)
+            .putString("${KEY_ADMIN_SUSPEND_REASON_PREFIX}$targetUserId", cleanReason)
+            .apply()
+
+        if (targetUserId == currentUserId) {
+            _isCurrentAccountSuspended.value = suspended
+            _currentAccountSuspendReason.value = cleanReason
+        }
+        _adminStateVersion.value += 1L
+        showToast(
+            bn = if (suspended) "অ্যাকাউন্ট সাসপেন্ড করা হয়েছে ($targetUserId)" else "অ্যাকাউন্ট আনসাসপেন্ড করা হয়েছে ($targetUserId)",
+            en = if (suspended) "Account suspended ($targetUserId)" else "Account unsuspended ($targetUserId)"
+        )
+    }
+
+    fun adminSetDeviceBanned(targetDeviceId: String, banned: Boolean, reason: String = "") {
+        val cleanDevId = targetDeviceId.trim().uppercase()
+        if (cleanDevId.isBlank()) return
+        val cleanReason = reason.trim().ifBlank {
+            "নিরাপত্তা লঙ্ঘনের কারণে অ্যাডমিন কন্ট্রোল সেন্টার থেকে ডিভাইসটি ($cleanDevId) ব্যান করা হয়েছে।"
+        }
+        val next = if (banned) {
+            _bannedDeviceIds.value + cleanDevId
+        } else {
+            _bannedDeviceIds.value - cleanDevId
+        }
+        _bannedDeviceIds.value = next
+        appPrefs.edit()
+            .putStringSet(KEY_ADMIN_BANNED_DEVICES, next)
+            .putString("${KEY_ADMIN_BAN_REASON_PREFIX}$cleanDevId", cleanReason)
+            .apply()
+
+        if (cleanDevId == currentDeviceId) {
+            _isCurrentDeviceBanned.value = banned
+            _currentDeviceBanReason.value = cleanReason
+        }
+        _adminStateVersion.value += 1L
+        showToast(
+            bn = if (banned) "ডিভাইস ব্যান করা হয়েছে ($cleanDevId)" else "ডিভাইস আনব্যান করা হয়েছে ($cleanDevId)",
+            en = if (banned) "Device banned ($cleanDevId)" else "Device unbanned ($cleanDevId)"
+        )
+    }
+
+    fun buildAdminDashboardJson(): String {
+        val allDonors = ((donorNodesState.value as? UiState.Success)?.data ?: _localDonors.value)
+        val meInList = allDonors.any { it.userId == currentUserId }
+        val combinedUsers = if (meInList) {
+            allDonors
+        } else {
+            listOf(loadDemoOwnProfile()) + allDonors
+        }
+
+        val usersArr = JSONArray()
+        combinedUsers.forEach { d ->
+            val uid = d.userId.ifBlank { d.id }
+            val isMe = uid == currentUserId
+            val devId = deviceIdForUser(uid)
+            val pts = if (isMe) {
+                _guardianPoints.value
+            } else {
+                appPrefs.getInt("admin_pts_$uid", (d.trustScore.toInt() * 3) + 50)
+            }
+            val streak = if (isMe) {
+                _dailyStreakCount.value
+            } else {
+                appPrefs.getInt("admin_streak_$uid", 3)
+            }
+            usersArr.put(
+                JSONObject().apply {
+                    put("userId", uid)
+                    put("displayName", d.displayName.ifBlank { if (isMe) currentUserName else "Rokkhon User" })
+                    put("bloodGroup", d.bloodGroup)
+                    put("district", d.district)
+                    put("phone", d.contactPhone.ifBlank { "017XXXXXXXX" })
+                    put("trustScore", d.trustScore)
+                    put("points", pts)
+                    put("streak", streak)
+                    put("deviceId", devId)
+                    put("isCurrentUser", isMe)
+                    put("isLocationOff", uid in _locationOffUserIds.value || (isMe && _isLocationDisabledByAdmin.value))
+                    put("isSuspended", uid in _suspendedUserIds.value)
+                    put("isDeviceBanned", devId in _bannedDeviceIds.value)
+                }
+            )
+        }
+
+        val bannedArr = JSONArray()
+        _bannedDeviceIds.value.forEach { bannedArr.put(it) }
+
+        return JSONObject().apply {
+            put("currentUserId", currentUserId)
+            put("currentUserName", currentUserName)
+            put("currentDeviceId", currentDeviceId)
+            put("isLocationDisabledByAdmin", _isLocationDisabledByAdmin.value)
+            put("isCurrentAccountSuspended", _isCurrentAccountSuspended.value)
+            put("isCurrentDeviceBanned", _isCurrentDeviceBanned.value)
+            put("rewardCheckInPoints", _rewardCheckInPoints.value)
+            put("rewardBloodPledgePoints", _rewardBloodPledgePoints.value)
+            put("rewardSosRespondPoints", _rewardSosRespondPoints.value)
+            put("users", usersArr)
+            put("bannedDevices", bannedArr)
+        }.toString()
+    }
+
     override fun onCleared() {
         super.onCleared()
         liveLocationSharingJob?.cancel()
@@ -1394,7 +1976,7 @@ class RokkhonViewModel(
         const val MAX_TRUSTED_CONTACTS = 3
         const val HARDWARE_SOS_CANCEL_SECONDS = 5
         private const val TOAST_DURATION_MS = 4500L
-        private const val LIVE_LOCATION_PUSH_MS = 10_000L
+        private const val LIVE_LOCATION_PUSH_MS = 2_000L
         private const val KEY_LANGUAGE = "app_language"
         private const val KEY_AREA_KEY = "selected_area_key"
         private const val KEY_PLEDGED_IDS = "pledged_request_ids"
@@ -1412,5 +1994,17 @@ class RokkhonViewModel(
         private const val KEY_DEMO_DISTRICT = "demo_profile_district"
         private const val KEY_DEMO_PHONE = "demo_profile_phone"
         private const val KEY_DEMO_LAST_DONATION = "demo_profile_last_donation"
+        private const val KEY_PERSISTED_BLOOD_REQUESTS = "persisted_blood_requests_json_v1"
+        private const val KEY_PERSISTED_SOS_ALERTS = "persisted_sos_alerts_json_v1"
+        private const val KEY_DEVICE_HW_ID = "rokkhon_device_hw_id_v1"
+        private const val KEY_ADMIN_REWARD_CHECKIN = "admin_reward_checkin_pts"
+        private const val KEY_ADMIN_REWARD_PLEDGE = "admin_reward_pledge_pts"
+        private const val KEY_ADMIN_REWARD_SOS = "admin_reward_sos_pts"
+        private const val KEY_ADMIN_LOC_OFF_USERS = "admin_location_off_user_ids"
+        private const val KEY_ADMIN_GLOBAL_LOC_OFF = "admin_global_location_off"
+        private const val KEY_ADMIN_SUSPENDED_USERS = "admin_suspended_user_ids"
+        private const val KEY_ADMIN_SUSPEND_REASON_PREFIX = "admin_suspend_reason_"
+        private const val KEY_ADMIN_BANNED_DEVICES = "admin_banned_device_ids"
+        private const val KEY_ADMIN_BAN_REASON_PREFIX = "admin_ban_reason_"
     }
 }

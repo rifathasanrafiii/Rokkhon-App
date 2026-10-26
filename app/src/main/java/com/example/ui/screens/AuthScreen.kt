@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -135,7 +137,7 @@ private fun generateSixDigitOtpForPhone(phoneInput: String): String {
 
 fun attemptAutoSignIn(
     context: Context,
-    credentialManager: CredentialManager,
+    credentialManager: CredentialManager?,
     onAuthSuccess: () -> Unit,
     onUnauthenticated: () -> Unit,
     scope: CoroutineScope
@@ -145,21 +147,24 @@ fun attemptAutoSignIn(
         onAuthSuccess()
         return
     }
+    if (credentialManager == null) {
+        onUnauthenticated()
+        return
+    }
     val clientId = googleWebClientId(context) ?: run {
         onUnauthenticated()
         return
     }
 
-    val googleIdOption = GetGoogleIdOption.Builder()
-        .setFilterByAuthorizedAccounts(true)
-        .setServerClientId(clientId)
-        .setAutoSelectEnabled(true)
-        .build()
-
-    val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
-
     scope.launch {
         try {
+            val googleIdOption = GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(true)
+                .setServerClientId(clientId)
+                .setAutoSelectEnabled(true)
+                .build()
+
+            val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
             val activityContext = context.findActivity() ?: context
             val result = credentialManager.getCredential(activityContext, request)
             val credential = result.credential
@@ -171,7 +176,7 @@ fun attemptAutoSignIn(
             } else {
                 onUnauthenticated()
             }
-        } catch (e: Exception) {
+        } catch (t: Throwable) {
             onUnauthenticated()
         }
     }
@@ -179,22 +184,25 @@ fun attemptAutoSignIn(
 
 fun onGoogleSignInClicked(
     context: Context,
-    credentialManager: CredentialManager,
+    credentialManager: CredentialManager?,
     onAuthSuccess: () -> Unit,
     onAuthError: (String) -> Unit,
     scope: CoroutineScope,
     onAuthCancelled: () -> Unit = {}
 ) {
+    if (credentialManager == null) {
+        onAuthError("এই ডিভাইসে গুগল সাইন-ইন সার্ভিস সাপোর্ট করছে না। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
+        return
+    }
     val clientId = googleWebClientId(context) ?: run {
         onAuthError("গুগল সাইন-ইন এই বিল্ডে কনফিগার করা নেই। মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
         return
     }
 
-    val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
-    val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
-
     scope.launch {
         try {
+            val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
+            val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
             val activityContext = context.findActivity() ?: context
             val result = credentialManager.getCredential(activityContext, request)
             val credential = result.credential
@@ -212,8 +220,8 @@ fun onGoogleSignInClicked(
         } catch (e: NoCredentialException) {
             Log.w("Auth", "No Google account on device/emulator: ${e.message}", e)
             onAuthError("এই ডিভাইসে গুগল অ্যাকাউন্ট লগইন করা নেই। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
-        } catch (e: Exception) {
-            Log.e("Auth", "Google Sign-In failed", e)
+        } catch (t: Throwable) {
+            Log.e("Auth", "Google Sign-In failed", t)
             onAuthError("গুগল সাইন-ইন সম্পন্ন হয়নি। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
         }
     }
@@ -224,18 +232,18 @@ fun signOutRokkhon(
     onSignOutComplete: () -> Unit,
     scope: CoroutineScope
 ) {
-    val credentialManager = CredentialManager.create(context)
+    val credentialManager = runCatching { CredentialManager.create(context) }.getOrNull()
     val appPrefs = context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE)
     appPrefs.edit()
         .remove(KEY_OTP_VERIFIED_PHONE)
         .remove(KEY_OTP_VERIFIED_NAME)
         .apply()
-    Firebase.auth.signOut()
+    runCatching { Firebase.auth.signOut() }
     scope.launch {
         try {
-            credentialManager.clearCredentialState(ClearCredentialStateRequest())
-        } catch (e: Exception) {
-            Log.e("Auth", "Failed to clear credential state", e)
+            credentialManager?.clearCredentialState(ClearCredentialStateRequest())
+        } catch (t: Throwable) {
+            Log.e("Auth", "Failed to clear credential state", t)
         } finally {
             onSignOutComplete()
         }
@@ -255,7 +263,7 @@ fun AuthScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val credentialManager = remember { CredentialManager.create(context) }
+    val credentialManager = remember { runCatching { CredentialManager.create(context) }.getOrNull() }
     val appPrefs = remember { context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE) }
 
     var isLoading by remember { mutableStateOf(false) }
@@ -422,6 +430,8 @@ fun AuthScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .imePadding()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 26.dp, vertical = 22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -797,6 +807,8 @@ fun OtpVerificationScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .imePadding()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 26.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally

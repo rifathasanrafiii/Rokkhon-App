@@ -12,13 +12,16 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
@@ -71,7 +74,7 @@ fun RokkhonSplashScreen(
     onSplashFinished: () -> Unit
 ) {
     LaunchedEffect(Unit) {
-        delay(1300L)
+        delay(800L)
         onSplashFinished()
     }
 
@@ -87,6 +90,7 @@ fun RokkhonSplashScreen(
                     )
                 )
             )
+            .clickable { onSplashFinished() }
             .testTag("rokkhon_splash_screen"),
         contentAlignment = Alignment.Center
     ) {
@@ -209,13 +213,13 @@ fun RokkhonTutorialScreen(
         ),
         TutorialSlide(
             badge = "STEP 03 / 03",
-            titleBn = "হোম SOS বাটন ও\n৩-বার পাওয়ার চাপে সুরক্ষা",
-            subtitleBn = "ভুল চাপ হলে ৫ সেকেন্ডের মধ্যে বাতিল করার সুযোগ",
-            descriptionBn = "হোম স্ক্রিনের SOS বাটনে ট্যাপ করলে বা পাওয়ার বাটনে ৩ বার চাপ দিলে অডিও প্রমাণ ও লাইভ জিপিএস লোকেশনসহ জরুরি অ্যালার্ট চলে যাবে।",
+            titleBn = "এক ট্যাপে হোম ও\nSOS বাটনে দ্রুত সুরক্ষা",
+            subtitleBn = "৫ সেকেন্ডের অডিও প্রমাণ ও লাইভ লোকেশন ট্র্যাকিং",
+            descriptionBn = "হোম বা SOS স্ক্রিনের বাটনে ট্যাপ করলে অডিও প্রমাণ ও রিয়েল-টাইম জিপিএস লোকেশনসহ জরুরি অ্যালার্ট চলে যাবে।",
             highlightPoints = listOf(
                 TutorialHighlightPoint(
                     icon = Icons.Default.FlashOn,
-                    label = "হোম SOS বাটন ও ৩-বার পাওয়ার চাপে দ্রুত অ্যালার্ট"
+                    label = "এক ট্যাপে হোম ও SOS বাটনে দ্রুত অ্যালার্ট"
                 ),
                 TutorialHighlightPoint(
                     icon = Icons.Default.Call,
@@ -223,7 +227,7 @@ fun RokkhonTutorialScreen(
                 ),
                 TutorialHighlightPoint(
                     icon = Icons.Default.LocationOn,
-                    label = "নিরাপদ মার্ক না করা পর্যন্ত লাইভ জিপিএস লোকেশন"
+                    label = "নিরাপদ মার্ক না করা পর্যন্ত রিয়েল-টাইম জিপিএস ট্র্যাকিং"
                 )
             ),
             icon = Icons.Default.FlashOn
@@ -343,15 +347,20 @@ fun RokkhonTutorialScreen(
             shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.54f)
+                .weight(0.56f)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 26.dp, vertical = 20.dp),
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 26.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                ) {
                     Box(
                         modifier = Modifier
                             .width(42.dp)
@@ -360,7 +369,7 @@ fun RokkhonTutorialScreen(
                             .background(Color(0xFFE2D5D7))
                             .align(Alignment.CenterHorizontally)
                     )
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
                         text = slide.descriptionBn,
@@ -370,7 +379,7 @@ fun RokkhonTutorialScreen(
                         lineHeight = 23.sp
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         slide.highlightPoints.forEach { point ->
@@ -380,7 +389,7 @@ fun RokkhonTutorialScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
@@ -409,12 +418,13 @@ fun RokkhonTutorialScreen(
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 6.dp),
+                        .padding(top = 8.dp, bottom = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {

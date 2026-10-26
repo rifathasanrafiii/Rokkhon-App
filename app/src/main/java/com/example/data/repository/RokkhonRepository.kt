@@ -77,6 +77,63 @@ class RokkhonRepository(
             }
     }
 
+    data class AdminPolicySnapshot(
+        val rewardCheckInPoints: Int = 25,
+        val rewardBloodPledgePoints: Int = 100,
+        val rewardSosRespondPoints: Int = 50,
+        val globalLocationOff: Boolean = false,
+        val locationOffUserIds: Set<String> = emptySet(),
+        val suspendedUserIds: Set<String> = emptySet(),
+        val bannedDeviceIds: Set<String> = emptySet(),
+        val userPointsOverrides: Map<String, Int> = emptyMap(),
+        val userStreakOverrides: Map<String, Int> = emptyMap(),
+        val userTrustOverrides: Map<String, Int> = emptyMap()
+    )
+
+    fun observeAdminPolicy(): Flow<AdminPolicySnapshot> {
+        return db.collection("admin_controls")
+            .document("global_policy")
+            .snapshots()
+            .map { doc ->
+                if (!doc.exists()) {
+                    AdminPolicySnapshot()
+                } else {
+                    val locOffList = (doc.get("locationOffUserIds") as? List<*>)?.mapNotNull { it?.toString() }?.toSet().orEmpty()
+                    val suspList = (doc.get("suspendedUserIds") as? List<*>)?.mapNotNull { it?.toString() }?.toSet().orEmpty()
+                    val banList = (doc.get("bannedDeviceIds") as? List<*>)?.mapNotNull { it?.toString()?.uppercase() }?.toSet().orEmpty()
+                    val ptsMap = (doc.get("userPointsOverrides") as? Map<*, *>)?.mapNotNull { (k, v) ->
+                        val key = k?.toString() ?: return@mapNotNull null
+                        val num = (v as? Number)?.toInt() ?: return@mapNotNull null
+                        key to num
+                    }?.toMap().orEmpty()
+                    val streakMap = (doc.get("userStreakOverrides") as? Map<*, *>)?.mapNotNull { (k, v) ->
+                        val key = k?.toString() ?: return@mapNotNull null
+                        val num = (v as? Number)?.toInt() ?: return@mapNotNull null
+                        key to num
+                    }?.toMap().orEmpty()
+                    val trustMap = (doc.get("userTrustOverrides") as? Map<*, *>)?.mapNotNull { (k, v) ->
+                        val key = k?.toString() ?: return@mapNotNull null
+                        val num = (v as? Number)?.toInt() ?: return@mapNotNull null
+                        key to num
+                    }?.toMap().orEmpty()
+
+                    AdminPolicySnapshot(
+                        rewardCheckInPoints = (doc.getLong("rewardCheckInPoints")?.toInt() ?: 25).coerceIn(5, 1000),
+                        rewardBloodPledgePoints = (doc.getLong("rewardBloodPledgePoints")?.toInt() ?: 100).coerceIn(10, 2000),
+                        rewardSosRespondPoints = (doc.getLong("rewardSosRespondPoints")?.toInt() ?: 50).coerceIn(10, 2000),
+                        globalLocationOff = doc.getBoolean("globalLocationOff") ?: false,
+                        locationOffUserIds = locOffList,
+                        suspendedUserIds = suspList,
+                        bannedDeviceIds = banList,
+                        userPointsOverrides = ptsMap,
+                        userStreakOverrides = streakMap,
+                        userTrustOverrides = trustMap
+                    )
+                }
+            }
+            .catch { emit(AdminPolicySnapshot()) }
+    }
+
     /**
      * Creates the donor document on first save, afterwards only updates the fields the user owns.
      * Trust score and verified-SOS count are never written by the client after creation.
