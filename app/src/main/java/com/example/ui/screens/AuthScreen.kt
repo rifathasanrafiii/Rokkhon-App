@@ -100,6 +100,14 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Co
 import com.google.firebase.Firebase
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
+import java.util.concurrent.TimeUnit
+import com.google.firebase.auth.userProfileChangeRequest
+import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthCredential
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.FirebaseTooManyRequestsException
+import com.google.firebase.FirebaseNetworkException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -130,9 +138,55 @@ private fun normalizeBangladeshPhoneE164(raw: String): String {
     }
 }
 
-private fun generateSixDigitOtpForPhone(phoneInput: String): String {
-    val last4 = phoneInput.filter { it.isDigit() }.takeLast(4).toIntOrNull() ?: 2468
-    return ((last4 * 73 + 135791) % 900000 + 100000).toString().takeLast(6)
+/**
+ * Real SMS verification through Firebase Phone Auth. The old screen computed the code on the
+ * phone itself and showed it on screen, so anyone could sign in as any number and those
+ * "accounts" never reached the cloud. Firebase sends the SMS and creates a real user.
+ */
+private fun sendFirebaseOtp(
+    activity: Activity,
+    e164Phone: String,
+    resendToken: PhoneAuthProvider.ForceResendingToken?,
+    callbacks: PhoneAuthProvider.OnVerificationStateChangedCallbacks
+) {
+    val builder = PhoneAuthOptions.newBuilder(Firebase.auth)
+        .setPhoneNumber(e164Phone)
+        .setTimeout(60L, TimeUnit.SECONDS)
+        .setActivity(activity)
+        .setCallbacks(callbacks)
+    if (resendToken != null) builder.setForceResendingToken(resendToken)
+    PhoneAuthProvider.verifyPhoneNumber(builder.build())
+}
+
+/** Bangla message for a failed phone verification. */
+private fun phoneAuthErrorMessage(error: Throwable): String = when {
+    error is FirebaseAuthInvalidCredentialsException && error.errorCode == "ERROR_INVALID_VERIFICATION_CODE" ->
+        "কোডটি ভুল হয়েছে। SMS-এ আসা ৬ সংখ্যার কোড আবার লিখুন।"
+    error is FirebaseAuthInvalidCredentialsException -> "নম্বরটি সঠিক নয়। ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।"
+    error is FirebaseTooManyRequestsException -> "অনেকবার চেষ্টা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।"
+    error.message?.contains("OPERATION_NOT_ALLOWED") == true || error.message?.contains("not enabled") == true ->
+        "Firebase-এ মোবাইল নম্বর লগইন চালু নেই। অ্যাডমিনকে Firebase Console → Authentication → Phone চালু করতে বলুন।"
+    error is FirebaseNetworkException -> "ইন্টারনেট সংযোগ নেই। সংযোগ দিয়ে আবার চেষ্টা করুন।"
+    else -> "কোড পাঠানো/যাচাই করা যায়নি। আবার চেষ্টা করুন।"
+}
+
+/** Signs in with a verified phone credential and keeps the entered name on the Firebase account. */
+private suspend fun signInWithPhoneCredential(
+    credential: PhoneAuthCredential,
+    displayName: String,
+    e164Phone: String,
+    context: Context
+) {
+    val result = Firebase.auth.signInWithCredential(credential).await()
+    val user = result.user
+    if (user != null && displayName.isNotBlank() && user.displayName.isNullOrBlank()) {
+        runCatching { user.updateProfile(userProfileChangeRequest { this.displayName = displayName }).await() }
+    }
+    // Remembered only to pre-fill the donor profile form; sign-in itself is the Firebase user.
+    context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE).edit()
+        .putString(KEY_OTP_VERIFIED_PHONE, e164Phone)
+        .putString(KEY_OTP_VERIFIED_NAME, displayName.ifBlank { e164Phone })
+        .apply()
 }
 
 fun attemptAutoSignIn(
@@ -142,8 +196,7 @@ fun attemptAutoSignIn(
     onUnauthenticated: () -> Unit,
     scope: CoroutineScope
 ) {
-    val appPrefs = context.getSharedPreferences(RokkhonViewModel.APP_PREFS, Context.MODE_PRIVATE)
-    if (Firebase.auth.currentUser != null || !appPrefs.getString(KEY_OTP_VERIFIED_PHONE, "").isNullOrBlank()) {
+    if (Firebase.auth.currentUser != null) {
         onAuthSuccess()
         return
     }
@@ -191,11 +244,11 @@ fun onGoogleSignInClicked(
     onAuthCancelled: () -> Unit = {}
 ) {
     if (credentialManager == null) {
-        onAuthError("এই ডিভাইসে গুগল সাইন-ইন সার্ভিস সাপোর্ট করছে না। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
+        onAuthError("এই ডিভাইসে গুগল সাইন-ইন সার্ভিস সাপোর্ট করছে না। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
         return
     }
     val clientId = googleWebClientId(context) ?: run {
-        onAuthError("গুগল সাইন-ইন এই বিল্ডে কনফিগার করা নেই। মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
+        onAuthError("গুগল সাইন-ইন এই বিল্ডে কনফিগার করা নেই। মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
         return
     }
 
@@ -219,10 +272,10 @@ fun onGoogleSignInClicked(
             onAuthCancelled()
         } catch (e: NoCredentialException) {
             Log.w("Auth", "No Google account on device/emulator: ${e.message}", e)
-            onAuthError("এই ডিভাইসে গুগল অ্যাকাউন্ট লগইন করা নেই। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
+            onAuthError("এই ডিভাইসে গুগল অ্যাকাউন্ট লগইন করা নেই। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
         } catch (t: Throwable) {
             Log.e("Auth", "Google Sign-In failed", t)
-            onAuthError("গুগল সাইন-ইন সম্পন্ন হয়নি। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
+            onAuthError("গুগল সাইন-ইন সম্পন্ন হয়নি। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
         }
     }
 }
@@ -274,7 +327,63 @@ fun AuthScreen(
     var mobileInput by rememberSaveable { mutableStateOf("") }
     var showSeparateOtpScreen by rememberSaveable { mutableStateOf(false) }
     var activeE164Phone by rememberSaveable { mutableStateOf("") }
-    var generatedOtpCode by rememberSaveable { mutableStateOf("") }
+    var verificationId by rememberSaveable { mutableStateOf("") }
+    var resendToken by remember { mutableStateOf<PhoneAuthProvider.ForceResendingToken?>(null) }
+    var otpBusy by remember { mutableStateOf(false) }
+    var otpServerError by remember { mutableStateOf<String?>(null) }
+    val firebaseReady = remember { runCatching { com.google.firebase.FirebaseApp.getApps(context).isNotEmpty() }.getOrDefault(false) }
+
+    fun finishPhoneSignIn(credential: PhoneAuthCredential) {
+        otpBusy = true
+        otpServerError = null
+        coroutineScope.launch {
+            try {
+                signInWithPhoneCredential(credential, userNameInput.trim(), activeE164Phone, context)
+                otpBusy = false
+                onAuthSuccess()
+            } catch (t: Throwable) {
+                Log.w("AuthScreen", "Phone sign-in failed", t)
+                otpBusy = false
+                otpServerError = phoneAuthErrorMessage(t)
+            }
+        }
+    }
+
+    val phoneCallbacks = remember {
+        object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                // Android read the SMS by itself: sign in without typing the code.
+                finishPhoneSignIn(credential)
+            }
+
+            override fun onVerificationFailed(e: com.google.firebase.FirebaseException) {
+                Log.w("AuthScreen", "Phone verification failed", e)
+                isLoading = false
+                otpBusy = false
+                val message = phoneAuthErrorMessage(e)
+                if (showSeparateOtpScreen) otpServerError = message else infoNotice = message
+            }
+
+            override fun onCodeSent(id: String, token: PhoneAuthProvider.ForceResendingToken) {
+                verificationId = id
+                resendToken = token
+                isLoading = false
+                otpBusy = false
+                otpServerError = null
+                showSeparateOtpScreen = true
+            }
+        }
+    }
+
+    fun requestOtp(resend: Boolean) {
+        val activity = context.findActivity()
+        if (!firebaseReady || activity == null) {
+            infoNotice = "এই বিল্ডে Firebase কনফিগার করা নেই (google-services.json নেই), তাই লগইন করা যাচ্ছে না।"
+            return
+        }
+        if (resend) otpBusy = true else isLoading = true
+        sendFirebaseOtp(activity, activeE164Phone, if (resend) resendToken else null, phoneCallbacks)
+    }
 
     LaunchedEffect(Unit) {
         attemptAutoSignIn(
@@ -290,24 +399,20 @@ fun AuthScreen(
         OtpVerificationScreen(
             userName = userNameInput.trim(),
             e164Phone = activeE164Phone,
-            expectedOtpCode = generatedOtpCode,
+            isVerifying = otpBusy,
+            serverError = otpServerError,
             onBackToPhoneInput = {
                 showSeparateOtpScreen = false
                 infoNotice = null
+                otpServerError = null
             },
-            onResendOtp = {
-                val freshOtp = ((100000..999999).random()).toString()
-                generatedOtpCode = freshOtp
-            },
-            onOtpVerified = {
-                appPrefs.edit()
-                    .putString(KEY_OTP_VERIFIED_PHONE, activeE164Phone)
-                    .putString(
-                        KEY_OTP_VERIFIED_NAME,
-                        userNameInput.trim().ifBlank { activeE164Phone }
-                    )
-                    .apply()
-                onAuthSuccess()
+            onResendOtp = { requestOtp(resend = true) },
+            onSubmitCode = { code ->
+                if (verificationId.isBlank()) {
+                    otpServerError = "আগে কোড পাঠান।"
+                } else {
+                    finishPhoneSignIn(PhoneAuthProvider.getCredential(verificationId, code))
+                }
             }
         )
         return
@@ -379,7 +484,7 @@ fun AuthScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "স্কিপ",
+                            text = "শুধু SOS",
                             style = MaterialTheme.typography.labelLarge,
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold
@@ -410,7 +515,7 @@ fun AuthScreen(
                 )
                 Spacer(modifier = Modifier.height(14.dp))
                 Text(
-                    text = "জরুরি রক্তদাতা ও অফলাইন ব্লুটুথ সুরক্ষা নেটওয়ার্ক",
+                    text = "জরুরি রক্তদাতা ও অফলাইন ব্লুটুথ সুরক্ষা নেটওয়ার্ক",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.84f),
                     letterSpacing = 0.2.sp,
@@ -452,7 +557,7 @@ fun AuthScreen(
                     horizontalAlignment = Alignment.Start
                 ) {
                     Text(
-                        text = "মোবাইল নম্বর দিয়ে লগইন",
+                        text = "মোবাইল নম্বর দিয়ে লগইন",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color(0xFF1A0F12)
@@ -513,8 +618,7 @@ fun AuthScreen(
                         }
                         infoNotice = null
                         activeE164Phone = normalizeBangladeshPhoneE164(mobileInput)
-                        generatedOtpCode = generateSixDigitOtpForPhone(mobileInput)
-                        showSeparateOtpScreen = true
+                        requestOtp(resend = false)
                     },
                     enabled = !isLoading,
                     shape = CircleShape,
@@ -592,7 +696,7 @@ fun AuthScreen(
                             scope = coroutineScope,
                             onAuthCancelled = {
                                 isLoading = false
-                                infoNotice = "গুগল সাইন-ইন বাতিল হয়েছে। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।"
+                                infoNotice = "গুগল সাইন-ইন বাতিল হয়েছে। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।"
                             }
                         )
                     },
@@ -639,7 +743,7 @@ fun AuthScreen(
                         .testTag("skip_sign_in_button")
                 ) {
                     Text(
-                        text = "সাইন-ইন ছাড়া প্রবেশ করুন",
+                        text = "লগইন ছাড়া শুধু জরুরি SOS",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -659,10 +763,11 @@ fun AuthScreen(
 fun OtpVerificationScreen(
     userName: String,
     e164Phone: String,
-    expectedOtpCode: String,
+    isVerifying: Boolean,
+    serverError: String?,
     onBackToPhoneInput: () -> Unit,
     onResendOtp: () -> Unit,
-    onOtpVerified: () -> Unit
+    onSubmitCode: (String) -> Unit
 ) {
     BackHandler {
         onBackToPhoneInput()
@@ -787,7 +892,7 @@ fun OtpVerificationScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "নিচের ৬টি বক্সে আপনার কোডটি লিখুন  •  কোড: $expectedOtpCode",
+                    text = "$e164Phone নম্বরে SMS-এ আসা ৬ সংখ্যার কোডটি নিচের বক্সে লিখুন",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.90f),
                     fontWeight = FontWeight.Medium,
@@ -833,8 +938,8 @@ fun OtpVerificationScreen(
                         val filtered = newValue.text.filter { it.isDigit() }.take(6)
                         otpText = filtered
                         otpError = null
-                        if (filtered.length == 6 && filtered == expectedOtpCode) {
-                            onOtpVerified()
+                        if (filtered.length == 6 && !isVerifying) {
+                            onSubmitCode(filtered)
                         }
                     },
                     keyboardOptions = KeyboardOptions(
@@ -844,7 +949,7 @@ fun OtpVerificationScreen(
                     keyboardActions = KeyboardActions(
                         onDone = {
                             if (otpText.length == 6) {
-                                onOtpVerified()
+                                if (!isVerifying) onSubmitCode(otpText)
                             } else {
                                 otpError = "অনুগ্রহ করে ৬টি ঘরেই কোড লিখুন।"
                             }
@@ -915,10 +1020,11 @@ fun OtpVerificationScreen(
                     }
                 )
 
-                if (otpError != null) {
+                val shownError = otpError ?: serverError
+                if (shownError != null) {
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = otpError ?: "",
+                        text = shownError,
                         color = IosSystemRed,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold,
@@ -934,8 +1040,9 @@ fun OtpVerificationScreen(
                             otpError = "অনুগ্রহ করে ৬টি বক্সেই OTP কোড লিখুন।"
                             return@Button
                         }
-                        onOtpVerified()
+                        onSubmitCode(otpText)
                     },
+                    enabled = !isVerifying,
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = IosSystemGreen,
@@ -982,7 +1089,7 @@ fun OtpVerificationScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "পুনরায় কোড পাঠান",
+                            text = "পুনরায় কোড পাঠান",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = IosSystemRed

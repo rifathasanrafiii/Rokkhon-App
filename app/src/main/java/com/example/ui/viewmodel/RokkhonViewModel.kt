@@ -6,7 +6,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.ble.BleSosMeshManager
-import com.example.data.demo.DemoData
 import com.example.data.guard.GuardPrefs
 import com.example.data.guard.MeshAlertNotifier
 import com.example.data.guard.RokkhonGuardService
@@ -80,7 +79,7 @@ data class PendingHardwareSos(
 )
 
 class RokkhonViewModel(
-    /** Null in demo mode (guest, or the build has no Firebase configuration). */
+    /** Null when there is no cloud: signed out (emergency SOS only) or the build has no Firebase configuration. */
     private val repository: RokkhonRepository?,
     val bleMeshManager: BleSosMeshManager,
     private val appContext: Context,
@@ -92,8 +91,11 @@ class RokkhonViewModel(
 
     val audioVerifier = LiveAudioVerifier()
 
-    /** Demo mode never talks to Firestore and shows the clearly-labelled sample community. */
-    val isDemoMode: Boolean = isGuestSession || repository == null
+    /**
+     * Without a signed-in Firebase user there is no data source: lists stay empty (never sample
+     * people) and only the offline SOS tools (Bluetooth, 999, SMS) work.
+     */
+    val isOfflineSession: Boolean = isGuestSession || repository == null
 
     private val prefs = appContext.getSharedPreferences(
         "rokkhon_guardian_state_${currentUserId.take(32)}",
@@ -210,23 +212,17 @@ class RokkhonViewModel(
         }
     }
 
-    private val _rewardCheckInPoints = MutableStateFlow(appPrefs.getInt(KEY_ADMIN_REWARD_CHECKIN, 25))
+    private val _rewardCheckInPoints = MutableStateFlow(25)
     val rewardCheckInPoints: StateFlow<Int> = _rewardCheckInPoints.asStateFlow()
 
-    private val _rewardBloodPledgePoints = MutableStateFlow(appPrefs.getInt(KEY_ADMIN_REWARD_PLEDGE, 100))
+    private val _rewardBloodPledgePoints = MutableStateFlow(100)
     val rewardBloodPledgePoints: StateFlow<Int> = _rewardBloodPledgePoints.asStateFlow()
 
-    private val _rewardSosRespondPoints = MutableStateFlow(appPrefs.getInt(KEY_ADMIN_REWARD_SOS, 50))
+    private val _rewardSosRespondPoints = MutableStateFlow(50)
     val rewardSosRespondPoints: StateFlow<Int> = _rewardSosRespondPoints.asStateFlow()
-
-    private val _locationOffUserIds = MutableStateFlow<Set<String>>(emptySet())
-    val locationOffUserIds: StateFlow<Set<String>> = _locationOffUserIds.asStateFlow()
 
     private val _isLocationDisabledByAdmin = MutableStateFlow(false)
     val isLocationDisabledByAdmin: StateFlow<Boolean> = _isLocationDisabledByAdmin.asStateFlow()
-
-    private val _suspendedUserIds = MutableStateFlow<Set<String>>(emptySet())
-    val suspendedUserIds: StateFlow<Set<String>> = _suspendedUserIds.asStateFlow()
 
     private val _isCurrentAccountSuspended = MutableStateFlow(false)
     val isCurrentAccountSuspended: StateFlow<Boolean> = _isCurrentAccountSuspended.asStateFlow()
@@ -236,9 +232,6 @@ class RokkhonViewModel(
     )
     val currentAccountSuspendReason: StateFlow<String> = _currentAccountSuspendReason.asStateFlow()
 
-    private val _bannedDeviceIds = MutableStateFlow<Set<String>>(emptySet())
-    val bannedDeviceIds: StateFlow<Set<String>> = _bannedDeviceIds.asStateFlow()
-
     private val _isCurrentDeviceBanned = MutableStateFlow(false)
     val isCurrentDeviceBanned: StateFlow<Boolean> = _isCurrentDeviceBanned.asStateFlow()
 
@@ -246,9 +239,6 @@ class RokkhonViewModel(
         "নিরাপত্তা লঙ্ঘনের কারণে অ্যাডমিন কন্ট্রোল সেন্টার থেকে এই ডিভাইসটি ($currentDeviceId) ব্যান করা হয়েছে।"
     )
     val currentDeviceBanReason: StateFlow<String> = _currentDeviceBanReason.asStateFlow()
-
-    private val _adminStateVersion = MutableStateFlow(0L)
-    val adminStateVersion: StateFlow<Long> = _adminStateVersion.asStateFlow()
 
     private val _toastBanner = MutableStateFlow<String?>(null)
     val toastBanner: StateFlow<String?> = _toastBanner.asStateFlow()
@@ -260,18 +250,12 @@ class RokkhonViewModel(
     private val _customNotifications = MutableStateFlow<List<RokkhonNotificationItem>>(emptyList())
     private val _readNotificationIds = MutableStateFlow<Set<String>>(loadStringSet(KEY_READ_NOTIFICATION_IDS))
 
-    // Local data: persisted user records + demo community in demo mode, merged with Firestore in cloud mode.
-    private val _localDonors = MutableStateFlow(
-        if (isDemoMode) listOf(loadDemoOwnProfile()) + DemoData.donors() else listOfNotNull(loadSavedOwnProfileOrNull())
-    )
-    private val _localBloodRequests = MutableStateFlow(
-        mergeBloodRequests(loadPersistedBloodRequests(), if (isDemoMode) DemoData.bloodRequests() else emptyList())
-    )
-    private val _localSosAlerts = MutableStateFlow(
-        mergeSosAlerts(loadPersistedSosAlerts(), if (isDemoMode) DemoData.sosAlerts() else emptyList())
-    )
+    // Local data is only the user's own records (profile, posts, SOS) until Firestore confirms them.
+    private val _localDonors = MutableStateFlow(listOfNotNull(loadSavedOwnProfileOrNull()))
+    private val _localBloodRequests = MutableStateFlow(loadPersistedBloodRequests().filter { it.userId == currentUserId })
+    private val _localSosAlerts = MutableStateFlow(loadPersistedSosAlerts().filter { it.userId == currentUserId })
 
-    private val _cloudLoaded = MutableStateFlow(isDemoMode)
+    private val _cloudLoaded = MutableStateFlow(isOfflineSession)
 
     private val seenBloodRequestIds = mutableSetOf<String>()
     private val seenSosAlertIds = mutableSetOf<String>()
@@ -292,7 +276,7 @@ class RokkhonViewModel(
             me.bloodGroup.equals(req.bloodGroup, ignoreCase = true)
     }
 
-    private val upstreamDonorsFlow: Flow<List<DonorNode>> = if (isDemoMode || repository == null) {
+    private val upstreamDonorsFlow: Flow<List<DonorNode>> = if (isOfflineSession || repository == null) {
         _localDonors
     } else {
         combine(
@@ -316,19 +300,19 @@ class RokkhonViewModel(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = if (isDemoMode) UiState.Success(_localDonors.value) else UiState.Loading
+            initialValue = if (isOfflineSession) UiState.Success(_localDonors.value) else UiState.Loading
         )
 
     /** True once we know whether the signed-in user already has a donor profile. */
     val needsProfileSetup: StateFlow<Boolean> = combine(donorNodesState, _cloudLoaded) { state, loaded ->
-        if (isDemoMode || !loaded) {
+        if (isOfflineSession || !loaded) {
             false
         } else {
             (state as? UiState.Success)?.data?.none { it.userId == currentUserId } ?: false
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
 
-    private val upstreamBloodRequestsFlow: Flow<List<BloodRequest>> = if (isDemoMode || repository == null) {
+    private val upstreamBloodRequestsFlow: Flow<List<BloodRequest>> = if (isOfflineSession || repository == null) {
         combine(_localBloodRequests, _pledgedRequestIds) { list, pledged -> list.withPledges(pledged) }
     } else {
         combine(
@@ -365,7 +349,7 @@ class RokkhonViewModel(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = if (isDemoMode) UiState.Success(_localBloodRequests.value) else UiState.Loading
+            initialValue = if (isOfflineSession) UiState.Success(_localBloodRequests.value) else UiState.Loading
         )
 
     private fun notifyNewBloodRequests(list: List<BloodRequest>) {
@@ -394,7 +378,7 @@ class RokkhonViewModel(
         }
     }
 
-    private val upstreamSosAlertsFlow: Flow<List<SosAlert>> = if (isDemoMode || repository == null) {
+    private val upstreamSosAlertsFlow: Flow<List<SosAlert>> = if (isOfflineSession || repository == null) {
         combine(_localSosAlerts, _respondedSosIds, _reportedFalseSosIds) { localList, respondedSet, falseSet ->
             localList.withVotes(respondedSet, falseSet)
         }
@@ -438,7 +422,7 @@ class RokkhonViewModel(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = if (isDemoMode) UiState.Success(_localSosAlerts.value) else UiState.Loading
+            initialValue = if (isOfflineSession) UiState.Success(_localSosAlerts.value) else UiState.Loading
         )
 
     private fun notifyNewSosAlerts(list: List<SosAlert>) {
@@ -561,6 +545,9 @@ class RokkhonViewModel(
             .remove(KEY_ADMIN_GLOBAL_LOC_OFF)
             .remove(KEY_ADMIN_SUSPENDED_USERS)
             .remove(KEY_ADMIN_BANNED_DEVICES)
+            .remove(KEY_ADMIN_REWARD_CHECKIN)
+            .remove(KEY_ADMIN_REWARD_PLEDGE)
+            .remove(KEY_ADMIN_REWARD_SOS)
             .apply()
 
         GuardPrefs.lastLocation(appContext)?.let { (lat, lng) ->
@@ -599,14 +586,17 @@ class RokkhonViewModel(
         }
 
         if (repository != null) {
+            if (!isOfflineSession) {
+                viewModelScope.launch {
+                    repository.registerDevice(currentDeviceId)
+                        .onFailure { Log.w(TAG, "Device registration failed", it) }
+                }
+            }
             viewModelScope.launch {
                 repository.observeAdminPolicy().collect { policy ->
                     _rewardCheckInPoints.value = policy.rewardCheckInPoints
                     _rewardBloodPledgePoints.value = policy.rewardBloodPledgePoints
                     _rewardSosRespondPoints.value = policy.rewardSosRespondPoints
-                    _locationOffUserIds.value = policy.locationOffUserIds
-                    _suspendedUserIds.value = policy.suspendedUserIds
-                    _bannedDeviceIds.value = policy.bannedDeviceIds
 
                     val locDisabled = policy.globalLocationOff || (currentUserId in policy.locationOffUserIds)
                     val wasLocDisabled = _isLocationDisabledByAdmin.value
@@ -622,7 +612,10 @@ class RokkhonViewModel(
                     }
 
                     _isCurrentAccountSuspended.value = currentUserId in policy.suspendedUserIds
-                    _isCurrentDeviceBanned.value = currentDeviceId.uppercase() in policy.bannedDeviceIds
+                    policy.suspendReasons[currentUserId]?.let { _currentAccountSuspendReason.value = it }
+                    val deviceKey = currentDeviceId.uppercase()
+                    _isCurrentDeviceBanned.value = deviceKey in policy.bannedDeviceIds
+                    policy.banReasons[deviceKey]?.let { _currentDeviceBanReason.value = it }
 
                     policy.userPointsOverrides[currentUserId]?.let { pts ->
                         _guardianPoints.value = pts
@@ -734,43 +727,33 @@ class RokkhonViewModel(
         }
     }
 
-    private fun loadDemoOwnProfile(): DonorNode {
+    private fun loadLocalOwnProfile(): DonorNode {
         val otpPhone = appPrefs.getString("otp_verified_phone", "")?.removePrefix("+88") ?: ""
         val otpName = appPrefs.getString("otp_verified_name", "") ?: ""
-        val resolvedName = prefs.getString(KEY_DEMO_NAME, null)?.takeIf { it.isNotBlank() }
+        val resolvedName = prefs.getString(KEY_OWN_NAME, null)?.takeIf { it.isNotBlank() }
             ?: otpName.takeIf { it.isNotBlank() }
-            ?: currentUserName.takeIf { it.isNotBlank() && it != "Guest" && it != "Demo User" }.orEmpty()
-        val resolvedPhone = prefs.getString(KEY_DEMO_PHONE, null)?.takeIf { it.isNotBlank() }
+            ?: currentUserName.takeIf { it.isNotBlank() && it != "Guest" }.orEmpty()
+        val resolvedPhone = prefs.getString(KEY_OWN_PHONE, null)?.takeIf { it.isNotBlank() }
             ?: otpPhone
         return DonorNode(
             id = currentUserId,
             userId = currentUserId,
             displayName = resolvedName,
-            bloodGroup = prefs.getString(KEY_DEMO_BLOOD, "O+") ?: "O+",
-            isAvailableDonor = prefs.getBoolean(KEY_DEMO_AVAILABLE, true),
-            district = prefs.getString(KEY_DEMO_DISTRICT, null) ?: _selectedDistrict.value.nameEn,
+            bloodGroup = prefs.getString(KEY_OWN_BLOOD, "O+") ?: "O+",
+            isAvailableDonor = prefs.getBoolean(KEY_OWN_AVAILABLE, true),
+            district = prefs.getString(KEY_OWN_DISTRICT, null) ?: _selectedDistrict.value.nameEn,
             contactPhone = resolvedPhone,
             latitude = _selectedDistrict.value.latitude,
             longitude = _selectedDistrict.value.longitude,
-            lastDonationDate = prefs.getString(KEY_DEMO_LAST_DONATION, "") ?: ""
+            lastDonationDate = prefs.getString(KEY_OWN_LAST_DONATION, "") ?: ""
         )
     }
 
     private fun loadSavedOwnProfileOrNull(): DonorNode? {
-        val savedName = prefs.getString(KEY_DEMO_NAME, null)
-        val savedPhone = prefs.getString(KEY_DEMO_PHONE, null)
+        val savedName = prefs.getString(KEY_OWN_NAME, null)
+        val savedPhone = prefs.getString(KEY_OWN_PHONE, null)
         if (savedName.isNullOrBlank() && savedPhone.isNullOrBlank()) return null
-        return loadDemoOwnProfile()
-    }
-
-    private fun mergeBloodRequests(primary: List<BloodRequest>, fallback: List<BloodRequest>): List<BloodRequest> {
-        val primaryIds = primary.map { it.id }.toSet()
-        return primary + fallback.filterNot { it.id in primaryIds }
-    }
-
-    private fun mergeSosAlerts(primary: List<SosAlert>, fallback: List<SosAlert>): List<SosAlert> {
-        val primaryIds = primary.map { it.id }.toSet()
-        return primary + fallback.filterNot { it.id in primaryIds }
+        return loadLocalOwnProfile()
     }
 
     private fun persistBloodRequestsToDisk(list: List<BloodRequest>) {
@@ -1184,15 +1167,15 @@ class RokkhonViewModel(
         _localDonors.value = listOf(updatedLocal) + _localDonors.value.filterNot { it.userId == currentUserId }
 
         prefs.edit()
-            .putString(KEY_DEMO_NAME, updatedLocal.displayName)
-            .putString(KEY_DEMO_BLOOD, bloodGroup)
-            .putBoolean(KEY_DEMO_AVAILABLE, isAvailableDonor)
-            .putString(KEY_DEMO_DISTRICT, updatedLocal.district)
-            .putString(KEY_DEMO_PHONE, updatedLocal.contactPhone)
-            .putString(KEY_DEMO_LAST_DONATION, updatedLocal.lastDonationDate)
+            .putString(KEY_OWN_NAME, updatedLocal.displayName)
+            .putString(KEY_OWN_BLOOD, bloodGroup)
+            .putBoolean(KEY_OWN_AVAILABLE, isAvailableDonor)
+            .putString(KEY_OWN_DISTRICT, updatedLocal.district)
+            .putString(KEY_OWN_PHONE, updatedLocal.contactPhone)
+            .putString(KEY_OWN_LAST_DONATION, updatedLocal.lastDonationDate)
             .apply()
 
-        if (isDemoMode || repository == null) {
+        if (isOfflineSession || repository == null) {
             showToast("ডোনার প্রোফাইল সফলভাবে সেভ হয়েছে", "Donor profile saved successfully")
             return true
         }
@@ -1225,14 +1208,14 @@ class RokkhonViewModel(
         }
         val updated = existing.copy(isAvailableDonor = newStatus)
         _localDonors.value = listOf(updated) + _localDonors.value.filterNot { it.userId == currentUserId }
-        if (isDemoMode) prefs.edit().putBoolean(KEY_DEMO_AVAILABLE, newStatus).apply()
+        if (isOfflineSession) prefs.edit().putBoolean(KEY_OWN_AVAILABLE, newStatus).apply()
 
         showToast(
             if (newStatus) "আপনি এখন রক্তদাতা হিসেবে দৃশ্যমান" else "আপনি এখন ডোনার তালিকায় লুকানো",
             if (newStatus) "You are now visible as an available donor" else "You are hidden from donor lists"
         )
 
-        if (!isDemoMode && repository != null) {
+        if (!isOfflineSession && repository != null) {
             viewModelScope.launch { repository.toggleDonorAvailability(newStatus) }
         }
     }
@@ -1319,7 +1302,7 @@ class RokkhonViewModel(
             }
         )
 
-        if (!isDemoMode && repository != null) {
+        if (!isOfflineSession && repository != null) {
             viewModelScope.launch {
                 val result = repository.createBloodRequest(
                     requesterName = currentUserName.ifBlank { "Rokkhon User" },
@@ -1401,7 +1384,7 @@ class RokkhonViewModel(
             "Thank you! Now call the patient's family: ${request.contactPhone}"
         )
 
-        if (!isDemoMode && repository != null) {
+        if (!isOfflineSession && repository != null) {
             viewModelScope.launch {
                 if (repository.pledgeBloodResponse(request).isFailure) {
                     showToast("সাড়া সার্ভারে পাঠানো যায়নি", "Could not sync your pledge")
@@ -1424,7 +1407,7 @@ class RokkhonViewModel(
         }
         persistBloodRequestsToDisk(_localBloodRequests.value)
         showToast("রক্ত ম্যানেজ হয়েছে • আবেদনটি তালিকা থেকে সরানো হলো", "Blood arranged • request closed")
-        if (!isDemoMode && repository != null) {
+        if (!isOfflineSession && repository != null) {
             viewModelScope.launch { repository.markBloodRequestFulfilled(requestId) }
         }
     }
@@ -1538,8 +1521,8 @@ class RokkhonViewModel(
             }
 
             var finalAlertId = localAlertId
-            var uploaded = isDemoMode
-            if (!isDemoMode && repository != null) {
+            var uploaded = isOfflineSession
+            if (!isOfflineSession && repository != null) {
                 val cloudId = repository.createVerifiedSosAlert(
                     senderName = currentUserName.ifBlank { "Rokkhon User" },
                     bloodGroup = bloodGroup,
@@ -1607,7 +1590,7 @@ class RokkhonViewModel(
                         }
                     }
                     persistSosAlertsToDisk(_localSosAlerts.value)
-                    if (!isDemoMode && repository != null) {
+                    if (!isOfflineSession && repository != null) {
                         repository.updateOwnSosLiveLocation(alertId, lat, lng)
                     }
                 }
@@ -1647,7 +1630,7 @@ class RokkhonViewModel(
 
         showToast("'যাচ্ছি' মার্ক হয়েছে • ডিরেকশন দেখতে 'পথ দেখুন' চাপুন", "Marked as going • tap Directions to navigate")
 
-        if (!isDemoMode && repository != null) {
+        if (!isOfflineSession && repository != null) {
             viewModelScope.launch { repository.respondToSosAlert(alert) }
         }
     }
@@ -1685,7 +1668,7 @@ class RokkhonViewModel(
 
         showToast("আপনি নিরাপদ • SOS বন্ধ হয়েছে ও হিস্ট্রিতে রাখা হয়েছে", "You're safe • SOS turned off and kept in history")
 
-        if (!isDemoMode && repository != null) {
+        if (!isOfflineSession && repository != null) {
             viewModelScope.launch { repository.resolveOwnSosAlert(target.id) }
         }
     }
@@ -1740,224 +1723,13 @@ class RokkhonViewModel(
         }
         showToast("রিপোর্ট নথিভুক্ত হয়েছে (মোট $nextCount)", "Report recorded (total $nextCount)")
 
-        if (!isDemoMode && repository != null) {
+        if (!isOfflineSession && repository != null) {
             viewModelScope.launch { repository.reportFalseAlarm(alert) }
         }
     }
 
     private fun prependCustomNotification(item: RokkhonNotificationItem) {
         _customNotifications.value = listOf(item) + _customNotifications.value.filterNot { it.id == item.id }
-    }
-
-    // ---------------------------------------------------------------- Admin Web Control Center Actions
-
-    fun deviceIdForUser(userId: String): String {
-        if (userId == currentUserId) return currentDeviceId
-        val hash = kotlin.math.abs(userId.hashCode()).toString(16).uppercase().padStart(8, '0').take(8)
-        return "DEV-BD-$hash"
-    }
-
-    fun adminUpdateUserRewards(
-        targetUserId: String,
-        newPoints: Int,
-        newTrustScore: Int,
-        newStreak: Int
-    ) {
-        val safePoints = newPoints.coerceAtLeast(0)
-        val safeTrust = newTrustScore.coerceIn(0, 100)
-        val safeStreak = newStreak.coerceAtLeast(0)
-
-        if (targetUserId == currentUserId) {
-            _guardianPoints.value = safePoints
-            _dailyStreakCount.value = safeStreak
-            prefs.edit()
-                .putInt(KEY_GUARDIAN_POINTS, safePoints)
-                .putInt(KEY_STREAK_COUNT, safeStreak)
-                .apply()
-        } else {
-            appPrefs.edit()
-                .putInt("admin_pts_$targetUserId", safePoints)
-                .putInt("admin_streak_$targetUserId", safeStreak)
-                .apply()
-        }
-
-        _localDonors.value = _localDonors.value.map { donor ->
-            if (donor.userId == targetUserId || donor.id == targetUserId) {
-                donor.copy(trustScore = safeTrust.toLong(), updatedAt = Timestamp.now())
-            } else {
-                donor
-            }
-        }
-        _adminStateVersion.value += 1L
-        showToast(
-            bn = "অ্যাডমিন আপডেট: পয়েন্ট $safePoints • ট্রাস্ট $safeTrust% • স্ট্রিক ${safeStreak}d",
-            en = "Admin updated: $safePoints pts • Trust $safeTrust% • Streak ${safeStreak}d"
-        )
-    }
-
-    fun adminUpdateGlobalRewardConfig(checkInPts: Int, bloodPledgePts: Int, sosRespondPts: Int) {
-        val c = checkInPts.coerceIn(5, 1000)
-        val p = bloodPledgePts.coerceIn(10, 2000)
-        val s = sosRespondPts.coerceIn(10, 2000)
-        _rewardCheckInPoints.value = c
-        _rewardBloodPledgePoints.value = p
-        _rewardSosRespondPoints.value = s
-        appPrefs.edit()
-            .putInt(KEY_ADMIN_REWARD_CHECKIN, c)
-            .putInt(KEY_ADMIN_REWARD_PLEDGE, p)
-            .putInt(KEY_ADMIN_REWARD_SOS, s)
-            .apply()
-        _adminStateVersion.value += 1L
-        showToast(
-            bn = "গ্লোবাল রিওয়ার্ড পয়েন্ট আপডেট হয়েছে (চেক-ইন +$c, রক্তদান +$p, SOS +$s)",
-            en = "Global reward rules updated (Check-in +$c, Blood +$p, SOS +$s)"
-        )
-    }
-
-    fun adminSetLocationDisabled(targetUserId: String, disabled: Boolean) {
-        val next = if (disabled) {
-            _locationOffUserIds.value + targetUserId
-        } else {
-            _locationOffUserIds.value - targetUserId
-        }
-        _locationOffUserIds.value = next
-        appPrefs.edit().putStringSet(KEY_ADMIN_LOC_OFF_USERS, next).apply()
-
-        if (targetUserId == currentUserId || targetUserId == "GLOBAL") {
-            if (targetUserId == "GLOBAL") {
-                appPrefs.edit().putBoolean(KEY_ADMIN_GLOBAL_LOC_OFF, disabled).apply()
-            }
-            _isLocationDisabledByAdmin.value = disabled || (currentUserId in next)
-            if (_isLocationDisabledByAdmin.value) {
-                liveLocationSharingJob?.cancel()
-                liveLocationSharingJob = null
-                locationTracker?.stopLiveUpdates()
-                _isLiveLocationSharingActive.value = false
-                _hasRealGpsFix.value = false
-            } else {
-                refreshGpsLocation()
-            }
-        }
-        _adminStateVersion.value += 1L
-        showToast(
-            bn = if (disabled) "অ্যাডমিন কন্ট্রোল থেকে লোকেশন অফ করা হয়েছে" else "অ্যাডমিন কন্ট্রোল থেকে লোকেশন অন করা হয়েছে",
-            en = if (disabled) "Location turned OFF by Admin Control Center" else "Location turned ON by Admin Control Center"
-        )
-    }
-
-    fun adminSetAccountSuspended(targetUserId: String, suspended: Boolean, reason: String = "") {
-        val cleanReason = reason.trim().ifBlank {
-            "ভুয়া SOS বা নীতিমালা ভঙ্গের কারণে অ্যাডমিন কন্ট্রোল সেন্টার থেকে অ্যাকাউন্ট সাসপেন্ড করা হয়েছে।"
-        }
-        val next = if (suspended) {
-            _suspendedUserIds.value + targetUserId
-        } else {
-            _suspendedUserIds.value - targetUserId
-        }
-        _suspendedUserIds.value = next
-        appPrefs.edit()
-            .putStringSet(KEY_ADMIN_SUSPENDED_USERS, next)
-            .putString("${KEY_ADMIN_SUSPEND_REASON_PREFIX}$targetUserId", cleanReason)
-            .apply()
-
-        if (targetUserId == currentUserId) {
-            _isCurrentAccountSuspended.value = suspended
-            _currentAccountSuspendReason.value = cleanReason
-        }
-        _adminStateVersion.value += 1L
-        showToast(
-            bn = if (suspended) "অ্যাকাউন্ট সাসপেন্ড করা হয়েছে ($targetUserId)" else "অ্যাকাউন্ট আনসাসপেন্ড করা হয়েছে ($targetUserId)",
-            en = if (suspended) "Account suspended ($targetUserId)" else "Account unsuspended ($targetUserId)"
-        )
-    }
-
-    fun adminSetDeviceBanned(targetDeviceId: String, banned: Boolean, reason: String = "") {
-        val cleanDevId = targetDeviceId.trim().uppercase()
-        if (cleanDevId.isBlank()) return
-        val cleanReason = reason.trim().ifBlank {
-            "নিরাপত্তা লঙ্ঘনের কারণে অ্যাডমিন কন্ট্রোল সেন্টার থেকে ডিভাইসটি ($cleanDevId) ব্যান করা হয়েছে।"
-        }
-        val next = if (banned) {
-            _bannedDeviceIds.value + cleanDevId
-        } else {
-            _bannedDeviceIds.value - cleanDevId
-        }
-        _bannedDeviceIds.value = next
-        appPrefs.edit()
-            .putStringSet(KEY_ADMIN_BANNED_DEVICES, next)
-            .putString("${KEY_ADMIN_BAN_REASON_PREFIX}$cleanDevId", cleanReason)
-            .apply()
-
-        if (cleanDevId == currentDeviceId) {
-            _isCurrentDeviceBanned.value = banned
-            _currentDeviceBanReason.value = cleanReason
-        }
-        _adminStateVersion.value += 1L
-        showToast(
-            bn = if (banned) "ডিভাইস ব্যান করা হয়েছে ($cleanDevId)" else "ডিভাইস আনব্যান করা হয়েছে ($cleanDevId)",
-            en = if (banned) "Device banned ($cleanDevId)" else "Device unbanned ($cleanDevId)"
-        )
-    }
-
-    fun buildAdminDashboardJson(): String {
-        val allDonors = ((donorNodesState.value as? UiState.Success)?.data ?: _localDonors.value)
-        val meInList = allDonors.any { it.userId == currentUserId }
-        val combinedUsers = if (meInList) {
-            allDonors
-        } else {
-            listOf(loadDemoOwnProfile()) + allDonors
-        }
-
-        val usersArr = JSONArray()
-        combinedUsers.forEach { d ->
-            val uid = d.userId.ifBlank { d.id }
-            val isMe = uid == currentUserId
-            val devId = deviceIdForUser(uid)
-            val pts = if (isMe) {
-                _guardianPoints.value
-            } else {
-                appPrefs.getInt("admin_pts_$uid", (d.trustScore.toInt() * 3) + 50)
-            }
-            val streak = if (isMe) {
-                _dailyStreakCount.value
-            } else {
-                appPrefs.getInt("admin_streak_$uid", 3)
-            }
-            usersArr.put(
-                JSONObject().apply {
-                    put("userId", uid)
-                    put("displayName", d.displayName.ifBlank { if (isMe) currentUserName else "Rokkhon User" })
-                    put("bloodGroup", d.bloodGroup)
-                    put("district", d.district)
-                    put("phone", d.contactPhone.ifBlank { "017XXXXXXXX" })
-                    put("trustScore", d.trustScore)
-                    put("points", pts)
-                    put("streak", streak)
-                    put("deviceId", devId)
-                    put("isCurrentUser", isMe)
-                    put("isLocationOff", uid in _locationOffUserIds.value || (isMe && _isLocationDisabledByAdmin.value))
-                    put("isSuspended", uid in _suspendedUserIds.value)
-                    put("isDeviceBanned", devId in _bannedDeviceIds.value)
-                }
-            )
-        }
-
-        val bannedArr = JSONArray()
-        _bannedDeviceIds.value.forEach { bannedArr.put(it) }
-
-        return JSONObject().apply {
-            put("currentUserId", currentUserId)
-            put("currentUserName", currentUserName)
-            put("currentDeviceId", currentDeviceId)
-            put("isLocationDisabledByAdmin", _isLocationDisabledByAdmin.value)
-            put("isCurrentAccountSuspended", _isCurrentAccountSuspended.value)
-            put("isCurrentDeviceBanned", _isCurrentDeviceBanned.value)
-            put("rewardCheckInPoints", _rewardCheckInPoints.value)
-            put("rewardBloodPledgePoints", _rewardBloodPledgePoints.value)
-            put("rewardSosRespondPoints", _rewardSosRespondPoints.value)
-            put("users", usersArr)
-            put("bannedDevices", bannedArr)
-        }.toString()
     }
 
     override fun onCleared() {
@@ -1988,12 +1760,12 @@ class RokkhonViewModel(
         private const val KEY_LAST_CHECKIN_DAY = "last_checkin_day"
         private const val KEY_GUARDIAN_POINTS = "guardian_points"
         private const val KEY_TRUSTED_CONTACTS = "trusted_contacts"
-        private const val KEY_DEMO_NAME = "demo_profile_name"
-        private const val KEY_DEMO_BLOOD = "demo_profile_blood"
-        private const val KEY_DEMO_AVAILABLE = "demo_profile_available"
-        private const val KEY_DEMO_DISTRICT = "demo_profile_district"
-        private const val KEY_DEMO_PHONE = "demo_profile_phone"
-        private const val KEY_DEMO_LAST_DONATION = "demo_profile_last_donation"
+        private const val KEY_OWN_NAME = "demo_profile_name"
+        private const val KEY_OWN_BLOOD = "demo_profile_blood"
+        private const val KEY_OWN_AVAILABLE = "demo_profile_available"
+        private const val KEY_OWN_DISTRICT = "demo_profile_district"
+        private const val KEY_OWN_PHONE = "demo_profile_phone"
+        private const val KEY_OWN_LAST_DONATION = "demo_profile_last_donation"
         private const val KEY_PERSISTED_BLOOD_REQUESTS = "persisted_blood_requests_json_v1"
         private const val KEY_PERSISTED_SOS_ALERTS = "persisted_sos_alerts_json_v1"
         private const val KEY_DEVICE_HW_ID = "rokkhon_device_hw_id_v1"
@@ -2003,8 +1775,6 @@ class RokkhonViewModel(
         private const val KEY_ADMIN_LOC_OFF_USERS = "admin_location_off_user_ids"
         private const val KEY_ADMIN_GLOBAL_LOC_OFF = "admin_global_location_off"
         private const val KEY_ADMIN_SUSPENDED_USERS = "admin_suspended_user_ids"
-        private const val KEY_ADMIN_SUSPEND_REASON_PREFIX = "admin_suspend_reason_"
         private const val KEY_ADMIN_BANNED_DEVICES = "admin_banned_device_ids"
-        private const val KEY_ADMIN_BAN_REASON_PREFIX = "admin_ban_reason_"
     }
 }

@@ -292,10 +292,39 @@ service cloud.firestore {
       }
     }
 
+    // Admins are listed in /admins/{uid}; that collection is only edited from the Firebase console.
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /admins/{uid} {
+      // Lets the admin web page check whether the signed-in account is an admin.
+      allow get: if isSignedIn() && request.auth.uid == uid;
+    }
+
     // Collection 4: /admin_controls/{docId}
+    // Every app reads the policy (suspensions, device bans, location off); only admins change it.
     match /admin_controls/{docId} {
-      allow get, list: if isSignedIn() && isValidId(docId);
-      allow create, update: if isSignedIn() && isValidId(docId);
+      allow get: if isSignedIn() && isValidId(docId);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(docId);
+    }
+
+    // Collection 5: /device_registry/{userId}
+    // Each app registers its own hardware ID so admins can ban the real device.
+    match /device_registry/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isSignedIn() &&
+                               isValidId(userId) &&
+                               request.auth.uid == userId &&
+                               incoming().keys().hasAll(['userId', 'deviceId', 'updatedAt']) &&
+                               incoming().keys().hasOnly(['userId', 'deviceId', 'updatedAt']) &&
+                               incoming().userId == userId &&
+                               incoming().deviceId is string &&
+                               incoming().deviceId.matches('^DEV-BD-[A-Z0-9]{1,16}$') &&
+                               incoming().updatedAt is timestamp &&
+                               incoming().updatedAt <= request.time;
     }
   }
 }

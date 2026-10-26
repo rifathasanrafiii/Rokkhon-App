@@ -169,7 +169,7 @@ internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
     awaitClose { removeAuthStateListener(listener) }
 }
 
-/** Without google-services.json Firebase is not initialised; the app then runs in demo mode instead of crashing. */
+/** Without google-services.json Firebase is not initialised; the app then offers only the offline SOS tools instead of crashing. */
 internal fun isFirebaseConfigured(context: Context): Boolean =
     try {
         FirebaseApp.getApps(context).isNotEmpty()
@@ -200,18 +200,10 @@ fun RokkhonAppRoot(
 
     var showSplash by rememberSaveable { mutableStateOf(true) }
     var showTutorial by rememberSaveable { mutableStateOf(!appPrefs.getBoolean(KEY_TUTORIAL_DONE, false)) }
-    var otpVerifiedPhone by rememberSaveable {
-        mutableStateOf(appPrefs.getString(KEY_OTP_VERIFIED_PHONE, "") ?: "")
-    }
-    var otpVerifiedName by rememberSaveable {
-        mutableStateOf(appPrefs.getString(KEY_OTP_VERIFIED_NAME, "") ?: "")
-    }
-    // The old code started with "guest = true", so the sign-in screen was never shown.
-    var isGuestChosen by rememberSaveable {
-        mutableStateOf(!firebaseReady || appPrefs.getBoolean(KEY_GUEST_MODE, false))
-    }
+    // Signed out = emergency-only session (Bluetooth SOS, 999, SMS) with no data. It is never
+    // remembered, so the next launch asks to sign in again; all data needs a Firebase user.
+    var isGuestChosen by rememberSaveable { mutableStateOf(false) }
     val user = currentUser
-    val isOtpAuthenticated = otpVerifiedPhone.isNotBlank()
 
     var permissionsCallbackTick by remember { mutableStateOf(0) }
 
@@ -242,7 +234,7 @@ fun RokkhonAppRoot(
         if (hardwareTriggerMethod != null) {
             showSplash = false
             showTutorial = false
-            if (user == null && !isOtpAuthenticated) isGuestChosen = true
+            if (user == null) isGuestChosen = true
         }
     }
 
@@ -257,37 +249,24 @@ fun RokkhonAppRoot(
                     showTutorial = false
                 }
             )
-            user == null && !isOtpAuthenticated && !isGuestChosen -> AuthScreen(
-                onAuthSuccess = {
-                    otpVerifiedPhone = appPrefs.getString(KEY_OTP_VERIFIED_PHONE, "") ?: ""
-                    otpVerifiedName = appPrefs.getString(KEY_OTP_VERIFIED_NAME, "") ?: ""
-                    appPrefs.edit().putBoolean(KEY_GUEST_MODE, false).apply()
-                    isGuestChosen = false
-                },
-                onSkipSignIn = {
-                    appPrefs.edit().putBoolean(KEY_GUEST_MODE, true).apply()
-                    isGuestChosen = true
-                }
+            user == null && !isGuestChosen -> AuthScreen(
+                onAuthSuccess = { isGuestChosen = false },
+                onSkipSignIn = { isGuestChosen = true }
             )
             else -> {
-                val resolvedUserId = when {
-                    user != null -> user.uid
-                    isOtpAuthenticated -> "bd_otp_${otpVerifiedPhone.filter { it.isDigit() }.takeLast(11)}"
-                    else -> "guest_rokkhon_bd"
-                }
+                val resolvedUserId = user?.uid ?: "guest_rokkhon_bd"
                 val resolvedUserName = when {
                     user != null -> user.displayName?.takeIf { it.isNotBlank() }
+                        ?: appPrefs.getString(KEY_OTP_VERIFIED_NAME, null)?.takeIf { it.isNotBlank() && !it.startsWith("+") }
                         ?: user.phoneNumber?.takeIf { it.isNotBlank() }
                         ?: user.email?.substringBefore("@")
                         ?: "Rokkhon User"
-                    isOtpAuthenticated -> otpVerifiedName.ifBlank { otpVerifiedPhone }
-                    firebaseReady -> "Guest"
-                    else -> "Demo User"
+                    else -> "Guest"
                 }
                 RokkhonAuthenticatedShell(
                     currentUserId = resolvedUserId,
                     currentUserName = resolvedUserName,
-                    isGuestSession = user == null && !isOtpAuthenticated,
+                    isGuestSession = user == null,
                     useCloud = firebaseReady && user != null,
                     canSignIn = firebaseReady,
                     permissionsCallbackTick = permissionsCallbackTick,
@@ -298,13 +277,11 @@ fun RokkhonAppRoot(
                     onOpenTutorial = { showTutorial = true },
                     onExitGuestOrSignOut = {
                         appPrefs.edit()
-                            .putBoolean(KEY_GUEST_MODE, false)
+                            .remove(KEY_GUEST_MODE)
                             .remove(KEY_OTP_VERIFIED_PHONE)
                             .remove(KEY_OTP_VERIFIED_NAME)
                             .apply()
-                        otpVerifiedPhone = ""
-                        otpVerifiedName = ""
-                        isGuestChosen = !firebaseReady
+                        isGuestChosen = false
                     }
                 )
             }

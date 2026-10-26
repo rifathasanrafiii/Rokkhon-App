@@ -236,3 +236,38 @@ test("Donors cannot set or raise their own trust score", async () => {
     })
   );
 });
+
+test("Only admins listed in /admins can change the admin policy; every signed-in app can read it", async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`admins/${BOB_UID}`).set({ addedAt: new Date() });
+  });
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+  const policy = { suspendedUserIds: [ALICE_UID], updatedAt: new Date().toISOString() };
+
+  await assertFails(aliceDb.doc("admin_controls/global_policy").set(policy));
+  await assertFails(aliceDb.doc(`admins/${ALICE_UID}`).set({ addedAt: new Date() }));
+  await assertSucceeds(bobDb.doc("admin_controls/global_policy").set(policy));
+  await assertSucceeds(aliceDb.doc("admin_controls/global_policy").get());
+  await assertFails(unauthDb.doc("admin_controls/global_policy").get());
+  await assertFails(aliceDb.doc("admin_controls/global_policy").update({ suspendedUserIds: [] }));
+  await assertSucceeds(bobDb.doc(`admins/${BOB_UID}`).get());
+  await assertFails(aliceDb.doc(`admins/${BOB_UID}`).get());
+});
+
+test("Device registry: owner writes their own device ID, only admins can list it", async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`admins/${BOB_UID}`).set({ addedAt: new Date() });
+  });
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const entry = { userId: ALICE_UID, deviceId: "DEV-BD-8F92A1C4", updatedAt: new Date() };
+
+  await assertSucceeds(aliceDb.doc(`device_registry/${ALICE_UID}`).set(entry));
+  await assertFails(aliceDb.doc(`device_registry/${BOB_UID}`).set({ ...entry, userId: BOB_UID }));
+  await assertFails(aliceDb.doc(`device_registry/${ALICE_UID}`).set({ ...entry, deviceId: "<script>" }));
+  await assertFails(aliceDb.doc(`device_registry/${ALICE_UID}`).set({ ...entry, trustScore: 100 }));
+  await assertFails(aliceDb.collection("device_registry").get());
+  await assertSucceeds(bobDb.collection("device_registry").get());
+});

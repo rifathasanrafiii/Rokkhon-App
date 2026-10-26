@@ -558,7 +558,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, doc, collection, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, doc, collection, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAMjcxudd8dWc959sW6keztNeMmQnjilJw",
@@ -572,6 +572,7 @@
     let db = null;
     let auth = null;
     let cloudConnected = false;
+    let unsubscribers = [];
 
     try {
       const app = initializeApp(firebaseConfig);
@@ -583,10 +584,19 @@
         const statusEl = document.getElementById("syncStatusText");
         if (user) {
           btn.textContent = user.displayName || user.email || "Admin Signed In";
-          statusEl.textContent = "LIVE FIRESTORE SYNC";
-          subscribeFirestoreRealtime();
+          getDoc(doc(db, "admins", user.uid)).then((snap) => {
+            window.setAdminAccess(snap.exists());
+            statusEl.textContent = snap.exists() ? "LIVE FIRESTORE SYNC" : "NOT AN ADMIN";
+            if (snap.exists()) subscribeFirestoreRealtime();
+          }).catch(() => {
+            window.setAdminAccess(false);
+            statusEl.textContent = "NOT AN ADMIN";
+          });
         } else {
+          unsubscribers.forEach(fn => fn());
+          unsubscribers = [];
           btn.textContent = "Google Admin Sign-In";
+          statusEl.textContent = "CLOUD FIRESTORE READY";
         }
       });
     } catch (e) {
@@ -606,195 +616,174 @@
 
     function subscribeFirestoreRealtime() {
       if (!db) return;
-      onSnapshot(doc(db, "admin_controls", "global_policy"), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
+      unsubscribers.forEach(fn => fn());
+      const onDenied = (err) => {
+        console.warn("Firestore read failed:", err);
+        window.setAdminAccess(false);
+      };
+      unsubscribers = [
+        onSnapshot(doc(db, "admin_controls", "global_policy"), (snap) => {
           cloudConnected = true;
-          window.applyCloudPolicyToDashboard(data);
-        }
-      });
-      onSnapshot(collection(db, "donor_nodes"), (snap) => {
-        const cloudUsers = [];
-        snap.forEach((docSnap) => {
-          const d = docSnap.data();
-          const uid = d.userId || docSnap.id;
-          cloudUsers.push({
-            userId: uid,
-            displayName: d.displayName || "Rokkhon User",
-            bloodGroup: d.bloodGroup || "O+",
-            district: d.district || "Dhaka",
-            phone: d.contactPhone || "017XXXXXXXX",
-            trustScore: d.trustScore ?? 100,
-            points: 150,
-            streak: 3,
-            deviceId: "DEV-BD-" + Math.abs(hashCode(uid)).toString(16).toUpperCase().padStart(8, "0").slice(0, 8),
-            isCurrentUser: false,
-            isLocationOff: false,
-            isSuspended: false,
-            isDeviceBanned: false
+          window.applyCloudPolicyToDashboard(snap.exists() ? snap.data() : {});
+        }, onDenied),
+        onSnapshot(collection(db, "donor_nodes"), (snap) => {
+          const cloudUsers = [];
+          snap.forEach((docSnap) => {
+            const d = docSnap.data();
+            cloudUsers.push({
+              userId: d.userId || docSnap.id,
+              displayName: d.displayName || "",
+              bloodGroup: d.bloodGroup || "",
+              district: d.district || "",
+              phone: d.contactPhone || "",
+              trustScore: d.trustScore ?? 100
+            });
           });
-        });
-        if (cloudUsers.length > 0) {
-          window.mergeCloudUsersIntoDashboard(cloudUsers);
-        }
-      });
+          window.setCloudUsers(cloudUsers);
+        }, onDenied),
+        onSnapshot(collection(db, "device_registry"), (snap) => {
+          const devices = {};
+          snap.forEach((docSnap) => {
+            const d = docSnap.data();
+            if (d.deviceId) devices[d.userId || docSnap.id] = String(d.deviceId).toUpperCase();
+          });
+          window.setDeviceRegistry(devices);
+        }, onDenied)
+      ];
     }
 
-    function hashCode(str) {
-      let h = 0;
-      for (let i = 0; i < str.length; i++) {
-        h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+    window.pushPolicyToCloud = async function(policy) {
+      if (!db || !auth || !auth.currentUser) {
+        window.showToast("আগে Google অ্যাডমিন সাইন-ইন করুন");
+        return false;
       }
-      return h;
-    }
-
-    window.pushPolicyToCloud = async function(stateObj) {
-      if (!db || !auth || !auth.currentUser) return;
       try {
-        const locOffIds = stateObj.users.filter(u => u.isLocationOff).map(u => u.userId);
-        const suspIds = stateObj.users.filter(u => u.isSuspended).map(u => u.userId);
-        const banIds = stateObj.users.filter(u => u.isDeviceBanned).map(u => u.deviceId);
-        const ptsMap = {};
-        const streakMap = {};
-        const trustMap = {};
-        stateObj.users.forEach(u => {
-          ptsMap[u.userId] = Number(u.points) || 0;
-          streakMap[u.userId] = Number(u.streak) || 0;
-          trustMap[u.userId] = Number(u.trustScore) || 100;
-        });
-
+        // Full write (no merge) so removed overrides and lifted bans are really removed.
         await setDoc(doc(db, "admin_controls", "global_policy"), {
-          rewardCheckInPoints: Number(stateObj.rewardCheckInPoints) || 25,
-          rewardBloodPledgePoints: Number(stateObj.rewardBloodPledgePoints) || 100,
-          rewardSosRespondPoints: Number(stateObj.rewardSosRespondPoints) || 50,
-          globalLocationOff: Boolean(stateObj.isLocationDisabledByAdmin),
-          locationOffUserIds: locOffIds,
-          suspendedUserIds: suspIds,
-          bannedDeviceIds: banIds,
-          userPointsOverrides: ptsMap,
-          userStreakOverrides: streakMap,
-          userTrustOverrides: trustMap,
+          ...policy,
           updatedAt: new Date().toISOString()
-        }, { merge: true });
+        });
+        return true;
       } catch (err) {
         console.warn("Cloud policy write failed:", err);
+        window.showToast("সেভ হয়নি — এই অ্যাকাউন্ট অ্যাডমিন তালিকায় নেই");
+        return false;
       }
     };
   </script>
 
   <script>
-    const STORAGE_KEY = "rokkhon_standalone_admin_state_v1";
+    // Everything shown here comes from Firestore: donor_nodes (people), device_registry (their phones)
+    // and admin_controls/global_policy (rewards, location off, suspensions, device bans).
+    try { localStorage.removeItem("rokkhon_standalone_admin_state_v1"); } catch (e) {}
 
-    let dashboardState = loadInitialState();
+    const dashboardState = {
+      policyLoaded: false,
+      isAdmin: true,
+      rewardCheckInPoints: 25,
+      rewardBloodPledgePoints: 100,
+      rewardSosRespondPoints: 50,
+      isLocationDisabledByAdmin: false,
+      locationOffUserIds: new Set(),
+      suspendedUserIds: new Set(),
+      bannedDeviceIds: new Set(),
+      pointsOverrides: {},
+      streakOverrides: {},
+      trustOverrides: {},
+      suspendReasons: {},
+      banReasons: {},
+      cloudUsers: [],
+      deviceIdsByUser: {}
+    };
 
-    function loadInitialState() {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
-      } catch (e) {}
+    function numberMap(obj) {
+      const out = {};
+      Object.entries(obj || {}).forEach(([k, v]) => { if (typeof v === "number") out[k] = v; });
+      return out;
+    }
+
+    function stringMap(obj) {
+      const out = {};
+      Object.entries(obj || {}).forEach(([k, v]) => { if (typeof v === "string" && v.trim()) out[k] = v; });
+      return out;
+    }
+
+    function usersView() {
+      const s = dashboardState;
+      return s.cloudUsers.map(cu => {
+        const deviceId = s.deviceIdsByUser[cu.userId] || "";
+        return {
+          ...cu,
+          deviceId,
+          points: s.pointsOverrides[cu.userId],
+          streak: s.streakOverrides[cu.userId],
+          trustScore: s.trustOverrides[cu.userId] ?? cu.trustScore,
+          isLocationOff: s.isLocationDisabledByAdmin || s.locationOffUserIds.has(cu.userId),
+          isSuspended: s.suspendedUserIds.has(cu.userId),
+          isDeviceBanned: Boolean(deviceId) && s.bannedDeviceIds.has(deviceId)
+        };
+      });
+    }
+
+    function policyForCloud() {
+      const s = dashboardState;
       return {
-        isLocationDisabledByAdmin: false,
-        rewardCheckInPoints: 25,
-        rewardBloodPledgePoints: 100,
-        rewardSosRespondPoints: 50,
-        users: [
-          {
-            userId: "user_dhaka_01",
-            displayName: "তানভীর আহমেদ (Tanvir Ahmed)",
-            bloodGroup: "O+",
-            district: "Dhanmondi, Dhaka",
-            phone: "01711223344",
-            trustScore: 100,
-            points: 350,
-            streak: 7,
-            deviceId: "DEV-BD-8F92A1C4",
-            isCurrentUser: false,
-            isLocationOff: false,
-            isSuspended: false,
-            isDeviceBanned: false
-          },
-          {
-            userId: "user_ctg_02",
-            displayName: "নুসরাত জাহান (Nusrat Jahan)",
-            bloodGroup: "AB+",
-            district: "Panchlaish, Chattogram",
-            phone: "01819556677",
-            trustScore: 98,
-            points: 220,
-            streak: 4,
-            deviceId: "DEV-BD-3C74E91B",
-            isCurrentUser: false,
-            isLocationOff: false,
-            isSuspended: false,
-            isDeviceBanned: false
-          },
-          {
-            userId: "user_sylhet_03",
-            displayName: "রাশেদুল ইসলাম (Rashedul Islam)",
-            bloodGroup: "B+",
-            district: "Zindabazar, Sylhet",
-            phone: "01914889900",
-            trustScore: 92,
-            points: 180,
-            streak: 5,
-            deviceId: "DEV-BD-5E10B82D",
-            isCurrentUser: false,
-            isLocationOff: false,
-            isSuspended: false,
-            isDeviceBanned: false
-          }
-        ],
-        bannedDevices: []
+        rewardCheckInPoints: s.rewardCheckInPoints,
+        rewardBloodPledgePoints: s.rewardBloodPledgePoints,
+        rewardSosRespondPoints: s.rewardSosRespondPoints,
+        globalLocationOff: s.isLocationDisabledByAdmin,
+        locationOffUserIds: [...s.locationOffUserIds],
+        suspendedUserIds: [...s.suspendedUserIds],
+        bannedDeviceIds: [...s.bannedDeviceIds],
+        userPointsOverrides: s.pointsOverrides,
+        userStreakOverrides: s.streakOverrides,
+        userTrustOverrides: s.trustOverrides,
+        suspendReasons: s.suspendReasons,
+        banReasons: s.banReasons
       };
     }
 
-    function persistState() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(dashboardState));
-      } catch (e) {}
-      if (window.pushPolicyToCloud) {
-        window.pushPolicyToCloud(dashboardState);
+    async function persistState(successMsg) {
+      if (!dashboardState.policyLoaded) {
+        showToast("ক্লাউড পলিসি এখনো লোড হয়নি — আগে অ্যাডমিন সাইন-ইন করুন");
+        return;
+      }
+      renderDashboard();
+      if (window.pushPolicyToCloud && await window.pushPolicyToCloud(policyForCloud())) {
+        showToast(successMsg);
       }
     }
 
     window.applyCloudPolicyToDashboard = function(policy) {
-      dashboardState.rewardCheckInPoints = policy.rewardCheckInPoints ?? 25;
-      dashboardState.rewardBloodPledgePoints = policy.rewardBloodPledgePoints ?? 100;
-      dashboardState.rewardSosRespondPoints = policy.rewardSosRespondPoints ?? 50;
-      dashboardState.isLocationDisabledByAdmin = Boolean(policy.globalLocationOff);
-      const locSet = new Set(policy.locationOffUserIds || []);
-      const suspSet = new Set(policy.suspendedUserIds || []);
-      const banSet = new Set(policy.bannedDeviceIds || []);
-      const ptsMap = policy.userPointsOverrides || {};
-      const streakMap = policy.userStreakOverrides || {};
-      const trustMap = policy.userTrustOverrides || {};
-
-      dashboardState.users.forEach(u => {
-        u.isLocationOff = locSet.has(u.userId);
-        u.isSuspended = suspSet.has(u.userId);
-        u.isDeviceBanned = banSet.has(u.deviceId);
-        if (ptsMap[u.userId] !== undefined) u.points = ptsMap[u.userId];
-        if (streakMap[u.userId] !== undefined) u.streak = streakMap[u.userId];
-        if (trustMap[u.userId] !== undefined) u.trustScore = trustMap[u.userId];
-      });
+      const s = dashboardState;
+      s.policyLoaded = true;
+      s.rewardCheckInPoints = policy.rewardCheckInPoints ?? 25;
+      s.rewardBloodPledgePoints = policy.rewardBloodPledgePoints ?? 100;
+      s.rewardSosRespondPoints = policy.rewardSosRespondPoints ?? 50;
+      s.isLocationDisabledByAdmin = Boolean(policy.globalLocationOff);
+      s.locationOffUserIds = new Set(policy.locationOffUserIds || []);
+      s.suspendedUserIds = new Set(policy.suspendedUserIds || []);
+      s.bannedDeviceIds = new Set((policy.bannedDeviceIds || []).map(id => String(id).toUpperCase()));
+      s.pointsOverrides = numberMap(policy.userPointsOverrides);
+      s.streakOverrides = numberMap(policy.userStreakOverrides);
+      s.trustOverrides = numberMap(policy.userTrustOverrides);
+      s.suspendReasons = stringMap(policy.suspendReasons);
+      s.banReasons = stringMap(policy.banReasons);
       renderDashboard();
     };
 
-    window.mergeCloudUsersIntoDashboard = function(cloudUsers) {
-      const existingById = {};
-      dashboardState.users.forEach(u => { existingById[u.userId] = u; });
-      cloudUsers.forEach(cu => {
-        if (existingById[cu.userId]) {
-          Object.assign(existingById[cu.userId], {
-            displayName: cu.displayName,
-            bloodGroup: cu.bloodGroup,
-            district: cu.district,
-            phone: cu.phone
-          });
-        } else {
-          dashboardState.users.unshift(cu);
-        }
-      });
+    window.setCloudUsers = function(users) {
+      dashboardState.cloudUsers = users;
+      renderDashboard();
+    };
+
+    window.setDeviceRegistry = function(devices) {
+      dashboardState.deviceIdsByUser = devices;
+      renderDashboard();
+    };
+
+    window.setAdminAccess = function(isAdmin) {
+      dashboardState.isAdmin = isAdmin;
       renderDashboard();
     };
 
@@ -814,8 +803,17 @@
     }
     window.showToast = showToast;
 
+    function emptyRow() {
+      const msg = !dashboardState.isAdmin
+        ? "এই Google অ্যাকাউন্ট অ্যাডমিন তালিকায় নেই। Firestore-এ admins/{uid} ডকুমেন্ট যোগ করুন।"
+        : !dashboardState.policyLoaded
+          ? "ইউজার দেখতে উপরের Google Admin Sign-In বাটনে চাপুন।"
+          : "এখনো কোনো ইউজার নেই — অ্যাপে প্রোফাইল সেভ করলে এখানে দেখা যাবে।";
+      return `<div class="user-row"><div class="user-sub">${msg}</div></div>`;
+    }
+
     function renderDashboard() {
-      const users = dashboardState.users || [];
+      const users = usersView();
       document.getElementById('statTotalUsers').textContent = users.length;
       document.getElementById('statRewardRule').textContent =
         `+${dashboardState.rewardCheckInPoints} / +${dashboardState.rewardBloodPledgePoints} / +${dashboardState.rewardSosRespondPoints}`;
@@ -841,6 +839,7 @@
 
     function renderRewardsList(users) {
       const container = document.getElementById('rewardsUserList');
+      if (users.length === 0) { container.innerHTML = emptyRow(); return; }
       container.innerHTML = users.map(u => `
         <div class="user-row">
           <div class="user-top">
@@ -851,16 +850,16 @@
                 <div class="user-sub">${escapeHtml(u.district)} • ${escapeHtml(u.phone)} • ID: <span class="code-tag">${escapeHtml(u.userId)}</span></div>
               </div>
             </div>
-            <span class="chip chip-ok">${u.points} Pts • Trust ${u.trustScore}% • ${u.streak}d Streak</span>
+            <span class="chip chip-ok">${u.points ?? '—'} Pts • Trust ${u.trustScore}% • ${u.streak ?? '—'}d Streak</span>
           </div>
           <div class="action-bar">
             <div class="inline-inputs">
               <label class="field-label">Points:</label>
-              <input type="number" class="mini-input" id="pts_${u.userId}" value="${u.points}" />
+              <input type="number" class="mini-input" id="pts_${u.userId}" value="${u.points ?? ''}" placeholder="—" min="0" />
               <label class="field-label">Trust %:</label>
               <input type="number" class="mini-input" id="trust_${u.userId}" value="${u.trustScore}" min="0" max="100" />
               <label class="field-label">Streak:</label>
-              <input type="number" class="mini-input" id="streak_${u.userId}" value="${u.streak}" min="0" />
+              <input type="number" class="mini-input" id="streak_${u.userId}" value="${u.streak ?? ''}" placeholder="—" min="0" />
             </div>
             <div style="display:flex; gap:6px; flex-wrap:wrap;">
               <button class="btn btn-outline" onclick="quickAddPoints('${u.userId}', 100)">+100 Pts</button>
@@ -873,6 +872,7 @@
 
     function renderLocationList(users) {
       const container = document.getElementById('locationUserList');
+      if (users.length === 0) { container.innerHTML = emptyRow(); return; }
       container.innerHTML = users.map(u => `
         <div class="user-row">
           <div class="user-top">
@@ -880,7 +880,7 @@
               <div class="blood-badge">${u.bloodGroup}</div>
               <div>
                 <div class="user-name">${escapeHtml(u.displayName)}</div>
-                <div class="user-sub">${escapeHtml(u.district)} • Device: <span class="code-tag">${escapeHtml(u.deviceId)}</span></div>
+                <div class="user-sub">${escapeHtml(u.district)} • Device: <span class="code-tag">${escapeHtml(u.deviceId || '—')}</span></div>
               </div>
             </div>
             <span class="chip ${u.isLocationOff ? 'chip-danger' : 'chip-ok'}">
@@ -902,6 +902,7 @@
 
     function renderSuspendList(users) {
       const container = document.getElementById('suspendUserList');
+      if (users.length === 0) { container.innerHTML = emptyRow(); return; }
       container.innerHTML = users.map(u => `
         <div class="user-row">
           <div class="user-top">
@@ -931,6 +932,7 @@
 
     function renderDeviceBanList(users) {
       const container = document.getElementById('deviceBanUserList');
+      if (users.length === 0) { container.innerHTML = emptyRow(); return; }
       container.innerHTML = users.map(u => `
         <div class="user-row">
           <div class="user-top">
@@ -938,7 +940,7 @@
               <div class="blood-badge">${u.bloodGroup}</div>
               <div>
                 <div class="user-name">${escapeHtml(u.displayName)}</div>
-                <div class="user-sub">Hardware Device ID: <span class="code-tag">${escapeHtml(u.deviceId)}</span></div>
+                <div class="user-sub">Hardware Device ID: <span class="code-tag">${escapeHtml(u.deviceId || '—')}</span></div>
               </div>
             </div>
             <span class="chip ${u.isDeviceBanned ? 'chip-danger' : 'chip-ok'}">
@@ -948,9 +950,11 @@
           <div class="action-bar">
             <div class="user-sub">ইউজার: ${escapeHtml(u.phone)} • ${escapeHtml(u.district)}</div>
             <div style="display:flex; gap:8px;">
-              ${u.isDeviceBanned
-                ? `<button class="btn btn-emerald" onclick="toggleDeviceBan('${u.deviceId}', false)">ডিভাইস আনব্যান করুন</button>`
-                : `<button class="btn btn-danger" onclick="toggleDeviceBan('${u.deviceId}', true)">ডিভাইস ব্যান করুন</button>`
+              ${!u.deviceId
+                ? `<span class="user-sub">অ্যাপ খোলার পর ডিভাইস আইডি দেখা যাবে</span>`
+                : u.isDeviceBanned
+                  ? `<button class="btn btn-emerald" onclick="toggleDeviceBan('${u.deviceId}', false)">ডিভাইস আনব্যান করুন</button>`
+                  : `<button class="btn btn-danger" onclick="toggleDeviceBan('${u.deviceId}', true)">ডিভাইস ব্যান করুন</button>`
               }
             </div>
           </div>
@@ -959,30 +963,34 @@
     }
 
     function saveGlobalRewards() {
-      const c = parseInt(document.getElementById('cfgCheckInPts').value || '25', 10);
-      const p = parseInt(document.getElementById('cfgBloodPledgePts').value || '100', 10);
-      const s = parseInt(document.getElementById('cfgSosRespondPts').value || '50', 10);
+      const c = Math.min(1000, Math.max(5, parseInt(document.getElementById('cfgCheckInPts').value || '25', 10)));
+      const p = Math.min(2000, Math.max(10, parseInt(document.getElementById('cfgBloodPledgePts').value || '100', 10)));
+      const s = Math.min(2000, Math.max(10, parseInt(document.getElementById('cfgSosRespondPts').value || '50', 10)));
       dashboardState.rewardCheckInPoints = c;
       dashboardState.rewardBloodPledgePoints = p;
       dashboardState.rewardSosRespondPoints = s;
-      persistState();
-      renderDashboard();
-      showToast(`গ্লোবাল রিওয়ার্ড আপডেট হয়েছে (+${c} / +${p} / +${s})`);
+      persistState(`গ্লোবাল রিওয়ার্ড আপডেট হয়েছে (+${c} / +${p} / +${s})`);
+    }
+
+    function readOptionalInt(id) {
+      const raw = (document.getElementById(id).value || '').trim();
+      if (raw === '') return undefined;
+      const n = parseInt(raw, 10);
+      return Number.isFinite(n) ? Math.max(0, n) : undefined;
+    }
+
+    function setOverride(map, userId, value) {
+      if (value === undefined) delete map[userId]; else map[userId] = value;
     }
 
     function saveUserReward(userId) {
-      const pts = parseInt(document.getElementById('pts_' + userId).value || '0', 10);
-      const trust = parseInt(document.getElementById('trust_' + userId).value || '100', 10);
-      const streak = parseInt(document.getElementById('streak_' + userId).value || '0', 10);
-      const u = dashboardState.users.find(x => x.userId === userId);
-      if (u) {
-        u.points = pts;
-        u.trustScore = trust;
-        u.streak = streak;
-      }
-      persistState();
-      renderDashboard();
-      showToast(`রিওয়ার্ড আপডেট হয়েছে: ${pts} পয়েন্ট • ট্রাস্ট ${trust}%`);
+      const pts = readOptionalInt('pts_' + userId);
+      const trust = readOptionalInt('trust_' + userId);
+      const streak = readOptionalInt('streak_' + userId);
+      setOverride(dashboardState.pointsOverrides, userId, pts);
+      setOverride(dashboardState.streakOverrides, userId, streak);
+      setOverride(dashboardState.trustOverrides, userId, trust === undefined ? undefined : Math.min(100, trust));
+      persistState(`রিওয়ার্ড আপডেট হয়েছে: ${pts ?? '—'} পয়েন্ট • ট্রাস্ট ${trust ?? '—'}%`);
     }
 
     function quickAddPoints(userId, delta) {
@@ -995,30 +1003,42 @@
     function toggleLocation(userId, disabled) {
       if (userId === 'GLOBAL') {
         dashboardState.isLocationDisabledByAdmin = disabled;
-        dashboardState.users.forEach(u => u.isLocationOff = disabled);
+        if (!disabled) dashboardState.locationOffUserIds.clear();
+      } else if (disabled) {
+        dashboardState.locationOffUserIds.add(userId);
       } else {
-        const u = dashboardState.users.find(x => x.userId === userId);
-        if (u) u.isLocationOff = disabled;
+        dashboardState.locationOffUserIds.delete(userId);
       }
-      persistState();
-      renderDashboard();
-      showToast(disabled ? 'লাইভ লোকেশন অফ (OFF) করা হয়েছে' : 'লাইভ লোকেশন অন (ON) করা হয়েছে');
+      persistState(disabled ? 'লাইভ লোকেশন অফ (OFF) করা হয়েছে' : 'লাইভ লোকেশন অন (ON) করা হয়েছে');
     }
 
     function toggleSuspend(userId, suspended) {
-      const u = dashboardState.users.find(x => x.userId === userId);
-      if (u) u.isSuspended = suspended;
-      persistState();
-      renderDashboard();
-      showToast(suspended ? 'অ্যাকাউন্ট সাসপেন্ড করা হয়েছে' : 'অ্যাকাউন্ট আনসাসপেন্ড করা হয়েছে');
+      if (suspended) {
+        dashboardState.suspendedUserIds.add(userId);
+        const reason = (document.getElementById('suspendReasonInput').value || '').trim();
+        if (reason) dashboardState.suspendReasons[userId] = reason;
+      } else {
+        dashboardState.suspendedUserIds.delete(userId);
+        delete dashboardState.suspendReasons[userId];
+      }
+      persistState(suspended ? 'অ্যাকাউন্ট সাসপেন্ড করা হয়েছে' : 'অ্যাকাউন্ট আনসাসপেন্ড করা হয়েছে');
     }
 
     function toggleDeviceBan(deviceId, banned) {
-      const u = dashboardState.users.find(x => x.deviceId === deviceId);
-      if (u) u.isDeviceBanned = banned;
-      persistState();
-      renderDashboard();
-      showToast(banned ? `ডিভাইস (${deviceId}) ব্যান করা হয়েছে` : `ডিভাইস (${deviceId}) আনব্যান করা হয়েছে`);
+      const devId = String(deviceId || '').trim().toUpperCase();
+      if (!/^DEV-BD-[A-Z0-9]{1,16}$/.test(devId)) {
+        showToast('সঠিক ডিভাইস আইডি লিখুন (যেমন DEV-BD-8F92A1C4)');
+        return;
+      }
+      if (banned) {
+        dashboardState.bannedDeviceIds.add(devId);
+        const reason = (document.getElementById('banReasonInput').value || '').trim();
+        if (reason) dashboardState.banReasons[devId] = reason;
+      } else {
+        dashboardState.bannedDeviceIds.delete(devId);
+        delete dashboardState.banReasons[devId];
+      }
+      persistState(banned ? `ডিভাইস (${devId}) ব্যান করা হয়েছে` : `ডিভাইস (${devId}) আনব্যান করা হয়েছে`);
     }
 
     function banManualDevice(banned) {

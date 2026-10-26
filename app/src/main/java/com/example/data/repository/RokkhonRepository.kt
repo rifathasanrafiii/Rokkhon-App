@@ -87,8 +87,29 @@ class RokkhonRepository(
         val bannedDeviceIds: Set<String> = emptySet(),
         val userPointsOverrides: Map<String, Int> = emptyMap(),
         val userStreakOverrides: Map<String, Int> = emptyMap(),
-        val userTrustOverrides: Map<String, Int> = emptyMap()
+        val userTrustOverrides: Map<String, Int> = emptyMap(),
+        val suspendReasons: Map<String, String> = emptyMap(),
+        val banReasons: Map<String, String> = emptyMap()
     )
+
+    /** Publishes this phone's hardware ID so the admin web can ban the real device. */
+    suspend fun registerDevice(deviceId: String): Result<Unit> = runCatching {
+        val uid = requireUserId()
+        db.collection("device_registry").document(uid).set(
+            mapOf(
+                "userId" to uid,
+                "deviceId" to deviceId,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
+    private fun DocumentSnapshot.stringMap(field: String): Map<String, String> =
+        (get(field) as? Map<*, *>)?.mapNotNull { (k, v) ->
+            val key = k?.toString() ?: return@mapNotNull null
+            val text = (v as? String)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            key to text
+        }?.toMap().orEmpty()
 
     fun observeAdminPolicy(): Flow<AdminPolicySnapshot> {
         return db.collection("admin_controls")
@@ -127,7 +148,9 @@ class RokkhonRepository(
                         bannedDeviceIds = banList,
                         userPointsOverrides = ptsMap,
                         userStreakOverrides = streakMap,
-                        userTrustOverrides = trustMap
+                        userTrustOverrides = trustMap,
+                        suspendReasons = doc.stringMap("suspendReasons"),
+                        banReasons = doc.stringMap("banReasons").mapKeys { it.key.uppercase() }
                     )
                 }
             }
