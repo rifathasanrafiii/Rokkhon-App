@@ -7,7 +7,6 @@ plugins {
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
-  id("org.jetbrains.kotlin.plugin.serialization") version "2.2.10"
 }
 
 android {
@@ -45,7 +44,9 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      // R8 + resource shrinking: smaller APK and much smoother Compose than an unoptimised build.
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
@@ -55,6 +56,13 @@ android {
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
       signingConfig = signingConfigs.getByName("debugConfig")
+    }
+    // Same as release (optimised, not debuggable) but signed with the repo's debug key, so it can
+    // be installed on a phone with `adb install` without the upload keystore: ./gradlew assemblePreview
+    create("preview") {
+      initWith(getByName("release"))
+      signingConfig = signingConfigs.getByName("debugConfig")
+      matchingFallbacks += listOf("release")
     }
   }
   compileOptions {
@@ -123,14 +131,10 @@ dependencies {
   // implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
-  implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
   // implementation(libs.logging.interceptor)
   // implementation(libs.moshi.kotlin)
-  implementation(libs.okhttp)
   implementation(libs.osmdroid.android)
   implementation(libs.play.services.location)
-  implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

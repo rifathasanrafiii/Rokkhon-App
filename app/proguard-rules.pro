@@ -19,3 +19,11 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Firestore maps documents onto these classes by reflection (toObjects / set).
+-keepattributes Signature,*Annotation*
+-keep class com.example.data.model.** { *; }
+
+# Credential Manager loads its Play Services provider by reflection.
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** { *; }

@@ -2,4 +2,9 @@
 <resources>
 
     <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar" />
+
+    <!-- Shown only while the app starts; MainActivity switches to Theme.MyApplication. -->
+    <style name="Theme.MyApplication.Launch">
+        <item name="android:windowBackground">@color/rokkhon_crimson</item>
+    </style>
 </resources>

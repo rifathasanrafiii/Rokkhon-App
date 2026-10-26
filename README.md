@@ -7,18 +7,35 @@ Bangladesh blood-donor network + personal safety SOS app (Kotlin, Jetpack Compos
 - **1 km Bluetooth mesh:** an SOS is broadcast over BLE with the sender's position, a packet id and a hop count. Every Rokkhon phone that hears it alerts its user and re-broadcasts it while it is within 1 km of the sender, so it reaches every app user in that circle without internet; it stops at the 1 km edge or after 6 hops (3 hops for a phone that doesn't know its own location).
 - **Safety network (background):** a foreground service (`data/guard/RokkhonGuardService`) keeps listening and relaying while the app is closed, keeps a low-power location fix, and for signed-in users alerts on new cloud SOS within 1 km. It restarts after a reboot and can be turned off from the SOS tab, Profile or its notification.
 - **Map:** real OpenStreetMap tiles (osmdroid) with donor, patient and SOS pins.
-- **Demo mode:** without Google sign-in (or without Firebase config) the app shows a clearly labelled sample community; nothing is uploaded.
+- **Real data only:** every donor, request and SOS comes from Firestore. Without sign-in (or without Firebase config) lists stay empty and only the offline SOS tools work (Bluetooth mesh, 999, SMS).
+- **Admin web (`admin-web/`):** rewards, location off, account suspend and device ban, written to `admin_controls/global_policy` and applied live in the app.
 
-## Build
+## Build and install
 
 Requirements: JDK 17+, Android SDK (platform `android-36.1`), Gradle 9.3.1.
 
 ```bash
 echo "sdk.dir=/path/to/android-sdk" > local.properties
-gradle assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
+gradle assemblePreview        # app/build/outputs/apk/preview/app-preview.apk (optimised, smooth)
+adb install -r app/build/outputs/apk/preview/app-preview.apk
 ```
 
-`app/google-services.json` is optional. Without it the app builds and runs in demo mode; with it Google sign-in and the shared Firestore network are enabled.
+`assemblePreview` is the release build (R8, not debuggable) signed with the repo's `debug.keystore`, so it installs without the upload key. `assembleDebug` also works but Compose is much slower in debug builds.
+
+## Firebase setup
+
+The app uses Firebase project `btshop-5b889` with the Firestore database named in `app/src/main/res/values/firebase_applet_config.xml`.
+
+1. Firebase Console → Project settings → add an Android app with package `com.aistudio.rokkhon.bdxqpz`, download `google-services.json` into `app/`.
+2. Add the SHA-1 and SHA-256 of the signing key (`keytool -list -v -keystore debug.keystore -storepass android` for preview/debug builds).
+3. Authentication → Sign-in method: enable **Phone** and **Google**.
+4. Deploy the rules: `firebase deploy --only firestore:rules`.
+
+Without `google-services.json` the app still builds and runs, but sign-in and the shared network are off.
+
+## Admin setup
+
+Open `admin-web/index.html` (any static host or locally) and sign in with Google. Only accounts listed in Firestore can change the policy: create a document `admins/{uid}` (any fields) in the Firebase Console for each admin's Auth UID. Apps register their hardware ID in `device_registry/{uid}`, which is what device bans match.
 
 ## Tests
 
@@ -41,4 +58,4 @@ ROKKHON_SCREENSHOT_LANG=en ROKKHON_SCREENSHOTS=$PWD/screenshots-en gradle testDe
 
 The Find tab downloads real OpenStreetMap tiles, so rendering it needs network access. Each screenshot also gets a `.tags.json` with the bounds of every tagged element (used by the click-through simulator).
 
-Fonts: Hind Siliguri (SIL Open Font License, see `licenses/HindSiliguri-OFL.txt`).
+Fonts: Google Sans (SIL Open Font License, see `licenses/GoogleSans-OFL.txt`).

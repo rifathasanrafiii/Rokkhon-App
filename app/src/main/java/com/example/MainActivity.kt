@@ -66,8 +66,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -119,6 +121,7 @@ class MainActivity : ComponentActivity() {
     val pendingHardwareSosMethod: StateFlow<String?> = _pendingHardwareSosMethod.asStateFlow()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_MyApplication)
         super.onCreate(savedInstanceState)
         runCatching { enableEdgeToEdge() }
         RokkhonNotificationHelper.ensureChannel(this)
@@ -363,6 +366,11 @@ fun RokkhonAuthenticatedShell(
 
     var showSosVerificationDialog by remember { mutableStateOf(false) }
     var showPostBloodRequestDialog by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    val openSosVerification = {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        showSosVerificationDialog = true
+    }
 
     LaunchedEffect(hardwareTriggerMethod) {
         if (hardwareTriggerMethod != null) {
@@ -407,19 +415,19 @@ fun RokkhonAuthenticatedShell(
                     recentPowerTaps = recentPowerTaps,
                     onSimulatePowerTap = onSimulatePowerTap,
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true },
-                    onOpenSosVerification = { showSosVerificationDialog = true },
+                    onOpenSosVerification = openSosVerification,
                     onOpenTutorial = onOpenTutorial
                 )
                 RokkhonTab.RADAR_MAP -> RadarMapHubScreen(
                     viewModel = viewModel,
-                    onOpenSosVerification = { showSosVerificationDialog = true },
+                    onOpenSosVerification = openSosVerification,
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true }
                 )
                 RokkhonTab.SOS_GUARDIAN -> SosGuardianAndBleScreen(
                     viewModel = viewModel,
                     recentPowerTaps = recentPowerTaps,
                     onSimulatePowerTap = onSimulatePowerTap,
-                    onOpenSosVerification = { showSosVerificationDialog = true }
+                    onOpenSosVerification = openSosVerification
                 )
                 RokkhonTab.DONOR_PROFILE -> Column(
                     modifier = Modifier
@@ -504,6 +512,7 @@ fun RokkhonAuthenticatedShell(
             onDismiss = { showSosVerificationDialog = false },
             onDispatchVerifiedSos = { emergencyType, hasCam, hasAudio, peakDb, note, triggerMethod ->
                 showSosVerificationDialog = false
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 viewModel.triggerVerifiedEmergencySos(
                     bloodGroup = myDonor?.bloodGroup ?: "O+",
                     emergencyType = emergencyType,
@@ -569,6 +578,7 @@ private fun RokkhonFloatingBottomBar(
     onPlusClick: () -> Unit
 ) {
     val isBn = language == AppLanguage.BENGALI
+    val haptics = LocalHapticFeedback.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -624,7 +634,10 @@ private fun RokkhonFloatingBottomBar(
                             .offset(y = (-6).dp)
                             .size(52.dp)
                             .clip(CircleShape)
-                            .clickable(role = Role.Button) { onPlusClick() }
+                            .clickable(role = Role.Button) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onPlusClick()
+                            }
                             .testTag("nav_center_plus_button")
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -672,13 +685,17 @@ private fun RokkhonBottomNavItem(
 ) {
     val activeRed = Color(0xFFB80F24)
     val inactiveGray = Color(0xFF6E6265)
+    val haptics = LocalHapticFeedback.current
     Surface(
         color = if (selected) Color(0xFFFBE9EB) else Color.Transparent,
         shape = RoundedCornerShape(28.dp),
         modifier = modifier
             .height(54.dp)
             .clip(RoundedCornerShape(28.dp))
-            .clickable(role = Role.Tab) { onClick() }
+            .clickable(role = Role.Tab) {
+                if (!selected) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),

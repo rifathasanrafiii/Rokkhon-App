@@ -38,7 +38,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -3687,7 +3687,7 @@ fun SosPostCardItem(
                                 .testTag("sos_nearby_respond_button_${alert.id}")
                         ) {
                             Icon(
-                                imageVector = if (hasRespondedNearby) Icons.Default.CheckCircle else Icons.Default.DirectionsRun,
+                                imageVector = if (hasRespondedNearby) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.DirectionsRun,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -4272,7 +4272,7 @@ fun SosVideoAudioInspectorDialog(
                                 colors = ButtonDefaults.buttonColors(containerColor = IosSystemGreen),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.Default.DirectionsRun, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.AutoMirrored.Filled.DirectionsRun, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (language == AppLanguage.BENGALI) {

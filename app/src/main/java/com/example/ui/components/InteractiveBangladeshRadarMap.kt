@@ -39,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -118,18 +119,26 @@ fun InteractiveBangladeshRadarMap(
     var useOsmRealTiles by remember { mutableStateOf(initialUseOsmTiles) }
     var followUserGps by remember { mutableStateOf(true) }
     val mapController = remember { RokkhonMapController() }
-    val textMeasurer = rememberTextMeasurer()
+    // Enough cache for every district label, so panning does not re-run text layout each frame.
+    val textMeasurer = rememberTextMeasurer(cacheSize = 128)
 
+    // The pulse only runs while the drawn map is visible; under the OSM street map it would
+    // redraw a hidden canvas every frame.
     val infiniteTransition = rememberInfiniteTransition(label = "real_map_pulse")
-    val radarPulse by infiniteTransition.animateFloat(
-        initialValue = 0.08f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "pulse_ring"
-    )
+    val radarPulseState: State<Float> = if (useOsmRealTiles) {
+        remember { mutableFloatStateOf(0.5f) }
+    } else {
+        infiniteTransition.animateFloat(
+            initialValue = 0.08f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 2400, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "pulse_ring"
+        )
+    }
+    val radarPulse by radarPulseState
 
     val filteredDonors = remember(donors, selectedBloodGroup, layerFilter) {
         if (layerFilter != MapLayerFilter.ALL && layerFilter != MapLayerFilter.DONORS_ONLY) {
@@ -160,8 +169,8 @@ fun InteractiveBangladeshRadarMap(
             .background(Color(0xFFEAE6DF))
             .testTag("interactive_bangladesh_map")
     ) {
-        // 1. Native Interactive Street & Area Map Canvas (Always rendered as instant layer + offline/test support)
-        Canvas(
+        // 1. Drawn area map: the offline fallback, shown when the street map layer is off.
+        if (!useOsmRealTiles) Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(centerLat, centerLng, filteredDonors, filteredRequests, filteredSos, bleBeacons, zoomLevel, panOffset) {
@@ -478,8 +487,7 @@ fun InteractiveBangladeshRadarMap(
             )
         }
 
-        // 2. Real OpenStreetMap street map (native osmdroid tiles + pins). The drawn map above stays
-        //    underneath as the offline fallback and for the layer toggle button.
+        // 2. Real OpenStreetMap street map (native osmdroid tiles + pins).
         if (useOsmRealTiles) {
             RokkhonMap(
                 centerLat = centerLat,

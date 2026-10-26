@@ -1,14 +1,3 @@
 <resources>
     <string name="app_name">Rokkhon</string>
-    <string name="cd_rokkhon_shield">Rokkhon Emergency Blood and Safety Shield</string>
-    <string name="tab_map_bn">ম্যাপ</string>
-    <string name="tab_map_en">Map</string>
-    <string name="tab_blood_bn">রক্ত</string>
-    <string name="tab_blood_en">Blood</string>
-    <string name="tab_sos_bn">SOS</string>
-    <string name="tab_sos_en">SOS</string>
-    <string name="tab_poster_bn">পোস্টার AI</string>
-    <string name="tab_poster_en">Poster AI</string>
-    <string name="tab_profile_bn">প্রোফাইল</string>
-    <string name="tab_profile_en">Profile</string>
 </resources>
