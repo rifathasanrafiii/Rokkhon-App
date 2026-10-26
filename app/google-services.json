@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "531346450679-3b9vn4rejrpe29ti45nl9jck4r7nd0u5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.rokkhon.bdxqpz",
+            "certificate_hash": "70787da22e984d9adfb450a89ca1f76932077f32"
+          }
+        },
+        {
           "client_id": "531346450679-cr5pr5mpmr88ga8s2e03i6chog70gp16.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
