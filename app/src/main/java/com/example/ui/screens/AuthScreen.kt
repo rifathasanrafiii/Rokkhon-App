@@ -248,31 +248,82 @@ fun onGoogleSignInClicked(
     }
 
     scope.launch {
-        try {
-            val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
-            val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
-            val activityContext = context.findActivity() ?: context
-            val result = credentialManager.getCredential(activityContext, request)
-            val credential = result.credential
-            if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-                val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
-                Firebase.auth.signInWithCredential(authCredential).await()
+        val activityContext = context.findActivity() ?: context
+        // Two ways to ask Google for the account: the "Sign in with Google" sheet, and the plain
+        // account picker. Some phones (older Play services, some OEMs) fail the first one, so the
+        // second is tried before giving up.
+        val options = listOf(
+            GetSignInWithGoogleOption.Builder(serverClientId = clientId).build(),
+            GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(false)
+                .setServerClientId(clientId)
+                .setAutoSelectEnabled(false)
+                .build()
+        )
+        var lastError: Throwable? = null
+        for (option in options) {
+            val idToken = try {
+                val result = credentialManager.getCredential(
+                    activityContext,
+                    GetCredentialRequest.Builder().addCredentialOption(option).build()
+                )
+                val credential = result.credential
+                if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                    GoogleIdTokenCredential.createFrom(credential.data).idToken
+                } else {
+                    lastError = IllegalStateException("credential type ${credential.type}")
+                    null
+                }
+            } catch (e: GetCredentialCancellationException) {
+                Log.w("Auth", "Google Sign-In cancelled or dismissed: ${e.message}", e)
+                onAuthCancelled()
+                return@launch
+            } catch (t: Throwable) {
+                Log.w("Auth", "Google account request failed (${option::class.java.simpleName})", t)
+                lastError = t
+                null
+            } ?: continue
+
+            // Google gave us the account; now Firebase has to accept it.
+            try {
+                Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(idToken, null)).await()
                 onAuthSuccess()
-            } else {
-                onAuthError("Unexpected credential type")
+            } catch (t: Throwable) {
+                Log.e("Auth", "Firebase rejected the Google credential", t)
+                onAuthError(googleSignInErrorMessage(t))
             }
-        } catch (e: GetCredentialCancellationException) {
-            Log.w("Auth", "Google Sign-In cancelled or dismissed: ${e.message}", e)
-            onAuthCancelled()
-        } catch (e: NoCredentialException) {
-            Log.w("Auth", "No Google account on device/emulator: ${e.message}", e)
-            onAuthError("এই ডিভাইসে গুগল অ্যাকাউন্ট লগইন করা নেই। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
-        } catch (t: Throwable) {
-            Log.e("Auth", "Google Sign-In failed", t)
-            onAuthError("গুগল সাইন-ইন সম্পন্ন হয়নি। উপরে মোবাইল নম্বর OTP দিয়ে লগইন করুন।")
+            return@launch
         }
+        Log.e("Auth", "Google Sign-In failed", lastError)
+        onAuthError(googleSignInErrorMessage(lastError))
     }
+}
+
+/**
+ * Says why Google sign-in failed, in words the user (or whoever set up Firebase) can act on,
+ * with the technical reason in brackets so it can be reported.
+ */
+private fun googleSignInErrorMessage(error: Throwable?): String {
+    val raw = listOfNotNull(error?.javaClass?.simpleName, error?.message).joinToString(": ").take(160)
+    val text = raw.lowercase()
+    val reason = when {
+        error is NoCredentialException ->
+            "এই ফোনে কোনো গুগল অ্যাকাউন্ট পাওয়া যায়নি। ফোনের Settings → Accounts-এ গুগল অ্যাকাউন্ট যোগ করে আবার চেষ্টা করুন।"
+        error is FirebaseNetworkException || text.contains("network") ->
+            "ইন্টারনেট সংযোগ নেই। সংযোগ দিয়ে আবার চেষ্টা করুন।"
+        text.contains("28444") || text.contains("developer console") || text.contains("[10]") || text.contains("unregistered") ->
+            "অ্যাপের SHA-1 এই Firebase প্রজেক্টে যোগ করা নেই, তাই গুগল লগইন আটকে গেছে। Firebase Console → Project settings → এই Android অ্যাপে SHA-1 যোগ করে নতুন google-services.json দিন।"
+        text.contains("operation_not_allowed") || text.contains("not enabled") ->
+            "Firebase-এ Google লগইন চালু নেই। Firebase Console → Authentication → Sign-in method → Google চালু করুন।"
+        text.contains("invalid_idp_response") || text.contains("audience") || text.contains("invalid id token") ->
+            "Google অ্যাকাউন্টটি এই Firebase প্রজেক্টের সাথে মেলেনি (Web client ID ভুল)। নতুন google-services.json দিন।"
+        text.contains("user_disabled") || text.contains("disabled") ->
+            "এই অ্যাকাউন্টটি বন্ধ করা আছে।"
+        text.contains("account_exists_with_different_credential") ->
+            "এই ইমেইলে অন্যভাবে (যেমন মোবাইল নম্বর) অ্যাকাউন্ট আছে। সেভাবে লগইন করুন।"
+        else -> "গুগল সাইন-ইন সম্পন্ন হয়নি। মোবাইল নম্বর OTP দিয়েও লগইন করতে পারেন।"
+    }
+    return if (raw.isBlank()) reason else "$reason\n($raw)"
 }
 
 fun signOutRokkhon(

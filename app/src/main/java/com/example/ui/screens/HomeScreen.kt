@@ -287,6 +287,11 @@ fun HomeMatchHubScreen(
                     )
                 }
 
+                if (onOpenPrivateSos != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    PrivateSosStrip(bn = bn, alert = sosAlertActive, onClick = onOpenPrivateSos)
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 SectionHeader(
@@ -796,6 +801,47 @@ private fun HomeTopBar(
                 Text(userInitial, color = RokkhonPalette.Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
         }
+    }
+}
+
+/** Way into the private SOS. Grey like the rest of Home; turns red only while an SOS is live. */
+@Composable
+private fun PrivateSosStrip(bn: Boolean, alert: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (alert) RokkhonPalette.Sos else RokkhonPalette.Subtle)
+            .springClick(pressedScale = 0.98f, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .testTag("home_sos_card"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(if (alert) Color.White.copy(alpha = 0.18f) else Color.White),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(UIcons.Shield, contentDescription = null, tint = if (alert) Color.White else RokkhonPalette.Sos, modifier = Modifier.size(21.dp))
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (alert) (if (bn) "SOS চালু আছে" else "An SOS is live") else (if (bn) "জরুরি SOS" else "Emergency SOS"),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (alert) Color.White else RokkhonPalette.Ink
+            )
+            Text(
+                text = if (alert) (if (bn) "দেখতে ট্যাপ করুন" else "Tap to open")
+                else (if (bn) "বিপদে বিশ্বস্ত মানুষদের লাইভ লোকেশন পাঠান" else "Share live location with people you trust"),
+                fontSize = 12.5.sp,
+                color = if (alert) Color.White.copy(alpha = 0.9f) else RokkhonPalette.Muted
+            )
+        }
+        Icon(UIcons.KeyboardArrowRight, contentDescription = null, tint = if (alert) Color.White else RokkhonPalette.Faint, modifier = Modifier.size(18.dp))
     }
 }
 

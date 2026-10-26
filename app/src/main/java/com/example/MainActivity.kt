@@ -418,8 +418,9 @@ fun RokkhonAuthenticatedShell(
 
     val myDonor = (donorsState as? UiState.Success)?.data?.firstOrNull { it.userId == currentUserId }
 
-    // Private SOS (trusted accounts only). Needs a signed-in Firebase account; guests get 999 only.
-    val sosVm: PrivateSosViewModel? = if (useCloud) viewModel(key = "private_sos_$currentUserId") else null
+    // Private SOS (trusted accounts only). Needs a signed-in Firebase account to share anything.
+    // Shown to everyone; without a signed-in account the SOS screen explains why and offers 999.
+    val sosVm: PrivateSosViewModel? = viewModel(key = "private_sos_${currentUserId}_$useCloud")
     var sosRoute by remember { mutableStateOf<SosRoute?>(null) }
     val watchedSos by (sosVm?.watched ?: remember { MutableStateFlow(emptyList<com.example.data.sos.WatchedSos>()) }).collectAsStateWithLifecycle()
     val ownerSos by SosRuntime.owner.collectAsStateWithLifecycle()
