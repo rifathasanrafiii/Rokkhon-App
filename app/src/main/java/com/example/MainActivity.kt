@@ -95,8 +95,9 @@ import com.example.ui.components.PostBloodRequestDialog
 import com.example.ui.icons.UIcons
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.DonorProfileScreen
+import com.example.ui.screens.FindScreen
 import com.example.ui.screens.HomeMatchHubScreen
-import com.example.ui.screens.RadarMapHubScreen
+import com.example.ui.screens.RewardsScreen
 import com.example.ui.screens.RokkhonSplashScreen
 import com.example.ui.screens.RokkhonTutorialScreen
 import com.example.ui.screens.SosGuardianAndBleScreen
@@ -303,16 +304,20 @@ fun RokkhonAppRoot(
 }
 
 private fun runtimePermissionsToAsk(): Array<String> {
+    // Location picks the nearest area; notifications bring new blood requests.
     val perms = mutableListOf(
-        Manifest.permission.CAMERA,
-        Manifest.permission.RECORD_AUDIO,
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        perms += Manifest.permission.BLUETOOTH_SCAN
-        perms += Manifest.permission.BLUETOOTH_ADVERTISE
-        perms += Manifest.permission.BLUETOOTH_CONNECT
+    // Camera, microphone and Bluetooth are only for SOS evidence and the safety network.
+    if (FeatureFlags.SOS_ENABLED) {
+        perms += Manifest.permission.CAMERA
+        perms += Manifest.permission.RECORD_AUDIO
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            perms += Manifest.permission.BLUETOOTH_SCAN
+            perms += Manifest.permission.BLUETOOTH_ADVERTISE
+            perms += Manifest.permission.BLUETOOTH_CONNECT
+        }
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         perms += Manifest.permission.POST_NOTIFICATIONS
@@ -439,9 +444,8 @@ fun RokkhonAuthenticatedShell(
                     onOpenSosVerification = openSosVerification,
                     onOpenTutorial = onOpenTutorial
                 )
-                RokkhonTab.RADAR_MAP -> RadarMapHubScreen(
+                RokkhonTab.RADAR_MAP -> FindScreen(
                     viewModel = viewModel,
-                    onOpenSosVerification = openSosVerification,
                     onOpenBloodRequestDialog = { showPostBloodRequestDialog = true }
                 )
                 RokkhonTab.SOS_GUARDIAN -> SosGuardianAndBleScreen(
@@ -450,6 +454,7 @@ fun RokkhonAuthenticatedShell(
                     onSimulatePowerTap = onSimulatePowerTap,
                     onOpenSosVerification = openSosVerification
                 )
+                RokkhonTab.REWARDS -> RewardsScreen(viewModel = viewModel)
                 RokkhonTab.DONOR_PROFILE -> Column(modifier = Modifier.fillMaxSize()) {
                     DonorProfileScreen(
                         viewModel = viewModel,
@@ -639,7 +644,7 @@ private fun RokkhonFloatingBottomBar(
 
                 // Centre "+" = post a blood request
                 Box(
-                    modifier = Modifier.weight(0.95f),
+                    modifier = Modifier.weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
@@ -673,6 +678,16 @@ private fun RokkhonFloatingBottomBar(
                     modifier = Modifier
                         .weight(1f)
                         .testTag("nav_tab_sos")
+                )
+
+                RokkhonBottomNavItem(
+                    selected = currentTab == RokkhonTab.REWARDS,
+                    icon = UIcons.CardGiftcard,
+                    label = if (isBn) "রিওয়ার্ড" else "Rewards",
+                    onClick = { onSelectTab(RokkhonTab.REWARDS) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("nav_tab_rewards")
                 )
 
                 RokkhonBottomNavItem(

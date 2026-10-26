@@ -6,7 +6,9 @@ Bangladesh blood-donor network (Kotlin, Jetpack Compose, Firebase). A personal-s
 - **SOS:** in-app SOS or 3x power/volume press (5-second cancel window), real microphone evidence, live GPS until "I'm safe", one-tap 999 call and SMS with a location link to up to 3 trusted contacts.
 - **1 km Bluetooth mesh:** an SOS is broadcast over BLE with the sender's position, a packet id and a hop count. Every Rokkhon phone that hears it alerts its user and re-broadcasts it while it is within 1 km of the sender, so it reaches every app user in that circle without internet; it stops at the 1 km edge or after 6 hops (3 hops for a phone that doesn't know its own location).
 - **Safety network (background):** a foreground service (`data/guard/RokkhonGuardService`) keeps listening and relaying while the app is closed, keeps a low-power location fix, and for signed-in users alerts on new cloud SOS within 1 km. It restarts after a reboot and can be turned off from the SOS tab, Profile or its notification.
-- **Map:** real OpenStreetMap tiles (osmdroid) with donor, patient and SOS pins.
+- **Find:** search every donor and open request by name, area, hospital and blood group, across all 8 divisions, 64 districts and 494 upazilas (area data: nuhil/bangladesh-geocode, MIT).
+- **90-day rule:** after "I donated today" a donor shows as resting with a countdown and becomes available again automatically after 90 days.
+- **Rewards:** points, daily check-in streak and badges on their own tab.
 - **Real data only:** every donor, request and SOS comes from Firestore. Without sign-in (or without Firebase config) lists stay empty and only the offline SOS tools work (Bluetooth mesh, 999, SMS).
 - **Admin web (`admin-web/`):** rewards, location off, account suspend and device ban, written to `admin_controls/global_policy` and applied live in the app.
 
@@ -56,7 +58,7 @@ ROKKHON_SCREENSHOTS=$PWD/screenshots gradle testDebugUnitTest --tests '*Screensh
 ROKKHON_SCREENSHOT_LANG=en ROKKHON_SCREENSHOTS=$PWD/screenshots-en gradle testDebugUnitTest --tests '*ScreenshotTourTest*'
 ```
 
-The Find tab downloads real OpenStreetMap tiles, so rendering it needs network access. Each screenshot also gets a `.tags.json` with the bounds of every tagged element (used by the click-through simulator).
+Each screenshot also gets a `.tags.json` with the bounds of every tagged element (used by the click-through simulator).
 
 ## Design
 

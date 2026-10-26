@@ -1,9 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,569 +17,417 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.FeatureFlags
 import com.example.data.model.AppLanguage
-import com.example.data.model.BANGLADESH_DISTRICTS
-import com.example.data.model.SosAlert
+import com.example.data.model.BloodRequest
+import com.example.data.model.DonorNode
 import com.example.data.model.canDonateTo
 import com.example.ui.components.BangladeshAreaPickerDialog
 import com.example.ui.components.ClinicalBloodRequestCard
-import com.example.ui.components.FalseSosAccountWarningBanner
-import com.example.ui.components.InteractiveBangladeshRadarMap
-import com.example.ui.components.LifelineResponderCard
-import com.example.ui.components.MapPinDetailOverlayCard
-import com.example.ui.components.RokkhonEmptyState
+import com.example.ui.components.RokkhonBottomSheet
 import com.example.ui.components.RokkhonIntents
-import com.example.ui.components.RoundIconButton
 import com.example.ui.components.Segment
 import com.example.ui.components.SegmentedControl
-import com.example.ui.components.SelectedMapPin
-import com.example.ui.components.SosPostCardItem
-import com.example.ui.components.SosVideoAudioInspectorDialog
 import com.example.ui.components.springClick
 import com.example.ui.icons.UIcons
-import com.example.ui.theme.IosSystemGreen
-import com.example.ui.theme.RadarObsidianBg
 import com.example.ui.theme.RokkhonPalette
 import com.example.ui.viewmodel.MapLayerFilter
-import com.example.ui.viewmodel.RokkhonTab
 import com.example.ui.viewmodel.RokkhonViewModel
 import com.example.ui.viewmodel.UiState
 
 /**
- * Screen 2 (Find — Real Interactive Bangladesh Map + 3 Dedicated Tabs:
- * 1. Available Donors
- * 2. Patient Blood Requests
- * 3. Active SOS Alerts (with "Nearby / যাচ্ছি" & "False / ভুয়া (X/3)" buttons, auto-removing at 3 false reports)
+ * Find: search every donor and every open blood request by name, area, hospital and blood group.
+ * A plain native list (the street map was removed); details open in a bottom sheet.
  */
 @Composable
-fun RadarMapHubScreen(
+fun FindScreen(
     viewModel: RokkhonViewModel,
-    recentPowerTaps: Int = 0,
-    onSimulatePowerTap: () -> Unit = {},
-    onOpenSosVerification: () -> Unit,
     onOpenBloodRequestDialog: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val language by viewModel.language.collectAsStateWithLifecycle()
     val selectedDistrict by viewModel.selectedDistrict.collectAsStateWithLifecycle()
     val isAreaFilterEnabled by viewModel.isAreaFilterEnabled.collectAsStateWithLifecycle()
     val isAreaAutoDetected by viewModel.isAreaAutoDetected.collectAsStateWithLifecycle()
-    val userLat by viewModel.userLatitude.collectAsStateWithLifecycle()
-    val userLng by viewModel.userLongitude.collectAsStateWithLifecycle()
-    val userBearing by viewModel.userBearing.collectAsStateWithLifecycle()
     val selectedBloodGroup by viewModel.selectedBloodFilter.collectAsStateWithLifecycle()
-    val savedLayerFilter by viewModel.mapLayerFilter.collectAsStateWithLifecycle()
-    // With SOS hidden, the SOS layer falls back to donors.
-    val layerFilter = if (!FeatureFlags.SOS_ENABLED && savedLayerFilter == MapLayerFilter.SOS_ALERTS_ONLY) MapLayerFilter.DONORS_ONLY else savedLayerFilter
+    val onlyAvailable by viewModel.onlyAvailableDonorsFilter.collectAsStateWithLifecycle()
+    val layerFilter by viewModel.mapLayerFilter.collectAsStateWithLifecycle()
     val pledgedIds by viewModel.pledgedRequestIds.collectAsStateWithLifecycle()
-    val respondedSosIds by viewModel.respondedSosIds.collectAsStateWithLifecycle()
-    val reportedFalseSosIds by viewModel.reportedFalseSosIds.collectAsStateWithLifecycle()
-    val isLiveLocationActive by viewModel.isLiveLocationSharingActive.collectAsStateWithLifecycle()
-    val activePlaybackAlertId by viewModel.audioVerifier.activePlaybackAlertId.collectAsStateWithLifecycle()
-    val playbackSeconds by viewModel.audioVerifier.playbackProgressSeconds.collectAsStateWithLifecycle()
-    val waveformBars by viewModel.audioVerifier.waveformSamples.collectAsStateWithLifecycle()
-    val falseSosWarningBanner by viewModel.falseSosWarningBanner.collectAsStateWithLifecycle()
-    val falseSosPenaltyCount by viewModel.falseSosPenaltyCount.collectAsStateWithLifecycle()
-
     val donorsState by viewModel.donorNodesState.collectAsStateWithLifecycle()
     val requestsState by viewModel.bloodRequestsState.collectAsStateWithLifecycle()
-    val sosState by viewModel.sosAlertsState.collectAsStateWithLifecycle()
-    val bleBeacons by viewModel.bleBeacons.collectAsStateWithLifecycle()
 
-    val allDonors = (donorsState as? UiState.Success)?.data.orEmpty()
-    val allRequests = (requestsState as? UiState.Success)?.data.orEmpty()
-    val cloudSosAlerts = (sosState as? UiState.Success)?.data.orEmpty()
-    // SOS heard only over the Bluetooth mesh (sender or this phone offline) are listed too.
-    val allSosAlerts = cloudSosAlerts + bluetoothOnlySosAlerts(bleBeacons, cloudSosAlerts)
+    val bn = language == AppLanguage.BENGALI
+    val showRequests = layerFilter == MapLayerFilter.BLOOD_REQUESTS_ONLY
+    var query by remember { mutableStateOf("") }
+    var showAreaPicker by remember { mutableStateOf(false) }
+    var selectedDonor by remember { mutableStateOf<DonorNode?>(null) }
+    var selectedRequest by remember { mutableStateOf<BloodRequest?>(null) }
 
-    val areaDonors = allDonors.filter { donor ->
-        donor.userId != viewModel.currentUserId &&
-            donor.isEligibleNow &&
-            (selectedBloodGroup == null || canDonateTo(donor.bloodGroup, selectedBloodGroup!!)) &&
-            (!isAreaFilterEnabled || selectedDistrict.matchesArea(donor.district))
-    }.sortedByDescending { it.bloodGroup == selectedBloodGroup }
+    val q = query.trim().lowercase()
+    val donors = (donorsState as? UiState.Success)?.data.orEmpty().filter { d ->
+        d.userId != viewModel.currentUserId &&
+            (!onlyAvailable || d.isEligibleNow) &&
+            (selectedBloodGroup == null || canDonateTo(d.bloodGroup, selectedBloodGroup!!)) &&
+            (!isAreaFilterEnabled || selectedDistrict.matchesArea(d.district)) &&
+            (q.isEmpty() || d.displayName.lowercase().contains(q) || d.district.lowercase().contains(q))
+    }.sortedWith(compareByDescending<DonorNode> { it.isEligibleNow }.thenByDescending { it.bloodGroup == selectedBloodGroup })
 
-    val areaOpenRequests = allRequests.filter { req ->
-        req.status == "OPEN" &&
-            (selectedBloodGroup == null || req.bloodGroup == selectedBloodGroup) &&
-            (!isAreaFilterEnabled || selectedDistrict.matchesArea(req.district))
+    val requests = (requestsState as? UiState.Success)?.data.orEmpty().filter { r ->
+        r.status == "OPEN" &&
+            (selectedBloodGroup == null || r.bloodGroup == selectedBloodGroup) &&
+            (!isAreaFilterEnabled || selectedDistrict.matchesArea(r.district)) &&
+            (q.isEmpty() || r.patientName.lowercase().contains(q) || r.hospitalName.lowercase().contains(q) || r.district.lowercase().contains(q))
     }
 
-    // Active SOS alerts stay visible for 24 hours even if falseAlarmReports >= 3 (no immediate auto-removal)
-    val activeSosAlerts = if (!FeatureFlags.SOS_ENABLED) emptyList() else allSosAlerts.filter { alert ->
-        alert.status == "ACTIVE" &&
-            !alert.isExpiredAfter24Hours() &&
-            (!isAreaFilterEnabled || selectedDistrict.matchesArea(alert.district))
-    }.ifEmpty {
-        // Fallback so active SOS alerts across Bangladesh remain visible if none in current sub-area
-        allSosAlerts.filter { it.status == "ACTIVE" && !it.isExpiredAfter24Hours() }
-    }
-
-    var selectedPin by remember { mutableStateOf<SelectedMapPin?>(null) }
-    var selectedSosForMediaModal by remember { mutableStateOf<SosAlert?>(null) }
-    var showAreaPickerDialog by remember { mutableStateOf(false) }
-
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(RadarObsidianBg)
+            .background(RokkhonPalette.Background)
+            .testTag("find_screen")
     ) {
-        // 1. Top Real Bangladesh Map Area (50% of screen)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.50f)
-        ) {
-            InteractiveBangladeshRadarMap(
-                centerLat = userLat,
-                centerLng = userLng,
-                donors = areaDonors,
-                bloodRequests = areaOpenRequests,
-                sosAlerts = activeSosAlerts,
-                bleBeacons = bleBeacons,
-                selectedBloodGroup = selectedBloodGroup,
-                layerFilter = layerFilter,
-                onPinSelected = { selectedPin = it },
-                showLiveFloatingCard = (selectedPin == null),
-                isLiveLocationActive = isLiveLocationActive,
-                selectedAreaName = if (language == AppLanguage.BENGALI) selectedDistrict.nameBn else selectedDistrict.nameEn,
-                userLat = userLat,
-                userLng = userLng,
-                userBearing = userBearing,
-                onRefreshLiveGps = { viewModel.refreshGpsLocation() },
-                bengali = language == AppLanguage.BENGALI,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // Top-Left Auto GPS + Search All 64 Districts + Quick Area Filter Strip inside Map
-            Row(
+        item(key = "find_header") {
+            Column(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 12.dp, top = 10.dp, end = 64.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp)
             ) {
-                Surface(
-                    color = Color.Black,
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .border(0.8.dp, Color.White.copy(alpha = 0.28f), CircleShape)
-                        .clickable { showAreaPickerDialog = true }
-                        .testTag("map_open_area_search_chip")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = UIcons.Search,
-                            contentDescription = "Search All 64 Districts",
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) {
-                                "সব জেলা (${selectedDistrict.nameBn})"
-                            } else {
-                                "All 64 Areas: ${selectedDistrict.nameEn}"
-                            },
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Surface(
-                    color = if (isAreaAutoDetected) IosSystemGreen else Color(0xFF000000).copy(alpha = 0.9f),
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .border(0.8.dp, Color.White.copy(alpha = 0.22f), CircleShape)
-                        .clickable { viewModel.autoSelectAreaFromPermission(notifyUser = true) }
-                        .testTag("map_area_auto_gps_chip")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = UIcons.MyLocation,
-                            contentDescription = "Auto GPS",
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) "অটো জিপিএস" else "Auto GPS",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Surface(
-                    color = Color(0xFF000000).copy(alpha = 0.9f),
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .border(0.8.dp, Color.White.copy(alpha = 0.18f), CircleShape)
-                        .clickable { viewModel.setBloodFilter(null) }
-                        .testTag("blood_filter_all")
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = if (selectedBloodGroup == null) "All Blood Groups" else "Group: $selectedBloodGroup (Reset)",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelMedium,
+                        text = if (bn) "খুঁজুন" else "Find",
+                        fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                        color = RokkhonPalette.Ink,
+                        modifier = Modifier.weight(1f)
                     )
-                }
-
-                BANGLADESH_DISTRICTS.take(12).forEach { dist ->
-                    val isSel = dist.areaKey == selectedDistrict.areaKey
-                    Surface(
-                        color = if (isSel) Color.Black else Color(0xFF000000).copy(alpha = 0.85f),
-                        shape = CircleShape,
-                        modifier = Modifier.clickable { viewModel.selectDistrict(dist, isManual = true) }
-                    ) {
-                        Text(
-                            text = dist.nameEn,
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
-                        )
-                    }
-                }
-            }
-
-            if (selectedPin != null) {
-                MapPinDetailOverlayCard(
-                    pin = selectedPin!!,
-                    language = language,
-                    currentUserId = viewModel.currentUserId,
-                    hasPledged = (selectedPin as? SelectedMapPin.RequestPin)?.let {
-                        it.request.id in pledgedIds || viewModel.hasUserPledged(it.request)
-                    } ?: false,
-                    hasRespondedSos = (selectedPin as? SelectedMapPin.SosPin)?.let {
-                        it.alert.id in respondedSosIds || viewModel.hasUserRespondedSos(it.alert)
-                    } ?: false,
-                    hasReportedFalseSos = (selectedPin as? SelectedMapPin.SosPin)?.let {
-                        it.alert.id in reportedFalseSosIds || viewModel.hasUserReportedFalseSos(it.alert)
-                    } ?: false,
-                    onDismiss = { selectedPin = null },
-                    onPledgeBlood = { viewModel.pledgeToDonate(it) },
-                    onRespondSos = { viewModel.respondToSos(it) },
-                    onReportFalseSos = { alert ->
-                        viewModel.flagFalseAlarm(alert)
-                    },
-                    onResolveOwnSos = { alert ->
-                        viewModel.resolveOwnSos(alert.id)
-                        selectedPin = null
-                    },
-                    onOpenSosVideoAudio = { alert ->
-                        viewModel.markSosEvidenceInspected(alert.id)
-                        selectedSosForMediaModal = alert
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(14.dp)
-                        .fillMaxWidth()
-                )
-            }
-        }
-
-        // 2. Bottom Rounded White Sheet with 3 Tabs: Donors | Patients | Active SOS
-        Surface(
-            color = Color.White,
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.50f)
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item {
-                    Spacer(modifier = Modifier.height(10.dp))
                     Box(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black)
+                            .springClick(onClick = onOpenBloodRequestDialog)
+                            .testTag("new_blood_request_fab"),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .width(40.dp)
-                                .height(4.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFE2E2E2))
-                        )
+                        Icon(UIcons.Add, contentDescription = if (bn) "রক্তের আবেদন" else "Request blood", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
-                    // Area title + one round "+" — the tabs below say the rest
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .springClick(pressedScale = 0.97f) { showAreaPickerDialog = true }
-                                .testTag("find_area_title"),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isAreaAutoDetected) IosSystemGreen else RokkhonPalette.Primary)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (language == AppLanguage.BENGALI) selectedDistrict.nameBn else selectedDistrict.nameEn,
-                                fontSize = 20.sp,
-                                color = RokkhonPalette.Ink,
-                                fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1
-                            )
-                            Icon(
-                                imageVector = UIcons.KeyboardArrowDown,
-                                contentDescription = "Change Area",
-                                tint = RokkhonPalette.Primary,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        RoundIconButton(
-                            icon = UIcons.Add,
-                            onClick = onOpenBloodRequestDialog,
-                            filled = true,
-                            contentDescription = if (language == AppLanguage.BENGALI) "রক্তের আবেদন" else "Post request",
-                            testTag = "new_blood_request_fab"
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val bnTabs = language == AppLanguage.BENGALI
-                    SegmentedControl(
-                        segments = listOfNotNull(
-                            Segment("${if (bnTabs) "ডোনার" else "Donors"} ${areaDonors.size}", UIcons.People, "map_filter_tab_available_donors"),
-                            Segment("${if (bnTabs) "রোগী" else "Patients"} ${areaOpenRequests.size}", UIcons.LocalHospital, "map_filter_tab_patient_requests"),
-                            if (FeatureFlags.SOS_ENABLED) Segment("SOS ${activeSosAlerts.size}", UIcons.Shield, "map_filter_tab_sos_alerts") else null
-                        ),
-                        selectedIndex = when (layerFilter) {
-                            MapLayerFilter.BLOOD_REQUESTS_ONLY -> 1
-                            MapLayerFilter.SOS_ALERTS_ONLY -> 2
-                            else -> 0
-                        },
-                        onSelect = { index ->
-                            viewModel.setMapLayerFilter(
-                                when (index) {
-                                    1 -> MapLayerFilter.BLOOD_REQUESTS_ONLY
-                                    2 -> MapLayerFilter.SOS_ALERTS_ONLY
-                                    else -> MapLayerFilter.DONORS_ONLY
-                                }
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        height = 44.dp
+                // Where: tap to pick any district or upazila
+                Row(
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .clip(CircleShape)
+                        .springClick(pressedScale = 0.97f) { showAreaPicker = true }
+                        .padding(vertical = 6.dp)
+                        .testTag("find_area_title"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(UIcons.LocationOn, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(17.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isAreaFilterEnabled) (if (bn) selectedDistrict.nameBn else selectedDistrict.nameEn) else (if (bn) "সারা বাংলাদেশ" else "All Bangladesh"),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = RokkhonPalette.Ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    Icon(UIcons.KeyboardArrowDown, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(18.dp))
+                    if (isAreaAutoDetected) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (bn) "জিপিএস" else "GPS",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = RokkhonPalette.Muted,
+                            modifier = Modifier.clip(CircleShape).background(RokkhonPalette.Subtle).padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
                 }
 
-                when (layerFilter) {
-                    MapLayerFilter.BLOOD_REQUESTS_ONLY -> {
-                        if (areaOpenRequests.isEmpty()) {
-                            item {
-                                RokkhonEmptyState(
-                                    icon = UIcons.LocalHospital,
-                                    title = if (language == AppLanguage.BENGALI) "কোনো খোলা রক্তের আবেদন নেই" else "No open blood requests",
-                                    body = if (language == AppLanguage.BENGALI) "এই এলাকায় এখন কেউ রক্ত খুঁজছেন না। কারও রক্ত লাগলে আবেদন করুন, মিলে যাওয়া ডোনারদের জানানো হবে।" else "Nobody is looking for blood here right now. Post a request and matching donors are notified.",
-                                    actionLabel = if (language == AppLanguage.BENGALI) "রক্তের আবেদন করুন" else "Request blood",
-                                    onAction = { onOpenBloodRequestDialog() },
-                                    testTag = "find_empty_requests"
-                                )
-                            }
-                        } else {
-                            items(areaOpenRequests, key = { "map_req_${it.id}" }) { req ->
-                                val hasPledged = req.id in pledgedIds || viewModel.hasUserPledged(req)
-                                ClinicalBloodRequestCard(
-                                    req = req,
-                                    language = language,
-                                    isOwner = req.userId == viewModel.currentUserId,
-                                    hasPledged = hasPledged,
-                                    onDonateClick = { viewModel.pledgeToDonate(req) },
-                                    onCallClick = {
-                                        RokkhonIntents.dial(context, req.contactPhone, language)
-                                    },
-                                    onFulfillClick = { viewModel.fulfillOwnBloodRequest(req.id) }
-                                )
-                            }
-                        }
-                    }
+                Spacer(modifier = Modifier.height(12.dp))
 
-                    MapLayerFilter.SOS_ALERTS_ONLY -> {
-                        if (falseSosWarningBanner != null || falseSosPenaltyCount > 0) {
-                            item {
-                                FalseSosAccountWarningBanner(
-                                    language = language,
-                                    warningMessage = falseSosWarningBanner,
-                                    penaltyCount = falseSosPenaltyCount,
-                                    onDismiss = { viewModel.dismissFalseSosWarningBanner() }
-                                )
-                            }
-                        }
-
-                        if (activeSosAlerts.isEmpty()) {
-                            item {
-                                RokkhonEmptyState(
-                                    icon = UIcons.Shield,
-                                    title = if (language == AppLanguage.BENGALI) "এখন কোনো সক্রিয় SOS নেই" else "No active SOS right now",
-                                    body = if (language == AppLanguage.BENGALI) "এই এলাকাটি এই মুহূর্তে নিরাপদ। বিপদে পড়লে SOS পাঠান, ১ কি.মি.-এর মধ্যে সবাই ব্লুটুথ ও ইন্টারনেটে জানতে পারবে।" else "This area is quiet. If you are in danger, send an SOS and everyone within 1 km is alerted over Bluetooth and internet.",
-                                    actionLabel = if (language == AppLanguage.BENGALI) "SOS পাঠান" else "Send SOS",
-                                    onAction = { viewModel.selectTab(RokkhonTab.SOS_GUARDIAN) },
-                                    testTag = "find_empty_sos"
-                                )
-                            }
-                        } else {
-                            items(activeSosAlerts, key = { "find_sos_${it.id}" }) { alert ->
-                                val isPlayingThisAlert = activePlaybackAlertId == alert.id
-                                val isMySos = alert.userId == viewModel.currentUserId
-                                val hasResponded = alert.id in respondedSosIds || viewModel.hasUserRespondedSos(alert)
-                                val hasReportedFalse = alert.id in reportedFalseSosIds || viewModel.hasUserReportedFalseSos(alert)
-                                val distanceKm = alert.distanceFromKm(userLat, userLng)
-
-                                SosPostCardItem(
-                                    alert = alert,
-                                    language = language,
-                                    isMySos = isMySos,
-                                    isHistoryItem = false,
-                                    hasRespondedNearby = hasResponded,
-                                    hasReportedFalse = hasReportedFalse,
-                                    distanceKm = distanceKm,
-                                    isPlaying = isPlayingThisAlert,
-                                    progressSeconds = if (isPlayingThisAlert) playbackSeconds else 0f,
-                                    waveformBars = waveformBars,
-                                    onCardTapOpenVideoAudio = {
-                                        viewModel.markSosEvidenceInspected(alert.id)
-                                        selectedSosForMediaModal = alert
-                                    },
-                                    onToggleInlinePlay = {
-                                        viewModel.markSosEvidenceInspected(alert.id)
-                                        viewModel.audioVerifier.togglePlayFiveSecondClip(
-                                            scope = scope,
-                                            alertId = alert.id
-                                        )
-                                    },
-                                    onRespond = { viewModel.respondToSos(alert) },
-                                    onReportFalseAlarm = { viewModel.flagFalseAlarm(alert) },
-                                    onMarkSafeOwnerOnly = { viewModel.resolveOwnSos(alert.id) }
-                                )
-                            }
-                        }
-                    }
-
-                    else -> {
-                        if (areaDonors.isEmpty()) {
-                            item {
-                                RokkhonEmptyState(
-                                    icon = UIcons.People,
-                                    title = if (language == AppLanguage.BENGALI) "এই এলাকায় এখনো কোনো ডোনার নেই" else "No donors in this area yet",
-                                    body = if (language == AppLanguage.BENGALI) {
-                                        "অন্য এলাকা বেছে দেখুন, অথবা নিজে ডোনার হয়ে প্রোফাইলে রক্তের গ্রুপ ও ফোন নম্বর দিন।"
-                                    } else {
-                                        "Try another area, or become a donor by adding your blood group and phone in your profile."
-                                    },
-                                    actionLabel = if (language == AppLanguage.BENGALI) "ডোনার হোন" else "Become a donor",
-                                    onAction = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) },
-                                    testTag = "find_empty_donors"
-                                )
-                            }
-                        }
-                        items(areaDonors, key = { it.id.ifBlank { it.userId } }) { donor ->
-                            LifelineResponderCard(
-                                donor = donor,
-                                language = language,
-                                onCallClick = {
-                                    RokkhonIntents.dial(context, donor.contactPhone, language)
-                                }
+                // Search box
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(RokkhonPalette.Subtle)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(UIcons.Search, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = if (showRequests) (if (bn) "রোগী, হাসপাতাল বা এলাকা" else "Patient, hospital or area") else (if (bn) "নাম বা এলাকা" else "Name or area"),
+                                fontSize = 16.sp,
+                                color = RokkhonPalette.Muted
                             )
                         }
+                        BasicTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            singleLine = true,
+                            textStyle = TextStyle(fontSize = 16.sp, color = RokkhonPalette.Ink),
+                            cursorBrush = SolidColor(Color.Black),
+                            modifier = Modifier.fillMaxWidth().testTag("find_search_input")
+                        )
+                    }
+                    if (query.isNotEmpty()) {
+                        Icon(
+                            UIcons.Close,
+                            contentDescription = if (bn) "মুছুন" else "Clear",
+                            tint = RokkhonPalette.Muted,
+                            modifier = Modifier.size(20.dp).springClick { query = "" }
+                        )
                     }
                 }
 
-                item { Spacer(modifier = Modifier.height(16.dp)) }
+                Spacer(modifier = Modifier.height(14.dp))
             }
         }
+
+        item(key = "find_groups") {
+            BloodGroupChipRow(
+                language = language,
+                selected = selectedBloodGroup,
+                onSelect = { viewModel.setBloodFilter(it) },
+                contentPadding = 16.dp
+            )
+        }
+
+        item(key = "find_tabs") {
+            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)) {
+                SegmentedControl(
+                    segments = listOf(
+                        Segment("${if (bn) "ডোনার" else "Donors"} ${donors.size}", UIcons.People, "map_filter_tab_available_donors"),
+                        Segment("${if (bn) "রোগী" else "Patients"} ${requests.size}", UIcons.LocalHospital, "map_filter_tab_patient_requests")
+                    ),
+                    selectedIndex = if (showRequests) 1 else 0,
+                    onSelect = { viewModel.setMapLayerFilter(if (it == 1) MapLayerFilter.BLOOD_REQUESTS_ONLY else MapLayerFilter.DONORS_ONLY) },
+                    modifier = Modifier.fillMaxWidth(),
+                    height = 44.dp
+                )
+                if (!showRequests) {
+                    Row(
+                        modifier = Modifier
+                            .padding(top = 10.dp)
+                            .clip(CircleShape)
+                            .springClick { viewModel.setOnlyAvailableDonorsFilter(!onlyAvailable) }
+                            .padding(vertical = 4.dp)
+                            .testTag("find_available_toggle"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = UIcons.CheckCircle,
+                            contentDescription = null,
+                            tint = if (onlyAvailable) RokkhonPalette.Positive else RokkhonPalette.Faint,
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (bn) "শুধু যারা এখন রক্ত দিতে পারবেন" else "Only those who can give now",
+                            fontSize = 14.sp,
+                            color = if (onlyAvailable) RokkhonPalette.Ink else RokkhonPalette.Muted
+                        )
+                    }
+                }
+            }
+        }
+
+        if (!showRequests) {
+            if (donors.isEmpty()) {
+                item(key = "find_empty_donors") {
+                    FindEmpty(
+                        title = if (bn) "কোনো ডোনার পাওয়া যায়নি" else "No donors found",
+                        body = if (bn) "অন্য এলাকা বা গ্রুপ বেছে দেখুন।" else "Try another area or blood group.",
+                        testTag = "find_empty_donors"
+                    )
+                }
+            } else {
+                items(donors, key = { "find_donor_${it.id.ifBlank { it.userId }}" }) { donor ->
+                    DonorRow(
+                        donor = donor,
+                        language = language,
+                        onClick = { selectedDonor = donor },
+                        onCall = { RokkhonIntents.dial(context, donor.contactPhone, language) },
+                        modifier = Modifier.animateItem()
+                    )
+                }
+            }
+        } else {
+            if (requests.isEmpty()) {
+                item(key = "find_empty_requests") {
+                    FindEmpty(
+                        title = if (bn) "কোনো খোলা আবেদন নেই" else "No open requests",
+                        body = if (bn) "এই মুহূর্তে এখানে কেউ রক্ত খুঁজছেন না।" else "Nobody here is looking for blood right now.",
+                        testTag = "find_empty_requests"
+                    )
+                }
+            } else {
+                items(requests, key = { "find_req_${it.id.ifBlank { it.patientName }}" }) { req ->
+                    RequestRow(req = req, language = language, onClick = { selectedRequest = req }, modifier = Modifier.animateItem())
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
     }
 
-    if (showAreaPickerDialog) {
+    if (showAreaPicker) {
         BangladeshAreaPickerDialog(
             language = language,
             selectedDistrict = selectedDistrict,
             isAutoGpsActive = isAreaAutoDetected,
             onSelectAutoGps = { viewModel.autoSelectAreaFromPermission(notifyUser = true) },
-            onSelectDistrict = { dist -> viewModel.selectDistrict(dist, isManual = true) },
-            onDismiss = { showAreaPickerDialog = false }
+            onSelectDistrict = { viewModel.selectDistrict(it, isManual = true) },
+            onDismiss = { showAreaPicker = false }
         )
     }
 
-    if (selectedSosForMediaModal != null) {
-        val alert = selectedSosForMediaModal!!
-        val isPlayingThisAlert = activePlaybackAlertId == alert.id
-        SosVideoAudioInspectorDialog(
-            language = language,
-            alert = alert,
-            isOwner = alert.userId == viewModel.currentUserId,
-            isPlaying = isPlayingThisAlert,
-            progressSeconds = if (isPlayingThisAlert) playbackSeconds else 0f,
-            waveformBars = waveformBars,
-            onTogglePlay = {
-                viewModel.markSosEvidenceInspected(alert.id)
-                viewModel.audioVerifier.togglePlayFiveSecondClip(
-                    scope = scope,
-                    alertId = alert.id
-                )
-            },
-            onRespond = { viewModel.respondToSos(alert) },
-            onMarkSafeOwnerOnly = {
-                viewModel.resolveOwnSos(alert.id)
-                selectedSosForMediaModal = null
-            },
-            onDismiss = {
-                viewModel.audioVerifier.stopPlayback()
-                selectedSosForMediaModal = null
+    selectedDonor?.let { donor ->
+        RokkhonBottomSheet(onDismiss = { selectedDonor = null }, testTag = "find_donor_sheet") {
+            DonorDetail(
+                donor = donor,
+                language = language,
+                onCall = { RokkhonIntents.dial(context, donor.contactPhone, language) },
+                onSms = {
+                    RokkhonIntents.sms(
+                        context,
+                        donor.contactPhone,
+                        if (bn) "আসসালামু আলাইকুম, রক্ষণ অ্যাপ থেকে আপনার নম্বর পেয়েছি। ${donor.bloodGroup} রক্তের প্রয়োজন।" else "Hi, I found you on Rokkhon. We need ${donor.bloodGroup} blood.",
+                        language
+                    )
+                }
+            )
+        }
+    }
+
+    selectedRequest?.let { req ->
+        RokkhonBottomSheet(onDismiss = { selectedRequest = null }, testTag = "find_request_sheet") {
+            ClinicalBloodRequestCard(
+                req = req,
+                language = language,
+                isOwner = req.userId == viewModel.currentUserId,
+                hasPledged = req.id in pledgedIds || viewModel.hasUserPledged(req),
+                onDonateClick = { viewModel.pledgeToDonate(req) },
+                onCallClick = { RokkhonIntents.dial(context, req.contactPhone, language) },
+                onFulfillClick = {
+                    viewModel.fulfillOwnBloodRequest(req.id)
+                    selectedRequest = null
+                }
+            )
+        }
+    }
+}
+
+/** A patient's request as a list row: group, patient, hospital, how much and when. */
+@Composable
+private fun RequestRow(req: BloodRequest, language: AppLanguage, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val bn = language == AppLanguage.BENGALI
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .springClick(pressedScale = 0.98f, onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(50.dp).clip(CircleShape).background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(req.bloodGroup, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = req.patientName.ifBlank { req.requesterName },
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = RokkhonPalette.Ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (req.urgencyLevel == "CRITICAL") {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (bn) "জরুরি" else "Urgent", color = RokkhonPalette.Sos, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Text(
+                    text = req.hospitalName + (if (req.district.isNotBlank()) " · " + req.district.substringBefore(",") else ""),
+                    fontSize = 13.5.sp,
+                    color = RokkhonPalette.Muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (bn) "${bnDigits(req.unitsNeeded.toInt())} ব্যাগ · ${req.neededDateTime}" else "${req.unitsNeeded} bag(s) · ${req.neededDateTime}",
+                    fontSize = 13.sp,
+                    color = RokkhonPalette.Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(UIcons.KeyboardArrowRight, contentDescription = null, tint = RokkhonPalette.Faint, modifier = Modifier.size(22.dp))
+        }
+        Box(
+            modifier = Modifier
+                .padding(start = 80.dp, end = 16.dp)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(RokkhonPalette.Divider)
         )
+    }
+}
+
+@Composable
+private fun FindEmpty(title: String, body: String, testTag: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 36.dp)
+            .testTag(testTag),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier.size(64.dp).clip(CircleShape).background(RokkhonPalette.Subtle),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(UIcons.Search, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(26.dp))
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink, textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(body, fontSize = 14.sp, color = RokkhonPalette.Muted, textAlign = TextAlign.Center)
     }
 }

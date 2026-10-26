@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.AppLanguage
+import com.example.data.model.BANGLADESH_AREAS
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.isValidBangladeshMobile
 import com.example.ui.components.BangladeshAreaPickerDialog
@@ -530,7 +531,8 @@ fun PostBloodRequestDialog(
     }
 
     if (showAreaPickerDialog) {
-        val currentDistObj = BANGLADESH_DISTRICTS.firstOrNull { it.matchesArea(district) } ?: BANGLADESH_DISTRICTS.first()
+        val currentDistObj = BANGLADESH_AREAS.firstOrNull { it.nameEn.equals(district, ignoreCase = true) }
+            ?: BANGLADESH_DISTRICTS.firstOrNull { it.matchesArea(district) } ?: BANGLADESH_DISTRICTS.first()
         BangladeshAreaPickerDialog(
             language = language,
             selectedDistrict = currentDistObj,

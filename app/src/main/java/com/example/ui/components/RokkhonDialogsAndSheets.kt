@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.AppLanguage
-import com.example.data.model.BANGLADESH_DISTRICTS
+import com.example.data.model.BANGLADESH_AREAS
 import com.example.data.model.BANGLADESH_DIVISIONS
 import com.example.data.model.BangladeshDistrict
 import com.example.data.model.NotificationKind
@@ -60,7 +60,7 @@ import com.example.ui.theme.PinCrimsonRed
 
 /**
  * Searchable All-Bangladesh Area Selector Sheet/Dialog:
- * Covers all 64 districts of Bangladesh across all 8 divisions + major Dhaka & Chattogram areas.
+ * Every area of Bangladesh: city thanas, all 64 districts and all 494 upazilas, by division.
  */
 @Composable
 fun BangladeshAreaPickerDialog(
@@ -75,7 +75,7 @@ fun BangladeshAreaPickerDialog(
     var selectedDivisionKey by remember { mutableStateOf("ALL") }
 
     val filteredDistricts = remember(searchQuery, selectedDivisionKey) {
-        BANGLADESH_DISTRICTS.filter { dist ->
+        BANGLADESH_AREAS.filter { dist ->
             val matchesDivision = selectedDivisionKey == "ALL" ||
                 dist.divisionEn.equals(selectedDivisionKey, ignoreCase = true)
             matchesDivision && dist.matchesSearch(searchQuery)
@@ -144,9 +144,9 @@ fun BangladeshAreaPickerDialog(
                                 )
                                 Text(
                                     text = if (language == AppLanguage.BENGALI) {
-                                        "৮টি বিভাগ, ৬৪ জেলা এবং ঢাকা ও চট্টগ্রামের প্রধান থানা (${BANGLADESH_DISTRICTS.size}টি এলাকা)"
+                                        "৮টি বিভাগ, ৬৪টি জেলা ও সব ৪৯৪টি উপজেলা"
                                     } else {
-                                        "All 64 districts + Dhaka & Chattogram areas (${BANGLADESH_DISTRICTS.size} locations)"
+                                        "8 divisions, 64 districts and all 494 upazilas"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF5E5E5E)

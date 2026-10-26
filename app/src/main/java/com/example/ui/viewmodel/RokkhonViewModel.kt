@@ -13,6 +13,7 @@ import com.example.data.guard.RokkhonGuardService
 import com.example.data.location.LocationTracker
 import com.example.data.media.LiveAudioVerifier
 import com.example.data.model.AppLanguage
+import com.example.data.model.BANGLADESH_AREAS
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.BangladeshDistrict
 import com.example.data.model.BleSosBeacon
@@ -63,6 +64,7 @@ enum class RokkhonTab {
     HOME_MATCH,
     RADAR_MAP,
     SOS_GUARDIAN,
+    REWARDS,
     DONOR_PROFILE
 }
 
@@ -127,7 +129,7 @@ class RokkhonViewModel(
     val mapLayerFilter: StateFlow<MapLayerFilter> = _mapLayerFilter.asStateFlow()
 
     private val _selectedDistrict = MutableStateFlow(
-        BANGLADESH_DISTRICTS.firstOrNull { it.areaKey == prefs.getString(KEY_AREA_KEY, "mirpur") }
+        BANGLADESH_AREAS.firstOrNull { it.areaKey == prefs.getString(KEY_AREA_KEY, "mirpur") }
             ?: BANGLADESH_DISTRICTS.first()
     )
     val selectedDistrict: StateFlow<BangladeshDistrict> = _selectedDistrict.asStateFlow()
@@ -1204,6 +1206,26 @@ class RokkhonViewModel(
             }
         }
         return true
+    }
+
+    /**
+     * "I donated today": stores today's date. The donor then shows as resting and comes back as
+     * available by itself 90 days later (isEligibleNow is computed from the date), with nothing
+     * to switch back on. No points for this, so it can't be tapped for rewards.
+     */
+    fun markDonatedToday() {
+        val me = myDonorNode()
+        if (me == null) {
+            showToast("আগে ডোনার প্রোফাইল সেভ করুন", "Save your donor profile first")
+            return
+        }
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        if (saveDonorProfile(me.displayName, me.bloodGroup, me.isAvailableDonor, me.district, me.contactPhone, today)) {
+            showToast(
+                "ধন্যবাদ! ৯০ দিন পর আপনি আবার নিজে থেকেই সক্রিয় হয়ে যাবেন",
+                "Thank you! You'll be active again automatically in 90 days"
+            )
+        }
     }
 
     fun toggleDonorActiveStatus(currentNode: DonorNode?, newStatus: Boolean) {

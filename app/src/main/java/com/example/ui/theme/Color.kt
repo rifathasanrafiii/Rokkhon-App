@@ -9,20 +9,15 @@ import androidx.compose.ui.graphics.Color
  * (The older token names are kept so every screen picks the new values up.)
  */
 val IosSystemRed = Color(0xFF000000)       // Primary: buttons, selected states, key icons
-val IosDeepCrimson = Color(0xFF000000)
 val PinCrimsonRed = Color(0xFFE11900)      // SOS / emergency only
 val LifelineBlush = Color(0xFFF3F3F3)      // Icon circles, chips
-val LifelineBlushBorder = Color(0xFFE2E2E2)
 
 val IosSystemGreen = Color(0xFF05944F)     // Available / safe
 val IosSystemBlue = Color(0xFF276EF1)      // Your GPS position
 val IosSystemOrange = Color(0xFFB86E00)    // Warnings
-val IosSystemIndigo = Color(0xFF545454)
 
 // Dark surfaces (splash, camera preview, map overlays)
-val RadarObsidianBg = Color(0xFF000000)
 val RadarDarkMaroon = Color(0xFF141414)
-val RadarGlassCard = Color(0xFF1F1F1F)
 
 // Light surfaces
 val IosLightBackground = Color(0xFFFFFFFF)

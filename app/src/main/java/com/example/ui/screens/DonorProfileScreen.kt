@@ -1,10 +1,10 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,8 +29,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -51,14 +51,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.AppLanguage
-import com.example.data.model.BANGLADESH_DISTRICTS
-import com.example.data.model.GUARDIAN_REWARD_TIERS
+import com.example.data.model.BANGLADESH_AREAS
+import com.example.data.model.DONATION_GAP_DAYS
+import com.example.data.model.daysUntilEligible
 import com.example.data.model.isValidBangladeshMobile
 import com.example.data.model.parseDonationDateMillis
 import com.example.ui.components.BangladeshAreaPickerDialog
@@ -66,11 +68,10 @@ import com.example.ui.components.RokkhonBottomSheet
 import com.example.ui.components.RollingNumber
 import com.example.ui.components.RoundIconButton
 import com.example.ui.components.SectionHeader
-import com.example.ui.components.enterOnce
 import com.example.ui.components.springClick
 import com.example.ui.icons.UIcons
-import com.example.ui.theme.IosSystemGreen
 import com.example.ui.theme.RokkhonPalette
+import com.example.ui.viewmodel.RokkhonTab
 import com.example.ui.viewmodel.RokkhonViewModel
 import com.example.ui.viewmodel.UiState
 
@@ -113,6 +114,7 @@ fun DonorProfileScreen(
     val bn = language == AppLanguage.BENGALI
     val trustScore = (myDonor?.trustScore ?: 100L).toInt()
     var showEditSheet by remember { mutableStateOf(false) }
+    var showDonatedConfirm by remember { mutableStateOf(false) }
     var showProfileAreaPicker by remember { mutableStateOf(false) }
 
     fun saveProfile(): Boolean {
@@ -210,7 +212,7 @@ fun DonorProfileScreen(
                         icon = UIcons.Stars,
                         value = guardianPoints,
                         label = if (bn) "পয়েন্ট" else "points",
-                        onClick = {},
+                        onClick = { viewModel.selectTab(RokkhonTab.REWARDS) },
                         modifier = Modifier.weight(1f)
                     )
                     HeroStat(
@@ -281,22 +283,13 @@ fun DonorProfileScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
-                    SectionHeader(title = if (bn) "রিওয়ার্ড" else "Rewards")
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        GUARDIAN_REWARD_TIERS.forEachIndexed { index, tier ->
-                            RewardTierCard(
-                                title = if (bn) tier.titleBn else tier.titleEn,
-                                requiredPoints = tier.requiredPoints,
-                                points = guardianPoints,
-                                tierIndex = index,
-                                modifier = Modifier.enterOnce(index)
-                            )
-                        }
+                    if (myDonor != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        DonationCycleCard(
+                            bn = bn,
+                            lastDonationDate = lastDonationDate,
+                            onDonatedToday = { showDonatedConfirm = true }
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
@@ -336,11 +329,11 @@ fun DonorProfileScreen(
                     SettingsGroup {
                         SettingsRow(
                             icon = UIcons.Logout,
-                            iconTint = RokkhonPalette.Sos,
+                            iconTint = RokkhonPalette.Ink,
                             title = if (bn) "লগ আউট" else "Sign out",
                             value = null,
                             onClick = onSignOut,
-                            titleColor = RokkhonPalette.Sos,
+                            titleColor = RokkhonPalette.Ink,
                             testTag = "sign_out_button"
                         )
                     }
@@ -368,7 +361,7 @@ fun DonorProfileScreen(
 
     if (showProfileAreaPicker) {
         BangladeshAreaPickerDialog(
-            selectedDistrict = BANGLADESH_DISTRICTS.firstOrNull { district.equals(it.nameEn, ignoreCase = true) } ?: selectedDistrict,
+            selectedDistrict = BANGLADESH_AREAS.firstOrNull { district.equals(it.nameEn, ignoreCase = true) } ?: selectedDistrict,
             isAutoGpsActive = false,
             language = language,
             onSelectDistrict = { picked ->
@@ -379,6 +372,56 @@ fun DonorProfileScreen(
             onSelectAutoGps = {},
             onDismiss = { showProfileAreaPicker = false }
         )
+    }
+
+    if (showDonatedConfirm) {
+        RokkhonBottomSheet(
+            onDismiss = { showDonatedConfirm = false },
+            title = if (bn) "আজ রক্ত দিয়েছেন?" else "Did you donate today?",
+            testTag = "donated_today_sheet"
+        ) {
+            Text(
+                text = if (bn) {
+                    "ধন্যবাদ! পরের ৯০ দিন আপনাকে তালিকায় \"বিশ্রামে\" দেখানো হবে। তারপর আপনি নিজে থেকেই আবার সক্রিয় হয়ে যাবেন — কিছু চালু করতে হবে না।"
+                } else {
+                    "Thank you! For the next 90 days you'll show as resting. After that you're active again automatically — nothing to switch on."
+                },
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                color = RokkhonPalette.Muted
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black)
+                    .springClick {
+                        viewModel.markDonatedToday()
+                        lastDonationDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+                        showDonatedConfirm = false
+                    }
+                    .testTag("confirm_donated_today"),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(if (bn) "হ্যাঁ, আজ দিয়েছি" else "Yes, I donated today", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(
+                text = if (bn) "না, ভুল করে চাপ লেগেছে" else "No, cancel",
+                fontSize = 15.sp,
+                color = RokkhonPalette.Ink,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .clip(CircleShape)
+                    .springClick { showDonatedConfirm = false }
+                    .padding(vertical = 12.dp)
+            )
+        }
     }
 
     if (showEditSheet) {
@@ -504,39 +547,6 @@ private fun HeroStat(
     }
 }
 
-/** Reward tier as a small card with progress towards it. */
-@Composable
-private fun RewardTierCard(title: String, requiredPoints: Int, points: Int, tierIndex: Int, modifier: Modifier = Modifier) {
-    val unlocked = points >= requiredPoints
-    val tierColor = RokkhonPalette.Ink
-    val progress by animateFloatAsState((points.toFloat() / requiredPoints).coerceIn(0f, 1f), label = "tier_progress")
-    Column(
-        modifier = modifier
-            .width(150.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(RokkhonPalette.Subtle)
-            .padding(14.dp)
-    ) {
-        Box(
-            modifier = Modifier.size(38.dp).clip(CircleShape).background(Color.White),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(if (unlocked) UIcons.CheckCircle else UIcons.CardGiftcard, contentDescription = null, tint = if (unlocked) IosSystemGreen else tierColor, modifier = Modifier.size(20.dp))
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(title, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = RokkhonPalette.Ink, maxLines = 1)
-        Text("$requiredPoints pts", fontSize = 12.sp, color = RokkhonPalette.Muted)
-        Spacer(modifier = Modifier.height(10.dp))
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
-            color = if (unlocked) RokkhonPalette.Positive else Color.Black,
-            trackColor = Color.White,
-            strokeCap = StrokeCap.Round
-        )
-    }
-}
-
 @Composable
 private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -596,6 +606,86 @@ private fun SettingsRow(
             trailing()
         } else {
             Icon(UIcons.KeyboardArrowRight, contentDescription = null, tint = RokkhonPalette.Faint, modifier = Modifier.size(22.dp))
+        }
+    }
+}
+
+/**
+ * Where the donor is in the 90-day cycle: resting with a countdown, or able to give now.
+ * Nothing needs switching back on — the app shows them as available again after 90 days.
+ */
+@Composable
+private fun DonationCycleCard(bn: Boolean, lastDonationDate: String, onDonatedToday: () -> Unit) {
+    val last = parseDonationDateMillis(lastDonationDate)
+    val daysLeft = daysUntilEligible(lastDonationDate)
+    val resting = last != null && daysLeft > 0
+    val progress by animateFloatAsState(
+        targetValue = if (resting) (DONATION_GAP_DAYS - daysLeft).toFloat() / DONATION_GAP_DAYS else 1f,
+        animationSpec = tween(900),
+        label = "cycle_progress"
+    )
+    val activeAgain = last?.let {
+        java.text.SimpleDateFormat("d MMMM", if (bn) java.util.Locale("bn", "BD") else java.util.Locale.ENGLISH)
+            .format(java.util.Date(it + DONATION_GAP_DAYS * 24L * 60L * 60L * 1000L))
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(RokkhonPalette.Subtle)
+            .padding(16.dp)
+            .testTag("donation_cycle_card")
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(60.dp)) {
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxSize(),
+                    color = if (resting) Color.Black else RokkhonPalette.Positive,
+                    trackColor = Color.White,
+                    strokeWidth = 5.dp,
+                    strokeCap = StrokeCap.Round
+                )
+                if (resting) {
+                    Text(if (bn) bnDigits(daysLeft) else "$daysLeft", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
+                } else {
+                    Icon(UIcons.CheckCircle, contentDescription = null, tint = RokkhonPalette.Positive, modifier = Modifier.size(24.dp))
+                }
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (resting) (if (bn) "বিশ্রামে আছেন — আর ${bnDigits(daysLeft)} দিন" else "Resting — $daysLeft days left")
+                    else (if (bn) "এখন রক্ত দিতে পারবেন" else "You can donate now"),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = RokkhonPalette.Ink
+                )
+                Text(
+                    text = if (resting) (if (bn) "$activeAgain থেকে নিজে থেকেই আবার সক্রিয় দেখাবে" else "Active again automatically from $activeAgain")
+                    else (if (bn) "রক্ত দেওয়ার পর নিচের বাটনে চাপুন" else "Tap below after you donate"),
+                    fontSize = 13.sp,
+                    color = RokkhonPalette.Muted
+                )
+            }
+        }
+        if (!resting || last == null) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White)
+                    .springClick(pressedScale = 0.97f, onClick = onDonatedToday)
+                    .testTag("profile_donated_today_button"),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(UIcons.Bloodtype, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (bn) "আজ রক্ত দিয়েছি" else "I donated today", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
+            }
         }
     }
 }

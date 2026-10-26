@@ -5,18 +5,17 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.swipe
-import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.test.core.app.ApplicationProvider
 import com.example.RokkhonAppRoot
 import com.example.data.model.AppLanguage
@@ -27,6 +26,8 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.PendingHardwareSos
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
+import java.io.File
+import java.io.FileOutputStream
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -37,19 +38,15 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
-import java.io.File
-import java.io.FileOutputStream
 
 /**
  * Renders every main page of the app with Robolectric's native graphics and writes PNGs.
  * Opt-in: set ROKKHON_SCREENSHOTS=/path/to/output/dir, e.g.
  *   ROKKHON_SCREENSHOTS=$PWD/screenshots ./gradlew testDebugUnitTest --tests '*ScreenshotTourTest*'
  * Without Firebase config there is no data source, so lists show their empty states.
- * The street map is a WebView and cannot render here; the built-in vector map underneath is shown instead.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-// Plain JDK TLS so map tile downloads use the JVM trust store and proxy settings.
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @Config(sdk = [34], qualifiers = "w412dp-h915dp-xhdpi")
 class ScreenshotTourTest {
@@ -156,19 +153,6 @@ class ScreenshotTourTest {
         return true
     }
 
-    /** Lets osmdroid fetch and draw map tiles on its background threads. */
-    private fun waitForMapTiles() {
-        val root = composeRule.activity.window.decorView
-        val scratch = Canvas(Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888))
-        repeat(16) {
-            // osmdroid requests tiles while drawing; nothing draws in a test unless we do.
-            root.draw(scratch)
-            Thread.sleep(500)
-            composeRule.mainClock.advanceTimeBy(500)
-            composeRule.waitForIdle()
-        }
-    }
-
     @Test
     fun home() {
         startApp()
@@ -183,13 +167,10 @@ class ScreenshotTourTest {
     fun find() {
         startApp()
         tap("nav_tab_map")
-        waitForMapTiles()
         save("04_find_donors")
         tap("map_filter_tab_patient_requests")
-        waitForMapTiles()
         save("05_find_patients")
         tap("map_filter_tab_sos_alerts")
-        waitForMapTiles()
         save("06_find_sos")
     }
 
@@ -215,6 +196,16 @@ class ScreenshotTourTest {
         save("11_profile_scrolled")
         swipeUp()
         save("12_profile_scrolled_more")
+    }
+
+    @Test
+    fun rewards() {
+        startApp()
+        tap("nav_tab_rewards")
+        composeRule.mainClock.advanceTimeBy(1_500)
+        save("19_rewards")
+        swipeUp()
+        save("20_rewards_scrolled")
     }
 
     @Test

@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,7 +62,6 @@ import com.example.data.model.BD_NATIONAL_EMERGENCY_NUMBER
 import com.example.data.model.SosAlert
 import com.example.data.model.TrustedContact
 import com.example.ui.components.FalseSosAccountWarningBanner
-import com.example.ui.components.InteractiveBangladeshRadarMap
 import com.example.ui.components.QuickAction
 import com.example.ui.components.RokkhonBottomSheet
 import com.example.ui.components.RokkhonEmptyState
@@ -73,7 +71,6 @@ import com.example.ui.components.SectionHeader
 import com.example.ui.components.SosPostCardItem
 import com.example.ui.components.SosVideoAudioInspectorDialog
 import com.example.ui.components.StatTile
-import com.example.ui.components.compassDirectionLabel
 import com.example.ui.components.enterOnce
 import com.example.ui.components.springClick
 import com.example.ui.icons.UIcons
@@ -146,7 +143,7 @@ fun SosGuardianAndBleScreen(
 
     val bn = language == AppLanguage.BENGALI
     val sosLive = myActiveSos != null || isLiveLocationActive
-    val dirText = com.example.ui.components.compassDirectionLabel(userBearing, bn)
+    val dirText = compassDirectionLabel(userBearing, bn)
     val block = viewModel.bleMeshManager.blockReason()
     val networkStatus = when {
         block == BleSosMeshManager.BlockReason.NO_PERMISSION -> if (bn) "ব্লুটুথ পারমিশন দিন" else "Permission needed"
@@ -513,38 +510,6 @@ fun SosGuardianAndBleScreen(
                 SheetStatText(value = dirText, label = if (bn) "দিক" else "Heading", modifier = Modifier.weight(1f))
                 SheetStatText(value = "%.4f, %.4f".format(java.util.Locale.US, userLat, userLng), label = if (bn) "স্থানাঙ্ক" else "Coordinates", modifier = Modifier.weight(1.6f))
             }
-            if (sosLive) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .border(1.dp, RokkhonPalette.Border, RoundedCornerShape(18.dp))
-                ) {
-                    InteractiveBangladeshRadarMap(
-                        centerLat = userLat,
-                        centerLng = userLng,
-                        donors = emptyList(),
-                        bloodRequests = emptyList(),
-                        sosAlerts = listOfNotNull(myActiveSos),
-                        bleBeacons = bleBeacons,
-                        selectedBloodGroup = null,
-                        layerFilter = MapLayerFilter.SOS_ALERTS_ONLY,
-                        onPinSelected = {},
-                        showLiveFloatingCard = false,
-                        isLiveLocationActive = true,
-                        selectedAreaName = if (bn) selectedDistrict.nameBn else selectedDistrict.nameEn,
-                        userLat = userLat,
-                        userLng = userLng,
-                        userBearing = userBearing,
-                        onRefreshLiveGps = { viewModel.refreshGpsLocation() },
-                        initialUseOsmTiles = false,
-                        bengali = bn,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
             Spacer(modifier = Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SheetAction(UIcons.Refresh, if (bn) "রিফ্রেশ" else "Refresh", Modifier.weight(1f)) { viewModel.refreshGpsLocation() }
@@ -736,4 +701,34 @@ private fun SheetAction(icon: ImageVector, label: String, modifier: Modifier = M
         Spacer(modifier = Modifier.width(6.dp))
         Text(label, color = RokkhonPalette.Primary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
+}
+
+/** "উত্তর-পূর্ব 45°" / "NE 45°" from a compass bearing. */
+private fun compassDirectionLabel(bearingDegrees: Float, bengali: Boolean): String {
+    val deg = ((bearingDegrees % 360f) + 360f) % 360f
+    val sector = ((deg + 22.5f) / 45f).toInt() % 8
+    val dir = if (bengali) {
+        when (sector) {
+            0 -> "উত্তর"
+            1 -> "উত্তর-পূর্ব"
+            2 -> "পূর্ব"
+            3 -> "দক্ষিণ-পূর্ব"
+            4 -> "দক্ষিণ"
+            5 -> "দক্ষিণ-পশ্চিম"
+            6 -> "পশ্চিম"
+            else -> "উত্তর-পশ্চিম"
+        }
+    } else {
+        when (sector) {
+            0 -> "N"
+            1 -> "NE"
+            2 -> "E"
+            3 -> "SE"
+            4 -> "S"
+            5 -> "SW"
+            6 -> "W"
+            else -> "NW"
+        }
+    }
+    return "$dir ${deg.toInt()}°"
 }

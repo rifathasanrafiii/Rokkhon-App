@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,14 +55,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
-import com.example.data.ble.BleSosMeshManager
 import com.example.data.model.AppLanguage
-import com.example.data.model.BleSosBeacon
 import com.example.data.model.BloodRequest
 import com.example.data.model.DonorNode
 import com.example.data.model.NotificationKind
-import com.example.data.model.SOS_NOTIFICATION_RADIUS_KM
-import com.example.data.model.SosAlert
 import com.example.data.model.canDonateTo
 import com.example.data.model.daysUntilEligible
 import com.example.data.model.parseDonationDateMillis
@@ -73,6 +70,7 @@ import com.example.ui.components.RokkhonIntents
 import com.example.ui.components.RokkhonNotificationCenterDialog
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.SheetGridItem
+import com.example.ui.components.enterOnce
 import com.example.ui.components.springClick
 import com.example.ui.icons.UIcons
 import com.example.ui.theme.RokkhonPalette
@@ -260,8 +258,8 @@ fun HomeMatchHubScreen(
                         testTag = "request_blood_button"
                     )
                     QuickAction(
-                        icon = UIcons.Map,
-                        label = if (bn) "ম্যাপ" else "Map",
+                        icon = UIcons.Search,
+                        label = if (bn) "খুঁজুন" else "Find",
                         onClick = {
                             viewModel.setMapLayerFilter(MapLayerFilter.DONORS_ONLY)
                             viewModel.selectTab(RokkhonTab.RADAR_MAP)
@@ -270,9 +268,9 @@ fun HomeMatchHubScreen(
                         testTag = "explore_compatible_donors_card"
                     )
                     QuickAction(
-                        icon = UIcons.Person,
-                        label = if (isOwnDonorRegistered) (if (bn) "প্রোফাইল" else "Profile") else (if (bn) "ডোনার হোন" else "Join"),
-                        onClick = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) },
+                        icon = if (isOwnDonorRegistered) UIcons.CardGiftcard else UIcons.Person,
+                        label = if (isOwnDonorRegistered) (if (bn) "রিওয়ার্ড" else "Rewards") else (if (bn) "ডোনার হোন" else "Join"),
+                        onClick = { viewModel.selectTab(if (isOwnDonorRegistered) RokkhonTab.REWARDS else RokkhonTab.DONOR_PROFILE) },
                         modifier = Modifier.weight(1f),
                         testTag = "home_profile_shortcut"
                     )
@@ -444,13 +442,13 @@ fun HomeMatchHubScreen(
                 }
             }
         } else {
-            items(matchingDonors, key = { "home_donor_${it.id.ifBlank { it.userId }}" }) { donor ->
+            itemsIndexed(matchingDonors, key = { _, d -> "home_donor_${d.id.ifBlank { d.userId }}" }) { index, donor ->
                 DonorRow(
                     donor = donor,
                     language = language,
                     onClick = { selectedDonor = donor },
                     onCall = { RokkhonIntents.dial(context, donor.contactPhone, language) },
-                    modifier = Modifier.animateItem()
+                    modifier = Modifier.animateItem().enterOnce(index)
                 )
             }
         }
@@ -646,34 +644,6 @@ fun HomeMatchHubScreen(
             onDismiss = { showNotificationCenterDialog = false }
         )
     }
-}
-
-/**
- * SOS heard over the Bluetooth mesh that the cloud doesn't have (sender or receiver offline),
- * shown next to the cloud alerts. A cloud alert carries the same BLE code, so it isn't listed twice.
- */
-internal fun bluetoothOnlySosAlerts(beacons: List<BleSosBeacon>, cloudAlerts: List<SosAlert>): List<SosAlert> {
-    val cloudCodes = cloudAlerts.mapNotNull { it.bleBeaconHash.takeIf { code -> code.isNotBlank() } }.toSet()
-    return beacons
-        .filter { it.packetKind == BleSosMeshManager.PACKET_KIND_SOS_1KM && it.senderCode !in cloudCodes }
-        .filter { it.distanceFromOriginKm == null || it.distanceFromOriginKm <= SOS_NOTIFICATION_RADIUS_KM }
-        .map { b ->
-            SosAlert(
-                id = "ble_${b.packetId}",
-                senderName = "Bluetooth SOS (${b.senderCode})",
-                bloodGroup = b.bloodGroup,
-                emergencyType = b.emergencyType,
-                district = "",
-                latitude = b.latitude,
-                longitude = b.longitude,
-                hasLiveAudioVerification = b.hasCameraAudioProof,
-                triggerMethod = "BLE_MESH",
-                verificationNote = "Received over Bluetooth from a nearby Rokkhon phone",
-                bleBeaconHash = b.senderCode,
-                status = "ACTIVE",
-                createdAt = com.google.firebase.Timestamp(java.util.Date(b.timestampMillis))
-            )
-        }
 }
 
 /** "Rifat Hasan (Rifat R.)" -> "RR": Latin initials for the avatar circles. */
@@ -1000,7 +970,7 @@ internal fun DonorRow(
 
 /** Donor details in a sheet: who they are, when they can give, and ways to reach them. */
 @Composable
-private fun DonorDetail(donor: DonorNode, language: AppLanguage, onCall: () -> Unit, onSms: () -> Unit) {
+internal fun DonorDetail(donor: DonorNode, language: AppLanguage, onCall: () -> Unit, onSms: () -> Unit) {
     val bn = language == AppLanguage.BENGALI
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
