@@ -208,7 +208,8 @@ class RokkhonRepositoryRuleTest : FirestoreEmulatorTestBase() {
     private companion object {
         const val ALICE_EMAIL = "alice_rokkhon@test.com"
         const val BOB_EMAIL = "bob_rokkhon@test.com"
-        const val DEFAULT_TIMEOUT_MS = 5000L
+        // The first write after the emulator starts can take several seconds (Firestore warm-up).
+        const val DEFAULT_TIMEOUT_MS = 15_000L
         const val FLOW_TIMEOUT_MS = 3000L
     }
 }

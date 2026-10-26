@@ -12,7 +12,17 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -409,7 +419,17 @@ fun RokkhonAuthenticatedShell(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (currentTab) {
+            // Tab switch: quick fade with a slight scale, like a native tab bar.
+            AnimatedContent(
+                targetState = currentTab,
+                transitionSpec = {
+                    (fadeIn(tween(220, delayMillis = 40)) + scaleIn(tween(220, delayMillis = 40), initialScale = 0.985f)) togetherWith
+                        fadeOut(tween(120))
+                },
+                label = "tab_switch",
+                modifier = Modifier.fillMaxSize()
+            ) { tab ->
+            when (tab) {
                 RokkhonTab.HOME_MATCH -> HomeMatchHubScreen(
                     viewModel = viewModel,
                     recentPowerTaps = recentPowerTaps,
@@ -429,11 +449,7 @@ fun RokkhonAuthenticatedShell(
                     onSimulatePowerTap = onSimulatePowerTap,
                     onOpenSosVerification = openSosVerification
                 )
-                RokkhonTab.DONOR_PROFILE -> Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                ) {
+                RokkhonTab.DONOR_PROFILE -> Column(modifier = Modifier.fillMaxSize()) {
                     DonorProfileScreen(
                         viewModel = viewModel,
                         onSignOut = {
@@ -449,6 +465,7 @@ fun RokkhonAuthenticatedShell(
                         }
                     )
                 }
+            }
             }
 
             // Top banner: neutral dark for info so it is not confused with an SOS alarm.
@@ -686,8 +703,15 @@ private fun RokkhonBottomNavItem(
     val activeRed = Color(0xFFB80F24)
     val inactiveGray = Color(0xFF6E6265)
     val haptics = LocalHapticFeedback.current
+    val pillColor by animateColorAsState(if (selected) Color(0xFFFBE9EB) else Color.Transparent, label = "nav_pill")
+    val tint by animateColorAsState(if (selected) activeRed else inactiveGray, label = "nav_tint")
+    val iconScale by animateFloatAsState(
+        targetValue = if (selected) 1.12f else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium),
+        label = "nav_icon_scale"
+    )
     Surface(
-        color = if (selected) Color(0xFFFBE9EB) else Color.Transparent,
+        color = pillColor,
         shape = RoundedCornerShape(28.dp),
         modifier = modifier
             .height(54.dp)
@@ -705,14 +729,19 @@ private fun RokkhonBottomNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (selected) activeRed else inactiveGray,
-                modifier = Modifier.size(22.dp)
+                tint = tint,
+                modifier = Modifier
+                    .size(22.dp)
+                    .graphicsLayer {
+                        scaleX = iconScale
+                        scaleY = iconScale
+                    }
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = label,
                 fontSize = 11.5.sp,
-                color = if (selected) activeRed else inactiveGray,
+                color = tint,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1
             )

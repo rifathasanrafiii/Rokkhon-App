@@ -34,3 +34,21 @@ val IosDarkSurfaceElevated = Color(0xFF2B1217)
 val IosDarkTextPrimary = Color(0xFFFAF3F4)
 val IosDarkTextSecondary = Color(0xFFB8A2A6)
 val IosDarkOutline = Color(0xFF3D2026)
+
+// The literal colours the screens use, named once so new layouts stay on the same palette.
+object RokkhonPalette {
+    val Crimson = Color(0xFFB80F24)        // Primary actions, selected states
+    val CrimsonBright = Color(0xFFE01E37)  // SOS
+    val Blush = Color(0xFFF5DDE0)          // Icon circles
+    val BlushSoft = Color(0xFFFDF0F1)      // Selected backgrounds
+    val Background = Color(0xFFFAF8F8)     // Sheet background
+    val Border = Color(0xFFEEE6E8)         // Card outline
+    val Track = Color(0xFFF3ECEE)          // Segmented control / progress track
+    val Ink = Color(0xFF1A1113)            // Titles
+    val Muted = Color(0xFF7B6F72)          // Secondary text
+    val HeroTop = Color(0xFF7B0C1A)
+    val HeroMid = Color(0xFF5A0913)
+    val HeroBottom = Color(0xFF2B060B)
+    val Amber = Color(0xFFD97706)
+    val Green = Color(0xFF1F9D55)
+}

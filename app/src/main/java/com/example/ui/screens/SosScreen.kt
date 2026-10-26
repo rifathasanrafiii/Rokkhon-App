@@ -1,8 +1,13 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,23 +31,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -60,8 +64,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -78,17 +86,23 @@ import com.example.data.model.SosAlert
 import com.example.data.model.TrustedContact
 import com.example.ui.components.FalseSosAccountWarningBanner
 import com.example.ui.components.InteractiveBangladeshRadarMap
+import com.example.ui.components.QuickAction
+import com.example.ui.components.RokkhonBottomSheet
 import com.example.ui.components.RokkhonEmptyState
 import com.example.ui.components.RokkhonIntents
+import com.example.ui.components.RollingNumber
+import com.example.ui.components.SectionHeader
 import com.example.ui.components.SosPostCardItem
 import com.example.ui.components.SosVideoAudioInspectorDialog
+import com.example.ui.components.StatTile
 import com.example.ui.components.compassDirectionLabel
+import com.example.ui.components.enterOnce
+import com.example.ui.components.springClick
+import com.example.ui.theme.IosSystemBlue
 import com.example.ui.theme.IosSystemGreen
-import com.example.ui.theme.IosSystemOrange
 import com.example.ui.theme.IosSystemRed
-import com.example.ui.theme.LifelineBlush
 import com.example.ui.theme.PinCrimsonRed
-import com.example.ui.theme.RadarObsidianBg
+import com.example.ui.theme.RokkhonPalette
 import com.example.ui.viewmodel.MapLayerFilter
 import com.example.ui.viewmodel.RokkhonTab
 import com.example.ui.viewmodel.RokkhonViewModel
@@ -153,626 +167,419 @@ fun SosGuardianAndBleScreen(
         }
     }
 
-    Column(
+    val bn = language == AppLanguage.BENGALI
+    val sosLive = myActiveSos != null || isLiveLocationActive
+    val dirText = com.example.ui.components.compassDirectionLabel(userBearing, bn)
+    val block = viewModel.bleMeshManager.blockReason()
+    val networkStatus = when {
+        block == BleSosMeshManager.BlockReason.NO_PERMISSION -> if (bn) "ব্লুটুথ পারমিশন দিন" else "Permission needed"
+        block == BleSosMeshManager.BlockReason.BLUETOOTH_OFF -> if (bn) "ব্লুটুথ বন্ধ আছে" else "Bluetooth is off"
+        block == BleSosMeshManager.BlockReason.NO_HARDWARE -> if (bn) "ব্লুটুথ অনুপলব্ধ" else "No Bluetooth hardware"
+        isAdvertising -> if (bn) "আপনার SOS সম্প্রচার হচ্ছে" else "Broadcasting your SOS"
+        isScanning -> if (bn) "সক্রিয় • রিলে $relayedCount" else "Active • relayed $relayedCount"
+        else -> bleStatus
+    }
+    val networkOk = isScanning && block == null
+    var showNetworkSheet by remember { mutableStateOf(false) }
+    var showLocationSheet by remember { mutableStateOf(false) }
+    var showPolicySheet by remember { mutableStateOf(false) }
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(RadarObsidianBg)
+            .background(RokkhonPalette.Background)
+            .testTag("sos_screen")
     ) {
-        // 1. Pure Gradient SOS Command Header (No 3x Power Test button, clean full-width SOS CTA)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF8B1124),
-                            Color(0xFF4B0A15),
-                            RadarObsidianBg
-                        )
-                    )
-                )
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    color = Color.White.copy(alpha = 0.14f),
-                    shape = CircleShape
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = null,
-                            tint = Color(0xFFFFB3C0),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) {
-                                "SOS কমান্ড সেন্টার"
-                            } else {
-                                "SOS COMMAND CENTER"
-                            },
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Surface(
-                    color = Color.White.copy(alpha = 0.14f),
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .clickable {
-                            viewModel.setMapLayerFilter(MapLayerFilter.SOS_ALERTS_ONLY)
-                            viewModel.selectTab(RokkhonTab.RADAR_MAP)
-                        }
-                        .testTag("open_find_sos_tab_button")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) "ম্যাপে সবার SOS" else "All SOS on Map",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = if (myActiveSos != null || isLiveLocationActive) {
-                    if (language == AppLanguage.BENGALI) {
-                        "আপনার জরুরি SOS ও লাইভ লোকেশন চালু আছে"
-                    } else {
-                        "Your Emergency SOS & Live Location are ON"
-                    }
-                } else {
-                    if (language == AppLanguage.BENGALI) {
-                        "এক ট্যাপে জরুরি SOS পাঠান"
-                    } else {
-                        "Send Emergency SOS in One Tap"
-                    }
-                },
-                fontSize = 23.sp,
-                lineHeight = 30.sp,
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Primary Full-Width SOS Button (3x Power Test removed from UI per user request)
-            Button(
-                onClick = onOpenSosVerification,
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = PinCrimsonRed),
+        item(key = "sos_hero") {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag("sos_guardian_main_button")
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color(0xFF8B1124), Color(0xFF4B0A15), RokkhonPalette.HeroBottom)
+                        )
+                    )
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 30.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (language == AppLanguage.BENGALI) "৫-সেকেন্ড SOS পাঠান" else "Send 5s SOS",
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 15.5.sp
-                )
-            }
-
-            // Prominent Turn Off / Mark Safe Button when the current user has an active SOS
-            if (myActiveSos != null || isLiveLocationActive) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = { viewModel.resolveOwnSos(myActiveSos?.id ?: activeUserSosId ?: "") },
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = IosSystemGreen),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("turn_off_my_sos_button")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (language == AppLanguage.BENGALI) {
-                            "আমি এখন নিরাপদ • সক্রিয় SOS বন্ধ করুন"
-                        } else {
-                            "I Am Safe Now • Turn Off Active SOS"
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Shield, contentDescription = null, tint = Color(0xFFFFB3C0), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (bn) "জরুরি SOS" else "Emergency SOS",
+                            color = Color.White,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.14f))
+                            .border(0.8.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                            .springClick {
+                                viewModel.setMapLayerFilter(MapLayerFilter.SOS_ALERTS_ONLY)
+                                viewModel.selectTab(RokkhonTab.RADAR_MAP)
+                            }
+                            .testTag("open_find_sos_tab_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Map, contentDescription = if (bn) "ম্যাপে সবার SOS" else "All SOS on map", tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                SosPulseButton(language = language, live = sosLive, onClick = onOpenSosVerification)
+
+                // Status chips: GPS direction and the Bluetooth network, at a glance
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HeroStatusChip(
+                        icon = Icons.Default.MyLocation,
+                        text = dirText,
+                        ok = true,
+                        onClick = { showLocationSheet = true }
+                    )
+                    HeroStatusChip(
+                        icon = Icons.Default.Bluetooth,
+                        text = if (guardEnabled) (if (bn) "নেটওয়ার্ক চালু" else "Network on") else (if (bn) "নেটওয়ার্ক বন্ধ" else "Network off"),
+                        ok = guardEnabled && networkOk,
+                        onClick = { showNetworkSheet = true }
+                    )
+                }
+
+                AnimatedVisibility(visible = sosLive) {
+                    Surface(
+                        color = IosSystemGreen,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .padding(top = 16.dp)
+                            .springClick { viewModel.resolveOwnSos(myActiveSos?.id ?: activeUserSosId ?: "") }
+                            .testTag("turn_off_my_sos_button")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(19.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (bn) "আমি নিরাপদ — SOS বন্ধ করুন" else "I'm safe — stop SOS",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(22.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    QuickAction(
+                        icon = Icons.Default.Call,
+                        label = if (bn) "৯৯৯" else "999",
+                        onClick = { RokkhonIntents.dial(context, BD_NATIONAL_EMERGENCY_NUMBER, language) },
+                        modifier = Modifier.weight(1f),
+                        testTag = "call_999_button"
+                    )
+                    QuickAction(
+                        icon = Icons.Default.Sms,
+                        label = if (bn) "পরিবারকে SMS" else "SMS family",
+                        onClick = {
+                            if (trustedContacts.isEmpty()) {
+                                showContactsEditor = true
+                            } else {
+                                RokkhonIntents.smsTrustedContacts(context, trustedContacts, viewModel.currentUserName, userLat, userLng, language)
+                            }
                         },
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 14.5.sp
+                        modifier = Modifier.weight(1f),
+                        testTag = "sms_trusted_contacts_button"
+                    )
+                    QuickAction(
+                        icon = Icons.Default.Share,
+                        label = if (bn) "লোকেশন" else "Location",
+                        onClick = { RokkhonIntents.shareLocation(context, viewModel.currentUserName, userLat, userLng, language) },
+                        modifier = Modifier.weight(1f),
+                        testTag = "share_location_button"
+                    )
+                    QuickAction(
+                        icon = Icons.Default.People,
+                        label = if (bn) "কন্টাক্ট" else "Contacts",
+                        onClick = { showContactsEditor = true },
+                        modifier = Modifier.weight(1f),
+                        testTag = "sos_contacts_quick_button"
                     )
                 }
             }
         }
 
-        // 2. Clean, Well-Organized White Rounded Sheet
-        Surface(
-            color = Color(0xFFFAF8F8),
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                item {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(42.dp)
-                                .height(4.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFE2D5D7))
-                        )
-                    }
-                }
-
-                // Section A: Quick Emergency Actions (999 Call, Family SMS, Share Location)
-                item {
-                    Surface(
-                        color = Color.White,
-                        shape = RoundedCornerShape(22.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(22.dp))
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = if (language == AppLanguage.BENGALI) {
-                                    "দ্রুত জরুরি সহায়তা"
-                                } else {
-                                    "Quick Emergency Actions"
-                                },
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Color(0xFF1A0F12),
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                listOf(
-                                    Triple(if (language == AppLanguage.BENGALI) "৯৯৯ কল" else "Call 999", Icons.Default.Call, "call_999_button"),
-                                    Triple(if (language == AppLanguage.BENGALI) "পরিবারকে SMS" else "SMS Family", Icons.Default.Sms, "sms_trusted_contacts_button"),
-                                    Triple(if (language == AppLanguage.BENGALI) "লোকেশন শেয়ার" else "Share GPS", Icons.Default.Share, "share_location_button")
-                                ).forEach { (label, icon, tag) ->
-                                    Surface(
-                                        color = Color(0xFFFAF5F6),
-                                        shape = RoundedCornerShape(16.dp),
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(16.dp))
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .clickable {
-                                                when (tag) {
-                                                    "call_999_button" -> RokkhonIntents.dial(context, BD_NATIONAL_EMERGENCY_NUMBER, language)
-                                                    "sms_trusted_contacts_button" -> if (trustedContacts.isEmpty()) {
-                                                        showContactsEditor = true
-                                                    } else {
-                                                        RokkhonIntents.smsTrustedContacts(context, trustedContacts, viewModel.currentUserName, userLat, userLng, language)
-                                                    }
-                                                    else -> RokkhonIntents.shareLocation(context, viewModel.currentUserName, userLat, userLng, language)
-                                                }
-                                            }
-                                            .testTag(tag)
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(34.dp)
-                                                    .clip(CircleShape)
-                                                    .background(LifelineBlush),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(icon, contentDescription = null, tint = IosSystemRed, modifier = Modifier.size(17.dp))
-                                            }
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            Text(
-                                                text = label,
-                                                color = Color(0xFF1A0F12),
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Section B: Live Real-Time Directional Location & Active SOS Broadcast
-                item {
-                    val dirText = com.example.ui.components.compassDirectionLabel(
-                        userBearing,
-                        language == AppLanguage.BENGALI
-                    )
-                    Surface(
-                        color = Color.White,
-                        shape = RoundedCornerShape(22.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(
-                                width = 1.dp,
-                                color = if (isLiveLocationActive || myActiveSos != null) PinCrimsonRed.copy(alpha = 0.45f) else Color(0xFFEDE2E4),
-                                shape = RoundedCornerShape(22.dp)
-                            )
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(10.dp)
-                                            .clip(CircleShape)
-                                            .background(if (isLiveLocationActive || myActiveSos != null) PinCrimsonRed else IosSystemGreen)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = if (isLiveLocationActive || myActiveSos != null) {
-                                            if (language == AppLanguage.BENGALI) "লাইভ SOS লোকেশন ট্র্যাকিং চালু" else "Live SOS Location Streaming"
-                                        } else {
-                                            if (language == AppLanguage.BENGALI) "রিয়েল-টাইম জিপিএস ও দিকনির্দেশনা" else "Real-Time GPS & Direction"
-                                        },
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = Color(0xFF1A0F12),
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                }
-
-                                Surface(
-                                    color = LifelineBlush,
-                                    shape = CircleShape,
-                                    modifier = Modifier.clickable { viewModel.refreshGpsLocation() }
-                                ) {
-                                    Text(
-                                        text = dirText,
-                                        color = IosSystemRed,
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            Text(
-                                text = if (language == AppLanguage.BENGALI) {
-                                    "স্থানাঙ্ক: ${"%.5f".format(userLat)}, ${"%.5f".format(userLng)} • আপনি যেদিকে মুভ করবেন ম্যাপে পিন সেদিকেই যাবে"
-                                } else {
-                                    "Coords: ${"%.5f".format(userLat)}, ${"%.5f".format(userLng)} • Moves in real time in your exact direction"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF5A4A4E),
-                                fontWeight = FontWeight.Medium
-                            )
-
-                            if (isLiveLocationActive || myActiveSos != null) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(185.dp)
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(16.dp))
-                                ) {
-                                    InteractiveBangladeshRadarMap(
-                                        centerLat = userLat,
-                                        centerLng = userLng,
-                                        donors = emptyList(),
-                                        bloodRequests = emptyList(),
-                                        sosAlerts = listOfNotNull(myActiveSos),
-                                        bleBeacons = bleBeacons,
-                                        selectedBloodGroup = null,
-                                        layerFilter = MapLayerFilter.SOS_ALERTS_ONLY,
-                                        onPinSelected = {},
-                                        showLiveFloatingCard = false,
-                                        isLiveLocationActive = true,
-                                        selectedAreaName = if (language == AppLanguage.BENGALI) selectedDistrict.nameBn else selectedDistrict.nameEn,
-                                        userLat = userLat,
-                                        userLng = userLng,
-                                        userBearing = userBearing,
-                                        onRefreshLiveGps = { viewModel.refreshGpsLocation() },
-                                        initialUseOsmTiles = false,
-                                        bengali = language == AppLanguage.BENGALI,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Active SOS Post Card (if any)
-                if (myActiveSos != null) {
-                    item {
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) {
-                                "আপনার বর্তমান সক্রিয় SOS"
-                            } else {
-                                "Your Active SOS Broadcast"
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = PinCrimsonRed,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-
-                    item {
-                        val isPlayingThisAlert = activePlaybackAlertId == myActiveSos.id
-                        SosPostCardItem(
-                            alert = myActiveSos,
-                            language = language,
-                            isMySos = true,
-                            isHistoryItem = false,
-                            hasRespondedNearby = false,
-                            isPlaying = isPlayingThisAlert,
-                            progressSeconds = if (isPlayingThisAlert) playbackSeconds else 0f,
-                            waveformBars = waveformBars,
-                            onCardTapOpenVideoAudio = {
-                                selectedSosForMediaModal = myActiveSos
-                            },
-                            onToggleInlinePlay = {
-                                viewModel.audioVerifier.togglePlayFiveSecondClip(
-                                    scope = scope,
-                                    alertId = myActiveSos.id
-                                )
-                            },
-                            onRespond = {},
-                            onReportFalseAlarm = {},
-                            onMarkSafeOwnerOnly = { viewModel.resolveOwnSos(myActiveSos.id) }
-                        )
-                    }
-                }
-
-                // Section C: 1 km Safety Network & Live Radar Status Card
-                item {
-                    Card(
-                        shape = RoundedCornerShape(22.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(22.dp))
-                    ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(CircleShape)
-                                            .background(LifelineBlush),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Shield,
-                                            contentDescription = "SOS Network",
-                                            tint = IosSystemRed
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text(
-                                            text = if (language == AppLanguage.BENGALI) {
-                                                "১ কি.মি. সুরক্ষা নেটওয়ার্ক"
-                                            } else {
-                                                "1 km Safety Network"
-                                            },
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = Color(0xFF1A0F12),
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                        val bn = language == AppLanguage.BENGALI
-                                        val block = viewModel.bleMeshManager.blockReason()
-                                        val statusLine = when {
-                                            block == BleSosMeshManager.BlockReason.NO_PERMISSION -> if (bn) "ব্লুটুথ পারমিশন দিন" else "Permission needed"
-                                            block == BleSosMeshManager.BlockReason.BLUETOOTH_OFF -> if (bn) "ব্লুটুথ বন্ধ আছে" else "Bluetooth is off"
-                                            block == BleSosMeshManager.BlockReason.NO_HARDWARE -> if (bn) "ব্লুটুথ অনুপলব্ধ" else "No Bluetooth hardware"
-                                            isAdvertising -> if (bn) "আপনার SOS সিগন্যাল সম্প্রচারিত হচ্ছে" else "Broadcasting your SOS"
-                                            isScanning -> if (bn) "সক্রিয় • কাছের SOS: ${bleBeacons.size} • রিলে: $relayedCount" else "Active • nearby: ${bleBeacons.size} • relayed: $relayedCount"
-                                            else -> bleStatus
-                                        }
-                                        Text(
-                                            text = if (isLiveLocationActive) {
-                                                (if (bn) "লাইভ জিপিএস চালু • " else "Live GPS on • ") + statusLine
-                                            } else {
-                                                statusLine
-                                            },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isLiveLocationActive || (isScanning && block == null)) IosSystemGreen else IosSystemRed,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                }
-
+        item(key = "sos_sheet") {
+            Box(modifier = Modifier.fillMaxWidth().background(RokkhonPalette.HeroBottom)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                        .background(RokkhonPalette.Background)
+                        .padding(start = 16.dp, end = 16.dp, top = 18.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StatTile(
+                            icon = Icons.Default.Shield,
+                            value = bleBeacons.size,
+                            label = if (bn) "১ কি.মি. নেটওয়ার্ক" else "1 km network",
+                            accent = if (guardEnabled) IosSystemGreen else RokkhonPalette.Crimson,
+                            onClick = { showNetworkSheet = true },
+                            modifier = Modifier.weight(1f).enterOnce(0),
+                            testTag = "sos_network_tile",
+                            trailing = {
                                 Switch(
                                     checked = guardEnabled,
                                     onCheckedChange = { viewModel.setGuardNetworkEnabled(it) },
                                     colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = IosSystemGreen),
-                                    modifier = Modifier.testTag("guard_network_switch")
+                                    modifier = Modifier
+                                        .scale(0.78f)
+                                        .height(30.dp)
+                                        .testTag("guard_network_switch")
                                 )
                             }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = if (language == AppLanguage.BENGALI) {
-                                    "অ্যাপ বন্ধ থাকলেও ১ কি.মি.-এর মধ্যে কেউ SOS দিলে আপনি তাৎক্ষণিক অ্যালার্ট পাবেন।"
-                                } else {
-                                    "Receive instant alerts when someone within 1 km triggers an SOS, even when the app is closed."
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF756568),
-                                lineHeight = 19.sp
-                            )
-                        }
-                    }
-                }
-
-                // Section D: Trusted Contacts Card
-                item {
-                    TrustedContactsCard(
-                        language = language,
-                        contacts = trustedContacts,
-                        onEdit = { showContactsEditor = true }
-                    )
-                }
-
-                // Section E: Anti-False-SOS Policy Banner
-                item {
-                    FalseSosAccountWarningBanner(
-                        language = language,
-                        warningMessage = falseSosWarningBanner,
-                        penaltyCount = falseSosPenaltyCount,
-                        onDismiss = if (falseSosWarningBanner != null) {
-                            { viewModel.dismissFalseSosWarningBanner() }
-                        } else {
-                            null
-                        }
-                    )
-                }
-
-                // Section F: My Past SOS History Section
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = null,
-                                tint = IosSystemRed,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    text = if (language == AppLanguage.BENGALI) {
-                                        "আমার SOS হিস্ট্রি (${myHistorySosList.size})"
-                                    } else {
-                                        "My SOS History (${myHistorySosList.size})"
-                                    },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color(0xFF1A0F12),
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    text = if (language == AppLanguage.BENGALI) {
-                                        if (mySosAlerts.isEmpty()) {
-                                            "আপনার পাঠানো সব SOS রেকর্ড এখানে সংরক্ষিত থাকে"
-                                        } else {
-                                            "মোট ${mySosAlerts.size} বার SOS পাঠানো হয়েছে"
-                                        }
-                                    } else {
-                                        if (mySosAlerts.isEmpty()) {
-                                            "All SOS alerts sent from your account are saved here"
-                                        } else {
-                                            "Total ${mySosAlerts.size} SOS alert(s) recorded"
-                                        }
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF756568)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (myHistorySosList.isEmpty()) {
-                    item {
-                        RokkhonEmptyState(
-                            icon = Icons.Default.History,
-                            title = if (language == AppLanguage.BENGALI) "এখনো কোনো SOS পাঠাননি" else "No SOS sent yet",
-                            body = if (language == AppLanguage.BENGALI) {
-                                "আপনার পাঠানো সব SOS এখানে সংরক্ষিত থাকবে। আশা করি এর দরকার কখনো না পড়ুক।"
-                            } else {
-                                "Every SOS you send is kept here. We hope you never need it."
-                            },
-                            testTag = "sos_empty_history"
+                        )
+                        StatTile(
+                            icon = Icons.Default.People,
+                            value = trustedContacts.size,
+                            valueSuffix = "/3",
+                            label = if (bn) "বিশ্বস্ত কন্টাক্ট" else "Trusted contacts",
+                            accent = RokkhonPalette.Crimson,
+                            onClick = { showContactsEditor = true },
+                            modifier = Modifier.weight(1f).enterOnce(1),
+                            testTag = "trusted_contacts_card"
                         )
                     }
-                } else {
-                    items(myHistorySosList, key = { "my_history_sos_${it.id}" }) { alert ->
-                        val isPlayingThisAlert = activePlaybackAlertId == alert.id
-                        SosPostCardItem(
-                            alert = alert,
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StatTile(
+                            icon = Icons.Default.MyLocation,
+                            value = 0,
+                            valueText = dirText,
+                            label = if (sosLive) (if (bn) "লাইভ শেয়ার হচ্ছে" else "Sharing live") else (if (bn) "লাইভ লোকেশন" else "Live location"),
+                            accent = if (sosLive) PinCrimsonRed else IosSystemBlue,
+                            onClick = { showLocationSheet = true },
+                            modifier = Modifier.weight(1f).enterOnce(2),
+                            testTag = "sos_location_tile"
+                        )
+                        StatTile(
+                            icon = Icons.Default.Gavel,
+                            value = falseSosPenaltyCount,
+                            label = if (bn) "ভুয়া রিপোর্ট নীতি" else "False report policy",
+                            accent = RokkhonPalette.Amber,
+                            onClick = { showPolicySheet = true },
+                            modifier = Modifier.weight(1f).enterOnce(3),
+                            testTag = "sos_policy_tile"
+                        )
+                    }
+
+                    if (falseSosWarningBanner != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        FalseSosAccountWarningBanner(
                             language = language,
-                            isMySos = true,
-                            isHistoryItem = true,
-                            hasRespondedNearby = false,
-                            isPlaying = isPlayingThisAlert,
-                            progressSeconds = if (isPlayingThisAlert) playbackSeconds else 0f,
-                            waveformBars = waveformBars,
-                            onCardTapOpenVideoAudio = {
-                                selectedSosForMediaModal = alert
-                            },
-                            onToggleInlinePlay = {
-                                viewModel.audioVerifier.togglePlayFiveSecondClip(
-                                    scope = scope,
-                                    alertId = alert.id
-                                )
-                            },
-                            onRespond = {},
-                            onReportFalseAlarm = {},
-                            onMarkSafeOwnerOnly = {}
+                            warningMessage = falseSosWarningBanner,
+                            penaltyCount = falseSosPenaltyCount,
+                            onDismiss = { viewModel.dismissFalseSosWarningBanner() }
                         )
                     }
-                }
 
-                item { Spacer(modifier = Modifier.height(28.dp)) }
+                    Spacer(modifier = Modifier.height(22.dp))
+                }
             }
+        }
+
+        if (myActiveSos != null) {
+            item(key = "my_active_sos_header") {
+                SectionHeader(
+                    title = if (bn) "আপনার সক্রিয় SOS" else "Your active SOS",
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+                )
+            }
+            item(key = "my_active_sos") {
+                Box(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                    val isPlayingThisAlert = activePlaybackAlertId == myActiveSos.id
+                    SosPostCardItem(
+                        alert = myActiveSos,
+                        language = language,
+                        isMySos = true,
+                        isHistoryItem = false,
+                        hasRespondedNearby = false,
+                        isPlaying = isPlayingThisAlert,
+                        progressSeconds = if (isPlayingThisAlert) playbackSeconds else 0f,
+                        waveformBars = waveformBars,
+                        onCardTapOpenVideoAudio = { selectedSosForMediaModal = myActiveSos },
+                        onToggleInlinePlay = { viewModel.audioVerifier.togglePlayFiveSecondClip(scope = scope, alertId = myActiveSos.id) },
+                        onRespond = {},
+                        onReportFalseAlarm = {},
+                        onMarkSafeOwnerOnly = { viewModel.resolveOwnSos(myActiveSos.id) }
+                    )
+                }
+            }
+        }
+
+        item(key = "history_header") {
+            SectionHeader(
+                title = if (bn) "আমার SOS (${myHistorySosList.size})" else "My SOS (${myHistorySosList.size})",
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+            )
+        }
+
+        if (myHistorySosList.isEmpty()) {
+            item(key = "history_empty") {
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    RokkhonEmptyState(
+                        icon = Icons.Default.History,
+                        title = if (bn) "এখনো কোনো SOS পাঠাননি" else "No SOS sent yet",
+                        body = if (bn) "আপনার পাঠানো সব SOS এখানে থাকবে।" else "Every SOS you send is kept here.",
+                        testTag = "sos_empty_history"
+                    )
+                }
+            }
+        } else {
+            items(myHistorySosList, key = { "my_history_sos_${it.id}" }) { alert ->
+                Box(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp).animateItem()) {
+                    val isPlayingThisAlert = activePlaybackAlertId == alert.id
+                    SosPostCardItem(
+                        alert = alert,
+                        language = language,
+                        isMySos = true,
+                        isHistoryItem = true,
+                        hasRespondedNearby = false,
+                        isPlaying = isPlayingThisAlert,
+                        progressSeconds = if (isPlayingThisAlert) playbackSeconds else 0f,
+                        waveformBars = waveformBars,
+                        onCardTapOpenVideoAudio = { selectedSosForMediaModal = alert },
+                        onToggleInlinePlay = { viewModel.audioVerifier.togglePlayFiveSecondClip(scope = scope, alertId = alert.id) },
+                        onRespond = {},
+                        onReportFalseAlarm = {},
+                        onMarkSafeOwnerOnly = {}
+                    )
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
+    }
+
+    if (showNetworkSheet) {
+        RokkhonBottomSheet(
+            onDismiss = { showNetworkSheet = false },
+            title = if (bn) "১ কি.মি. সুরক্ষা নেটওয়ার্ক" else "1 km safety network",
+            testTag = "sos_network_sheet"
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(10.dp).clip(CircleShape)
+                        .background(if (guardEnabled && networkOk) IosSystemGreen else RokkhonPalette.Crimson)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = (if (isLiveLocationActive) (if (bn) "লাইভ জিপিএস চালু • " else "Live GPS on • ") else "") + networkStatus,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = RokkhonPalette.Ink,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = guardEnabled,
+                    onCheckedChange = { viewModel.setGuardNetworkEnabled(it) },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = IosSystemGreen)
+                )
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SheetStat(value = bleBeacons.size, label = if (bn) "কাছের সংকেত" else "Nearby signals", modifier = Modifier.weight(1f))
+                SheetStat(value = relayedCount, label = if (bn) "রিলে করা" else "Relayed", modifier = Modifier.weight(1f))
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = if (bn) {
+                    "অ্যাপ বন্ধ থাকলেও ১ কি.মি.-এর মধ্যে কেউ SOS দিলে আপনি তাৎক্ষণিক অ্যালার্ট পাবেন, আর আপনার ফোন সংকেতটি সামনে পৌঁছে দেবে — ইন্টারনেট ছাড়াই।"
+                } else {
+                    "Get an instant alert when someone within 1 km sends an SOS, even with the app closed. Your phone also relays it onward, no internet needed."
+                },
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = RokkhonPalette.Muted
+            )
+        }
+    }
+
+    if (showLocationSheet) {
+        RokkhonBottomSheet(
+            onDismiss = { showLocationSheet = false },
+            title = if (sosLive) (if (bn) "লাইভ SOS লোকেশন" else "Live SOS location") else (if (bn) "আপনার লোকেশন" else "Your location"),
+            testTag = "sos_location_sheet"
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SheetStatText(value = dirText, label = if (bn) "দিক" else "Heading", modifier = Modifier.weight(1f))
+                SheetStatText(value = "%.4f, %.4f".format(java.util.Locale.US, userLat, userLng), label = if (bn) "স্থানাঙ্ক" else "Coordinates", modifier = Modifier.weight(1.6f))
+            }
+            if (sosLive) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .border(1.dp, RokkhonPalette.Border, RoundedCornerShape(18.dp))
+                ) {
+                    InteractiveBangladeshRadarMap(
+                        centerLat = userLat,
+                        centerLng = userLng,
+                        donors = emptyList(),
+                        bloodRequests = emptyList(),
+                        sosAlerts = listOfNotNull(myActiveSos),
+                        bleBeacons = bleBeacons,
+                        selectedBloodGroup = null,
+                        layerFilter = MapLayerFilter.SOS_ALERTS_ONLY,
+                        onPinSelected = {},
+                        showLiveFloatingCard = false,
+                        isLiveLocationActive = true,
+                        selectedAreaName = if (bn) selectedDistrict.nameBn else selectedDistrict.nameEn,
+                        userLat = userLat,
+                        userLng = userLng,
+                        userBearing = userBearing,
+                        onRefreshLiveGps = { viewModel.refreshGpsLocation() },
+                        initialUseOsmTiles = false,
+                        bengali = bn,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SheetAction(Icons.Default.Refresh, if (bn) "রিফ্রেশ" else "Refresh", Modifier.weight(1f)) { viewModel.refreshGpsLocation() }
+                SheetAction(Icons.Default.Share, if (bn) "শেয়ার" else "Share", Modifier.weight(1f)) {
+                    RokkhonIntents.shareLocation(context, viewModel.currentUserName, userLat, userLng, language)
+                }
+            }
+        }
+    }
+
+    if (showPolicySheet) {
+        RokkhonBottomSheet(
+            onDismiss = { showPolicySheet = false },
+            testTag = "sos_policy_sheet"
+        ) {
+            FalseSosAccountWarningBanner(
+                language = language,
+                warningMessage = falseSosWarningBanner,
+                penaltyCount = falseSosPenaltyCount,
+                onDismiss = null
+            )
         }
     }
 
@@ -811,79 +618,6 @@ fun SosGuardianAndBleScreen(
                 selectedSosForMediaModal = null
             }
         )
-    }
-}
-
-@Composable
-private fun TrustedContactsCard(
-    language: AppLanguage,
-    contacts: List<TrustedContact>,
-    onEdit: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val bn = language == AppLanguage.BENGALI
-    Surface(
-        color = Color(0xFFFAF6F6),
-        shape = RoundedCornerShape(22.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .border(1.dp, Color(0xFFEDE2E4), RoundedCornerShape(22.dp))
-            .testTag("trusted_contacts_card")
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Group, contentDescription = null, tint = IosSystemRed, modifier = Modifier.size(22.dp))
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(if (bn) "বিশ্বস্ত কন্টাক্ট" else "Trusted contacts", color = Color(0xFF1A0F12), fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Text(
-                        text = if (bn) "SOS পাঠালে এদের লোকেশন লিংকসহ SMS যাবে" else "They get an SMS with your location when you send SOS",
-                        color = Color(0xFF756568),
-                        fontSize = 12.sp
-                    )
-                }
-                Surface(
-                    color = LifelineBlush,
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable { onEdit() }
-                        .testTag("edit_trusted_contacts")
-                ) {
-                    Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Edit, contentDescription = null, tint = IosSystemRed, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (contacts.isEmpty()) (if (bn) "যোগ করুন" else "Add") else (if (bn) "এডিট" else "Edit"), color = IosSystemRed, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            if (contacts.isEmpty()) {
-                Text(
-                    text = if (bn) "এখনো কাউকে যোগ করা হয়নি। পরিবারের ১-৩ জনকে যোগ করুন।" else "No one added yet. Add 1-3 family members.",
-                    color = IosSystemOrange,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            } else {
-                contacts.forEach { c ->
-                    Row(modifier = Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFF5DDE0)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(c.name.firstOrNull()?.uppercase() ?: "?", color = IosSystemRed, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(c.name.ifBlank { c.phone }, color = Color(0xFF1A0F12), fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        Text(c.phone, color = Color(0xFF756568), fontSize = 13.sp)
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -961,5 +695,120 @@ private fun TrustedContactsEditorDialog(
                 }
             }
         }
+    }
+}
+
+
+/** The big round SOS button with two soft rings pulsing out of it. */
+@Composable
+private fun SosPulseButton(language: AppLanguage, live: Boolean, onClick: () -> Unit) {
+    val bn = language == AppLanguage.BENGALI
+    val pulse = rememberInfiniteTransition(label = "sos_pulse")
+    val p by pulse.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 2000, easing = LinearEasing)),
+        label = "sos_pulse_phase"
+    )
+    val ringColor = if (live) Color(0xFFFF6B7D) else Color.White
+    Box(
+        modifier = Modifier
+            .size(230.dp)
+            .drawBehind {
+                val base = 84.dp.toPx()
+                listOf(p, (p + 0.5f) % 1f).forEach { phase ->
+                    drawCircle(
+                        color = ringColor.copy(alpha = (1f - phase) * 0.22f),
+                        radius = base + phase * 30.dp.toPx(),
+                        center = center
+                    )
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(168.dp)
+                .shadow(18.dp, CircleShape, ambientColor = PinCrimsonRed, spotColor = PinCrimsonRed)
+                .clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFFFF3B52), Color(0xFFD0142C))))
+                .border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                .springClick(pressedScale = 0.92f, onClick = onClick)
+                .testTag("sos_guardian_main_button"),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.FlashOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
+                Text("SOS", color = Color.White, fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.ExtraBold)
+                Text(
+                    text = if (live) (if (bn) "লাইভ চালু" else "Live") else (if (bn) "চাপ দিন" else "Tap"),
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroStatusChip(icon: ImageVector, text: String, ok: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.12f))
+            .border(1.dp, Color.White.copy(alpha = 0.16f), CircleShape)
+            .springClick(onClick = onClick)
+            .padding(horizontal = 11.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(if (ok) Color(0xFF4ADE80) else Color(0xFFFBBF24)))
+        Spacer(modifier = Modifier.width(6.dp))
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun SheetStat(value: Int, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(RokkhonPalette.Background)
+            .padding(14.dp)
+    ) {
+        RollingNumber(value = value, fontSize = 24.sp, color = RokkhonPalette.Ink)
+        Text(label, fontSize = 12.sp, color = RokkhonPalette.Muted)
+    }
+}
+
+@Composable
+private fun SheetStatText(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(RokkhonPalette.Background)
+            .padding(14.dp)
+    ) {
+        Text(value, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = RokkhonPalette.Ink, maxLines = 1)
+        Text(label, fontSize = 12.sp, color = RokkhonPalette.Muted)
+    }
+}
+
+@Composable
+private fun SheetAction(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .clip(CircleShape)
+            .background(RokkhonPalette.BlushSoft)
+            .springClick(onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = RokkhonPalette.Crimson, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(label, color = RokkhonPalette.Crimson, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }

@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -51,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AppLanguage
 import com.example.data.model.BANGLADESH_DISTRICTS
@@ -64,14 +64,17 @@ import com.example.ui.components.LifelineResponderCard
 import com.example.ui.components.MapPinDetailOverlayCard
 import com.example.ui.components.RokkhonEmptyState
 import com.example.ui.components.RokkhonIntents
+import com.example.ui.components.RoundIconButton
+import com.example.ui.components.Segment
+import com.example.ui.components.SegmentedControl
 import com.example.ui.components.SelectedMapPin
 import com.example.ui.components.SosPostCardItem
 import com.example.ui.components.SosVideoAudioInspectorDialog
+import com.example.ui.components.springClick
 import com.example.ui.theme.IosSystemGreen
-import com.example.ui.theme.IosSystemRed
-import com.example.ui.theme.LifelineBlush
 import com.example.ui.theme.PinCrimsonRed
 import com.example.ui.theme.RadarObsidianBg
+import com.example.ui.theme.RokkhonPalette
 import com.example.ui.viewmodel.MapLayerFilter
 import com.example.ui.viewmodel.RokkhonTab
 import com.example.ui.viewmodel.RokkhonViewModel
@@ -352,106 +355,74 @@ fun RadarMapHubScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Area Header (Tap to open all 64 districts picker) + Post Blood Request Button
+                    // Area title + one round "+" — the tabs below say the rest
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable { showAreaPickerDialog = true }
+                                .springClick(pressedScale = 0.97f) { showAreaPickerDialog = true }
+                                .testTag("find_area_title"),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = if (language == AppLanguage.BENGALI) {
-                                        selectedDistrict.nameBn
-                                    } else {
-                                        selectedDistrict.nameEn
-                                    },
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color(0xFF1A0F12),
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Change Area",
-                                    tint = IosSystemRed,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    color = if (isAreaAutoDetected) IosSystemGreen.copy(alpha = 0.14f) else LifelineBlush,
-                                    shape = CircleShape
-                                ) {
-                                    Text(
-                                        text = if (isAreaAutoDetected) {
-                                            if (language == AppLanguage.BENGALI) "অটো জিপিএস" else "Auto GPS"
-                                        } else {
-                                            if (language == AppLanguage.BENGALI) "ম্যানুয়াল" else "Manual"
-                                        },
-                                        color = if (isAreaAutoDetected) IosSystemGreen else IosSystemRed,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                    )
-                                }
-                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isAreaAutoDetected) IosSystemGreen else RokkhonPalette.Crimson)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (language == AppLanguage.BENGALI) {
-                                    "ডোনার, রোগীর রক্তের পোস্ট এবং জরুরি SOS আলাদা ট্যাবে দেখুন"
-                                } else {
-                                    "Donors, Patient Posts & Active SOS alerts separated by tab"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF756568)
+                                text = if (language == AppLanguage.BENGALI) selectedDistrict.nameBn else selectedDistrict.nameEn,
+                                fontSize = 20.sp,
+                                color = RokkhonPalette.Ink,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1
+                            )
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Change Area",
+                                tint = RokkhonPalette.Crimson,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
-
-                        Surface(
-                            color = LifelineBlush,
-                            shape = CircleShape,
-                            modifier = Modifier
-                                .clickable { onOpenBloodRequestDialog() }
-                                .testTag("new_blood_request_fab")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    tint = IosSystemRed,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (language == AppLanguage.BENGALI) "রক্তের আবেদন" else "Post Request",
-                                    color = IosSystemRed,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
+                        RoundIconButton(
+                            icon = Icons.Default.Add,
+                            onClick = onOpenBloodRequestDialog,
+                            filled = true,
+                            contentDescription = if (language == AppLanguage.BENGALI) "রক্তের আবেদন" else "Post request",
+                            testTag = "new_blood_request_fab"
+                        )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // 3-Tab Segmented Switcher: Available Donors | Patient Posts | Active SOS
-                    SeparateDonorRequestAndSosFilterTabs(
-                        language = language,
-                        selectedLayer = when (layerFilter) {
-                            MapLayerFilter.BLOOD_REQUESTS_ONLY -> MapLayerFilter.BLOOD_REQUESTS_ONLY
-                            MapLayerFilter.SOS_ALERTS_ONLY -> MapLayerFilter.SOS_ALERTS_ONLY
-                            else -> MapLayerFilter.DONORS_ONLY
+                    val bnTabs = language == AppLanguage.BENGALI
+                    SegmentedControl(
+                        segments = listOf(
+                            Segment("${if (bnTabs) "ডোনার" else "Donors"} ${areaDonors.size}", Icons.Default.People, "map_filter_tab_available_donors"),
+                            Segment("${if (bnTabs) "রোগী" else "Patients"} ${areaOpenRequests.size}", Icons.Default.LocalHospital, "map_filter_tab_patient_requests"),
+                            Segment("SOS ${activeSosAlerts.size}", Icons.Default.Shield, "map_filter_tab_sos_alerts")
+                        ),
+                        selectedIndex = when (layerFilter) {
+                            MapLayerFilter.BLOOD_REQUESTS_ONLY -> 1
+                            MapLayerFilter.SOS_ALERTS_ONLY -> 2
+                            else -> 0
                         },
-                        donorsCount = areaDonors.size,
-                        requestsCount = areaOpenRequests.size,
-                        sosCount = activeSosAlerts.size,
-                        onSelectLayer = { viewModel.setMapLayerFilter(it) }
+                        onSelect = { index ->
+                            viewModel.setMapLayerFilter(
+                                when (index) {
+                                    1 -> MapLayerFilter.BLOOD_REQUESTS_ONLY
+                                    2 -> MapLayerFilter.SOS_ALERTS_ONLY
+                                    else -> MapLayerFilter.DONORS_ONLY
+                                }
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        height = 44.dp
                     )
                 }
 

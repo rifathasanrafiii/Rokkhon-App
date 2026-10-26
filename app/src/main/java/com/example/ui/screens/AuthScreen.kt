@@ -387,6 +387,8 @@ fun AuthScreen(
     }
 
     LaunchedEffect(Unit) {
+        // Without google-services.json there is no FirebaseApp; calling Firebase.auth would crash.
+        if (!firebaseReady) return@LaunchedEffect
         attemptAutoSignIn(
             context = context,
             credentialManager = credentialManager,
