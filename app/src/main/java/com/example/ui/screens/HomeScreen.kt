@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +35,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,9 +44,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -53,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.AppLanguage
@@ -71,6 +77,7 @@ import com.example.ui.components.RokkhonNotificationCenterDialog
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.SheetGridItem
 import com.example.ui.components.enterOnce
+import com.example.ui.components.riseIn
 import com.example.ui.components.springClick
 import com.example.ui.icons.UIcons
 import com.example.ui.theme.RokkhonPalette
@@ -142,21 +149,42 @@ fun HomeMatchHubScreen(
     var selectedDonor by remember { mutableStateOf<DonorNode?>(null) }
     var selectedRequest by remember { mutableStateOf<BloodRequest?>(null) }
 
+    // White status-bar icons while the red header is behind them, dark again once it scrolls away.
+    val listState = rememberLazyListState()
+    val headerUnderStatusBar by remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 260 }
+    }
+    val hostView = LocalView.current
+    DisposableEffect(headerUnderStatusBar) {
+        val window = generateSequence(hostView.context) { (it as? android.content.ContextWrapper)?.baseContext }
+            .filterIsInstance<android.app.Activity>().firstOrNull()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, hostView) }
+        controller?.isAppearanceLightStatusBars = !headerUnderStatusBar
+        onDispose { controller?.isAppearanceLightStatusBars = true }
+    }
+
     // A people-first home: who can give blood near you, and who needs it.
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .background(RokkhonPalette.Background)
             .testTag("home_screen")
     ) {
         item(key = "header") {
+            Column(modifier = Modifier.fillMaxWidth()) {
+            // Red gradient behind the top bar, greeting and search, like the first design.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFFE11900), Color(0xFFA8150C))))
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 16.dp, end = 16.dp, top = 10.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 20.dp)
+                    .testTag("home_red_header")
             ) {
                 HomeTopBar(
+                    onDark = true,
                     language = language,
                     userInitial = viewModel.currentUserName.firstOrNull()?.uppercaseChar()?.toString() ?: "R",
                     streakDays = dailyStreakCount,
@@ -177,12 +205,12 @@ fun HomeMatchHubScreen(
                     fontSize = 28.sp,
                     lineHeight = 34.sp,
                     fontWeight = FontWeight.Bold,
-                    color = RokkhonPalette.Ink
+                    color = Color.White
                 )
                 Text(
                     text = if (bn) "আজ কারো জন্য রক্ত খুঁজছেন?" else "Looking for blood for someone today?",
                     fontSize = 15.sp,
-                    color = RokkhonPalette.Muted
+                    color = Color.White.copy(alpha = 0.85f)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -192,7 +220,7 @@ fun HomeMatchHubScreen(
                         .fillMaxWidth()
                         .height(56.dp)
                         .clip(RoundedCornerShape(28.dp))
-                        .background(RokkhonPalette.Subtle)
+                        .background(Color.White)
                         .springClick(pressedScale = 0.98f) { showGroupSheet = true }
                         .padding(start = 18.dp, end = 8.dp)
                         .testTag("home_search_bar"),
@@ -213,7 +241,7 @@ fun HomeMatchHubScreen(
                     Row(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(Color.White)
+                            .background(RokkhonPalette.Subtle)
                             .springClick { showAreaPickerDialog = true }
                             .padding(horizontal = 12.dp, vertical = 9.dp)
                             .testTag("area_dropdown_selector"),
@@ -232,6 +260,8 @@ fun HomeMatchHubScreen(
                     }
                 }
 
+            }
+            Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
                 if (isLocationDisabledByAdmin) {
                     Row(
                         modifier = Modifier
@@ -257,7 +287,7 @@ fun HomeMatchHubScreen(
                         icon = UIcons.Bloodtype,
                         label = if (bn) "রক্ত চাই" else "Request",
                         onClick = onOpenBloodRequestDialog,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).riseIn(0),
                         testTag = "request_blood_button"
                     )
                     QuickAction(
@@ -267,29 +297,25 @@ fun HomeMatchHubScreen(
                             viewModel.setMapLayerFilter(MapLayerFilter.DONORS_ONLY)
                             viewModel.selectTab(RokkhonTab.RADAR_MAP)
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).riseIn(1),
                         testTag = "explore_compatible_donors_card"
                     )
                     QuickAction(
                         icon = if (isOwnDonorRegistered) UIcons.CardGiftcard else UIcons.Person,
                         label = if (isOwnDonorRegistered) (if (bn) "রিওয়ার্ড" else "Rewards") else (if (bn) "ডোনার হোন" else "Join"),
                         onClick = { if (isOwnDonorRegistered) viewModel.selectTab(RokkhonTab.REWARDS) else viewModel.openDonorEditor() },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).riseIn(2),
                         testTag = "home_profile_shortcut"
                     )
                     QuickAction(
                         icon = UIcons.GridView,
                         label = if (bn) "আরও" else "More",
                         onClick = { showMoreSheet = true },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).riseIn(3),
                         testTag = "home_more_button"
                     )
                 }
 
-                if (onOpenPrivateSos != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    PrivateSosStrip(bn = bn, alert = sosAlertActive, onClick = onOpenPrivateSos)
-                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -321,6 +347,7 @@ fun HomeMatchHubScreen(
                     }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
+            }
             }
         }
 
@@ -714,6 +741,7 @@ fun BloodGroupPillGrid2x4(
 /** Black wordmark on the left; streak, language, notifications and profile on the right. */
 @Composable
 private fun HomeTopBar(
+    onDark: Boolean = false,
     language: AppLanguage,
     userInitial: String,
     streakDays: Int,
@@ -727,13 +755,17 @@ private fun HomeTopBar(
     sosAlert: Boolean = false
 ) {
     val bn = language == AppLanguage.BENGALI
+    // On the red header everything turns white; elsewhere it stays black on grey.
+    val fg = if (onDark) Color.White else RokkhonPalette.Ink
+    val pillBg = if (onDark) Color.White.copy(alpha = 0.16f) else RokkhonPalette.Subtle
+    val badge = if (onDark) Color.White else RokkhonPalette.Sos
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Image(
-            painter = painterResource(R.drawable.rokkhon_wordmark_black),
+            painter = painterResource(if (onDark) R.drawable.rokkhon_wordmark_white else R.drawable.rokkhon_wordmark_black),
             contentDescription = "রক্ষণ",
             modifier = Modifier.height(30.dp)
         )
@@ -741,24 +773,24 @@ private fun HomeTopBar(
             Row(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(RokkhonPalette.Subtle)
+                    .background(pillBg)
                     .springClick(onClick = onStreakClick)
                     .padding(horizontal = 11.dp, vertical = 8.dp)
                     .testTag("header_streak_points_pill"),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(UIcons.LocalFireDepartment, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(15.dp))
+                Icon(UIcons.LocalFireDepartment, contentDescription = null, tint = fg, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(if (bn) "${streakDays}দি" else "${streakDays}d", color = RokkhonPalette.Ink, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                Text(if (bn) "${streakDays}দি" else "${streakDays}d", color = fg, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.width(8.dp))
-                Icon(UIcons.Star, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(15.dp))
+                Icon(UIcons.Star, contentDescription = null, tint = fg, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("$points", color = RokkhonPalette.Ink, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                Text("$points", color = fg, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
             }
             if (onSosClick != null) {
                 // Private SOS: hold-to-start lives behind this, so a stray tap here starts nothing.
                 HeaderIconButton(onClick = onSosClick, testTag = "home_private_sos_button", description = "SOS") {
-                    Icon(UIcons.Shield, contentDescription = null, tint = if (sosAlert) RokkhonPalette.Sos else RokkhonPalette.Ink, modifier = Modifier.size(19.dp))
+                    Icon(UIcons.Shield, contentDescription = null, tint = fg, modifier = Modifier.size(19.dp))
                     if (sosAlert) {
                         Box(
                             modifier = Modifier
@@ -766,16 +798,16 @@ private fun HomeTopBar(
                                 .padding(top = 8.dp, end = 9.dp)
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(RokkhonPalette.Sos)
+                                .background(badge)
                         )
                     }
                 }
             }
             HeaderIconButton(onClick = onLanguageClick, testTag = "language_toggle_button", description = "Switch Language") {
-                Icon(UIcons.Translate, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(19.dp))
+                Icon(UIcons.Translate, contentDescription = null, tint = fg, modifier = Modifier.size(19.dp))
             }
             HeaderIconButton(onClick = onBellClick, testTag = "notification_bell_button", description = "Notifications") {
-                Icon(UIcons.NotificationsNone, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(20.dp))
+                Icon(UIcons.NotificationsNone, contentDescription = null, tint = fg, modifier = Modifier.size(20.dp))
                 if (hasUnread) {
                     Box(
                         modifier = Modifier
@@ -783,7 +815,7 @@ private fun HomeTopBar(
                             .padding(top = 8.dp, end = 9.dp)
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(RokkhonPalette.Sos)
+                            .background(badge)
                     )
                 }
             }
@@ -791,56 +823,15 @@ private fun HomeTopBar(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(RokkhonPalette.Chip)
+                    .background(pillBg)
                     .springClick(onClick = onAvatarClick)
                     .semantics { contentDescription = "Profile" }
                     .testTag("open_profile_avatar"),
                 contentAlignment = Alignment.Center
             ) {
-                Text(userInitial, color = RokkhonPalette.Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(userInitial, color = fg, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
         }
-    }
-}
-
-/** Way into the private SOS. Grey like the rest of Home; turns red only while an SOS is live. */
-@Composable
-private fun PrivateSosStrip(bn: Boolean, alert: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (alert) RokkhonPalette.Sos else RokkhonPalette.Subtle)
-            .springClick(pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-            .testTag("home_sos_card"),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(if (alert) Color.White.copy(alpha = 0.18f) else Color.White),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(UIcons.Shield, contentDescription = null, tint = if (alert) Color.White else RokkhonPalette.Sos, modifier = Modifier.size(21.dp))
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = if (alert) (if (bn) "SOS চালু আছে" else "An SOS is live") else (if (bn) "জরুরি SOS" else "Emergency SOS"),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (alert) Color.White else RokkhonPalette.Ink
-            )
-            Text(
-                text = if (alert) (if (bn) "দেখতে ট্যাপ করুন" else "Tap to open")
-                else (if (bn) "বিপদে বিশ্বস্ত মানুষদের লাইভ লোকেশন পাঠান" else "Share live location with people you trust"),
-                fontSize = 12.5.sp,
-                color = if (alert) Color.White.copy(alpha = 0.9f) else RokkhonPalette.Muted
-            )
-        }
-        Icon(UIcons.KeyboardArrowRight, contentDescription = null, tint = if (alert) Color.White else RokkhonPalette.Faint, modifier = Modifier.size(18.dp))
     }
 }
 

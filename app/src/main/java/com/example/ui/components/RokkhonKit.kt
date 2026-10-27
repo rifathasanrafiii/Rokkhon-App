@@ -675,3 +675,28 @@ fun HoldToConfirmButton(
         )
     }
 }
+
+/**
+ * Rises into place from a little below with a soft spring, one after another by [order]
+ * (the Home shortcut grid). Played once while the item stays on screen.
+ */
+fun Modifier.riseIn(order: Int = 0): Modifier = composed {
+    var played by rememberSaveable { mutableStateOf(false) }
+    val progress = remember { Animatable(if (played) 1f else 0f) }
+    val shift = with(LocalDensity.current) { 36.dp.toPx() }
+    LaunchedEffect(Unit) {
+        if (!played) {
+            delay(120L + order.coerceAtMost(8) * 70L)
+            progress.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow))
+            played = true
+        }
+    }
+    graphicsLayer {
+        val p = progress.value
+        alpha = p.coerceIn(0f, 1f)
+        translationY = (1f - p) * shift
+        val sc = 0.88f + 0.12f * p
+        scaleX = sc
+        scaleY = sc
+    }
+}
