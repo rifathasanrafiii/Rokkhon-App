@@ -208,7 +208,7 @@ internal fun IconCircle(icon: ImageVector, tint: Color = RokkhonPalette.Ink, bac
 
 /** Small status pill: dot + text. */
 @Composable
-internal fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier, pulse: Boolean = false) {
+internal fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier, pulse: Boolean = false, dotColor: Color = color) {
     val alpha = if (pulse) {
         val tr = rememberInfiniteTransition(label = "pill")
         tr.animateFloat(0.35f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pill_a").value
@@ -220,7 +220,7 @@ internal fun StatusPill(text: String, color: Color, modifier: Modifier = Modifie
             .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(7.dp).clip(CircleShape).background(color.copy(alpha = alpha)))
+        Box(Modifier.size(7.dp).clip(CircleShape).background(dotColor.copy(alpha = alpha)))
         Spacer(Modifier.width(6.dp))
         Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = color)
     }
@@ -281,7 +281,8 @@ internal fun HoldToActivateButton(
     enabled: Boolean = true,
     holdMs: Int = 3000,
     size: Dp = 220.dp,
-    color: Color = RokkhonPalette.Sos,
+    color: Color = RokkhonPalette.Primary,
+    ringColor: Color = RokkhonPalette.Sos,
     testTag: String = "private_sos_hold_button"
 ) {
     val progress = remember { Animatable(0f) }
@@ -322,19 +323,19 @@ internal fun HoldToActivateButton(
                     .size(size * 0.92f)
                     .scale(if (enabled) halo else 1f)
                     .clip(CircleShape)
-                    .background(color.copy(alpha = if (enabled) 0.10f else 0.05f))
+                    .background(color.copy(alpha = if (enabled) 0.05f else 0.03f))
             )
             Canvas(Modifier.size(size * 0.86f)) {
                 val stroke = 7.dp.toPx()
                 drawArc(
-                    color = color.copy(alpha = 0.18f),
+                    color = color.copy(alpha = 0.10f),
                     startAngle = 0f, sweepAngle = 360f, useCenter = false,
                     topLeft = Offset(stroke / 2, stroke / 2),
                     size = Size(this.size.width - stroke, this.size.height - stroke),
                     style = Stroke(stroke)
                 )
                 drawArc(
-                    color = color,
+                    color = ringColor,
                     startAngle = -90f, sweepAngle = 360f * progress.value, useCenter = false,
                     topLeft = Offset(stroke / 2, stroke / 2),
                     size = Size(this.size.width - stroke, this.size.height - stroke),

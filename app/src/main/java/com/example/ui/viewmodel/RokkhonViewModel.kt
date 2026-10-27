@@ -15,6 +15,7 @@ import com.example.data.media.LiveAudioVerifier
 import com.example.data.model.AppLanguage
 import com.example.data.model.BANGLADESH_AREAS
 import com.example.data.model.AreaDetect
+import com.example.data.model.donationDateProblem
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.BangladeshDistrict
 import com.example.data.model.BleSosBeacon
@@ -1265,19 +1266,57 @@ class RokkhonViewModel(
      * available by itself 90 days later (isEligibleNow is computed from the date), with nothing
      * to switch back on. No points for this, so it can't be tapped for rewards.
      */
-    fun markDonatedToday() {
+    private val _donationUndoFor = MutableStateFlow(prefs.getString(KEY_DONATION_UNDO_FOR, null))
+    /** The donation date this phone recorded last, while it can still be taken back. */
+    val donationUndoFor: StateFlow<String?> = _donationUndoFor.asStateFlow()
+
+    /**
+     * Records a donation on [date] (yyyy-MM-dd) after the checks in [donationDateProblem].
+     * Gives no points, and makes the donor "resting" for 90 days, so there is nothing to gain
+     * from a false entry. The previous date is kept so the entry can be undone.
+     */
+    fun recordDonation(date: String): Boolean {
         val me = myDonorNode()
         if (me == null) {
             showToast("আগে ডোনার প্রোফাইল সেভ করুন", "Save your donor profile first")
-            return
+            return false
         }
         val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-        if (saveDonorProfile(me.displayName, me.bloodGroup, me.isAvailableDonor, me.district, me.contactPhone, today)) {
-            showToast(
-                "ধন্যবাদ! ৯০ দিন পর আপনি আবার নিজে থেকেই সক্রিয় হয়ে যাবেন",
-                "Thank you! You'll be active again automatically in 90 days"
-            )
+        if (donationDateProblem(date, me.lastDonationDate, today) != null) return false
+        if (!saveDonorProfile(me.displayName, me.bloodGroup, me.isAvailableDonor, me.district, me.contactPhone, date)) return false
+        prefs.edit()
+            .putString(KEY_DONATION_UNDO_PREV, me.lastDonationDate)
+            .putString(KEY_DONATION_UNDO_FOR, date)
+            .apply()
+        _donationUndoFor.value = date
+        showToast(
+            "ধন্যবাদ! ৯০ দিন পর আপনি আবার নিজে থেকেই সক্রিয় হয়ে যাবেন",
+            "Thank you! You'll be active again automatically in 90 days"
+        )
+        return true
+    }
+
+    /**
+     * Takes back the last donation recorded on this phone and restores the date before it.
+     * Returns the restored date ("" when there was none), or null if nothing was undone.
+     */
+    fun undoLastDonation(): String? {
+        val me = myDonorNode() ?: return null
+        val recorded = _donationUndoFor.value ?: return null
+        if (me.lastDonationDate != recorded) {
+            clearDonationUndo()
+            return null
         }
+        val previous = prefs.getString(KEY_DONATION_UNDO_PREV, "") ?: ""
+        if (!saveDonorProfile(me.displayName, me.bloodGroup, me.isAvailableDonor, me.district, me.contactPhone, previous)) return null
+        clearDonationUndo()
+        showToast("রক্তদানের রেকর্ড বাতিল হয়েছে", "Donation record removed")
+        return previous
+    }
+
+    private fun clearDonationUndo() {
+        prefs.edit().remove(KEY_DONATION_UNDO_PREV).remove(KEY_DONATION_UNDO_FOR).apply()
+        _donationUndoFor.value = null
     }
 
     fun toggleDonorActiveStatus(currentNode: DonorNode?, newStatus: Boolean) {
@@ -1830,6 +1869,8 @@ class RokkhonViewModel(
         private const val TOAST_DURATION_MS = 4500L
         private const val LIVE_LOCATION_PUSH_MS = 2_000L
         private const val KEY_LANGUAGE = "app_language"
+        private const val KEY_DONATION_UNDO_PREV = "donation_undo_previous_date"
+        private const val KEY_DONATION_UNDO_FOR = "donation_undo_recorded_date"
         private const val KEY_AREA_KEY = "selected_area_key"
         private const val KEY_PLEDGED_IDS = "pledged_request_ids"
         private const val KEY_RESPONDED_SOS_IDS = "responded_sos_ids"

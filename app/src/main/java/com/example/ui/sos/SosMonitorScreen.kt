@@ -171,7 +171,7 @@ fun SosMonitorScreen(vm: SosMonitorViewModel, bn: Boolean, onBack: () -> Unit) {
                 fontSize = 14.sp, lineHeight = 20.sp, color = RokkhonPalette.Ink
             )
             Spacer(Modifier.height(14.dp))
-            PrimaryButton(t(bn, "বুঝেছি, রেকর্ড করুন", "I understand, record"), danger = true, testTag = "record_consent_confirm", onClick = {
+            PrimaryButton(t(bn, "বুঝেছি, রেকর্ড করুন", "I understand, record"), testTag = "record_consent_confirm", onClick = {
                 consentOpen = false
                 vm.startRecording(session?.ownerName ?: "sos")
             })
@@ -216,12 +216,15 @@ private fun StatusHeader(bn: Boolean, s: SosSession, now: Long, online: Boolean)
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(if (s.active) RokkhonPalette.Sos else RokkhonPalette.Primary)
+            .background(if (s.active) RokkhonPalette.Primary else Color(0xFF3A3A3A))
             .padding(18.dp)
             .testTag("monitor_status")
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            StatusPill(if (s.active) t(bn, "SOS চলছে", "SOS active") else t(bn, "SOS শেষ", "SOS ended"), Color.White, pulse = s.active)
+            StatusPill(
+                if (s.active) t(bn, "SOS চলছে", "SOS active") else t(bn, "SOS শেষ", "SOS ended"), Color.White,
+                pulse = s.active, dotColor = if (s.active) RokkhonPalette.Sos else Color.White
+            )
             Spacer(Modifier.weight(1f))
             if (!online) Text(t(bn, "আপনি অফলাইনে", "You're offline"), color = Color.White, fontSize = 12.5.sp)
         }
@@ -362,13 +365,13 @@ private fun AudioBlock(
                         .fillMaxWidth()
                         .height(52.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(if (recording) RokkhonPalette.Sos else Color.White)
+                        .background(if (recording) RokkhonPalette.Primary else Color.White)
                         .springClick(enabled = link == AudioLink.CONNECTED || recording, pressedScale = 0.97f, onClick = onRecord)
                         .padding(horizontal = 16.dp)
                         .testTag("monitor_record"),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(if (recording) UIcons.Stop else UIcons.Mic, null, tint = if (recording) Color.White else RokkhonPalette.Sos, modifier = Modifier.size(20.dp))
+                    Icon(if (recording) UIcons.Stop else UIcons.Mic, null, tint = if (recording) RokkhonPalette.Sos else RokkhonPalette.Ink, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Text(
                         if (recording) t(bn, "রেকর্ড হচ্ছে · ", "Recording · ") + clock(recordingMs, bn)

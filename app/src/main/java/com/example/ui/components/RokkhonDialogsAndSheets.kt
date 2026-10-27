@@ -198,7 +198,7 @@ private fun NotificationRow(item: RokkhonNotificationItem, bn: Boolean, onClick:
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(if (sos) RokkhonPalette.Sos else if (!item.isRead) Color.White else RokkhonPalette.Subtle),
+                .background(if (sos) RokkhonPalette.Primary else if (!item.isRead) Color.White else RokkhonPalette.Subtle),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, contentDescription = null, tint = if (sos) Color.White else RokkhonPalette.Ink, modifier = Modifier.size(20.dp))

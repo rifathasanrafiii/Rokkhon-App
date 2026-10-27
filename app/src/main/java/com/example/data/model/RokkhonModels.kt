@@ -59,6 +59,29 @@ fun parseDonationDateMillis(value: String): Long? {
     }
 }
 
+/** Why a donation date can't be recorded. */
+enum class DonationProblem { INVALID, FUTURE, TOO_OLD, NOT_AFTER_LAST, TOO_SOON_AFTER_LAST }
+
+/** Only recent donations are logged from the profile; older ones are edited in the donor details. */
+const val DONATION_LOG_WINDOW_DAYS = 7
+
+/**
+ * Checks a donation the user wants to record ([newDate], yyyy-MM-dd) against the one already on
+ * the profile. A body can't give whole blood twice inside 90 days, so a second donation in that
+ * window is almost always a mis-tap or a fake; it is refused rather than recorded.
+ */
+fun donationDateProblem(newDate: String, lastDonationDate: String, todayDate: String): DonationProblem? {
+    val day = 24L * 60L * 60L * 1000L
+    val new = parseDonationDateMillis(newDate) ?: return DonationProblem.INVALID
+    val today = parseDonationDateMillis(todayDate) ?: return DonationProblem.INVALID
+    if (new > today) return DonationProblem.FUTURE
+    if ((today - new) / day >= DONATION_LOG_WINDOW_DAYS) return DonationProblem.TOO_OLD
+    val last = parseDonationDateMillis(lastDonationDate) ?: return null
+    if (new <= last) return DonationProblem.NOT_AFTER_LAST
+    if ((new - last) / day < DONATION_GAP_DAYS) return DonationProblem.TOO_SOON_AFTER_LAST
+    return null
+}
+
 /** Days left until the donor can donate again (0 = eligible now). */
 fun daysUntilEligible(lastDonationDate: String, nowMillis: Long = System.currentTimeMillis()): Int {
     val last = parseDonationDateMillis(lastDonationDate) ?: return 0

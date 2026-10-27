@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
@@ -164,7 +166,7 @@ private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenAccess: () -> Un
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp))
-                    .background(RokkhonPalette.Sos)
+                    .background(RokkhonPalette.Primary)
                     .springClick(pressedScale = 0.98f) { onOpenSession(w.sessionId) }
                     .padding(16.dp)
                     .testTag("watched_sos_card"),
@@ -174,6 +176,8 @@ private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenAccess: () -> Un
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(t(bn, "${w.ownerName} SOS চালু করেছেন", "${w.ownerName} started an SOS"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(Modifier.height(2.dp))
+                    StatusPill(t(bn, "লাইভ", "LIVE"), Color.White, pulse = true, dotColor = RokkhonPalette.Sos)
                     Text(t(bn, "দেখতে ট্যাপ করুন", "Tap to follow"), color = Color.White.copy(alpha = 0.85f), fontSize = 12.5.sp)
                 }
                 Icon(UIcons.KeyboardArrowRight, null, tint = Color.White)
@@ -300,20 +304,25 @@ private fun StrandedCard(bn: Boolean, onResume: () -> Unit, onEnd: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(RokkhonPalette.Primary)
+            .background(Color.White)
+            .border(1.dp, RokkhonPalette.Border, RoundedCornerShape(18.dp))
             .padding(16.dp)
             .testTag("sos_stranded")
     ) {
-        Text(t(bn, "আপনার একটি SOS এখনও চালু", "One of your SOS is still on"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(RokkhonPalette.Sos))
+            Spacer(Modifier.width(8.dp))
+            Text(t(bn, "আপনার একটি SOS এখনও চালু", "One of your SOS is still on"), color = RokkhonPalette.Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
         Spacer(Modifier.height(4.dp))
         Text(
             t(bn, "ফোন বন্ধ বা অ্যাপ বন্ধ হওয়ায় লোকেশন যাওয়া থেমে গিয়েছিল। আবার চালু করবেন, নাকি SOS শেষ করবেন?",
                 "Location stopped when the phone or app was closed. Resume sharing, or end the SOS?"),
-            color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, lineHeight = 19.sp
+            color = RokkhonPalette.Muted, fontSize = 13.sp, lineHeight = 19.sp
         )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f)) { PrimaryButton(t(bn, "আবার চালু", "Resume"), onClick = onResume, danger = true, testTag = "sos_resume") }
+            Box(Modifier.weight(1f)) { PrimaryButton(t(bn, "আবার চালু", "Resume"), onClick = onResume, testTag = "sos_resume") }
             SecondaryButton(t(bn, "শেষ করুন", "End SOS"), onClick = onEnd, modifier = Modifier.weight(1f), testTag = "sos_stranded_end")
         }
     }
@@ -352,12 +361,12 @@ private fun OwnerDashboard(vm: PrivateSosViewModel, bn: Boolean, owner: OwnerSos
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
-                .background(RokkhonPalette.Sos)
+                .background(RokkhonPalette.Primary)
                 .padding(18.dp)
                 .testTag("sos_owner_header")
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusPill(t(bn, "লাইভ", "LIVE"), Color.White, pulse = true)
+                StatusPill(t(bn, "লাইভ", "LIVE"), Color.White, pulse = true, dotColor = RokkhonPalette.Sos)
                 Spacer(Modifier.weight(1f))
                 Text(
                     if (owner.online) t(bn, "অনলাইন", "Online") else t(bn, "অফলাইন — নেট ফিরলে পাঠাবে", "Offline — will send when back"),
@@ -477,7 +486,7 @@ private fun Indicator(modifier: Modifier, icon: androidx.compose.ui.graphics.vec
             .testTag(testTag)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconCircle(icon, tint = if (live) Color.White else RokkhonPalette.Ink, background = if (live) RokkhonPalette.Sos else Color.White, size = 32.dp)
+            IconCircle(icon, tint = if (live) Color.White else RokkhonPalette.Ink, background = if (live) RokkhonPalette.Primary else Color.White, size = 32.dp)
             Spacer(Modifier.width(8.dp))
             Text(title, fontSize = 12.5.sp, color = RokkhonPalette.Muted)
         }

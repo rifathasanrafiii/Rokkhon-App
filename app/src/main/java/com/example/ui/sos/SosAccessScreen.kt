@@ -366,7 +366,7 @@ private fun EditGrantSheet(vm: PrivateSosViewModel, bn: Boolean, grant: SosGrant
                     fontSize = 13.sp, lineHeight = 19.sp, color = RokkhonPalette.Ink
                 )
                 Spacer(Modifier.height(10.dp))
-                PrimaryButton(t(bn, "হ্যাঁ, বাতিল করুন", "Yes, remove"), onClick = { vm.revoke(grant); onDismiss() }, danger = true, testTag = "access_revoke_confirm")
+                PrimaryButton(t(bn, "হ্যাঁ, বাতিল করুন", "Yes, remove"), onClick = { vm.revoke(grant); onDismiss() }, testTag = "access_revoke_confirm")
             }
         }
     }

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,12 +61,16 @@ import com.example.R
 import com.example.data.model.AppLanguage
 import com.example.data.model.BANGLADESH_AREAS
 import com.example.data.model.DONATION_GAP_DAYS
+import com.example.data.model.DONATION_LOG_WINDOW_DAYS
+import com.example.data.model.DonationProblem
 import com.example.data.model.GUARDIAN_REWARD_TIERS
 import com.example.data.model.daysUntilEligible
+import com.example.data.model.donationDateProblem
 import com.example.data.model.isValidBangladeshMobile
 import com.example.data.model.parseDonationDateMillis
 import com.example.ui.components.BangladeshAreaPickerDialog
 import com.example.ui.components.BloodGroupGrid
+import com.example.ui.components.HoldToConfirmButton
 import com.example.ui.components.RokkhonBottomSheet
 import com.example.ui.components.RollingNumber
 import com.example.ui.components.RoundIconButton
@@ -124,6 +129,8 @@ fun DonorProfileScreen(
         }
     }
     var showDonatedConfirm by remember { mutableStateOf(false) }
+    var showUndoDonation by remember { mutableStateOf(false) }
+    val donationUndoFor by viewModel.donationUndoFor.collectAsStateWithLifecycle()
     var showProfileAreaPicker by remember { mutableStateOf(false) }
 
     fun saveProfile(): Boolean {
@@ -293,7 +300,9 @@ fun DonorProfileScreen(
                         DonationCycleCard(
                             bn = bn,
                             lastDonationDate = lastDonationDate,
-                            onDonatedToday = { showDonatedConfirm = true }
+                            onLogDonation = { showDonatedConfirm = true },
+                            canUndo = donationUndoFor != null && donationUndoFor == lastDonationDate,
+                            onUndo = { showUndoDonation = true }
                         )
                     }
 
@@ -397,51 +406,49 @@ fun DonorProfileScreen(
     }
 
     if (showDonatedConfirm) {
-        RokkhonBottomSheet(
+        LogDonationSheet(
+            bn = bn,
+            lastDonationDate = lastDonationDate,
             onDismiss = { showDonatedConfirm = false },
-            title = if (bn) "আজ রক্ত দিয়েছেন?" else "Did you donate today?",
-            testTag = "donated_today_sheet"
+            onConfirm = { date ->
+                if (viewModel.recordDonation(date)) lastDonationDate = date
+                showDonatedConfirm = false
+            }
+        )
+    }
+
+    if (showUndoDonation) {
+        RokkhonBottomSheet(
+            onDismiss = { showUndoDonation = false },
+            title = if (bn) "রেকর্ডটি বাতিল করবেন?" else "Remove this donation?",
+            testTag = "undo_donation_sheet"
         ) {
             Text(
-                text = if (bn) {
-                    "ধন্যবাদ! পরের ৯০ দিন আপনাকে তালিকায় \"বিশ্রামে\" দেখানো হবে। তারপর আপনি নিজে থেকেই আবার সক্রিয় হয়ে যাবেন — কিছু চালু করতে হবে না।"
-                } else {
-                    "Thank you! For the next 90 days you'll show as resting. After that you're active again automatically — nothing to switch on."
-                },
-                fontSize = 15.sp,
-                lineHeight = 22.sp,
-                color = RokkhonPalette.Muted
+                text = if (bn) "ভুল করে রেকর্ড করে থাকলে বাতিল করুন। আগের তারিখ ফিরে আসবে, আর আপনি আবার আগের মতো তালিকায় দেখাবেন।"
+                else "If you recorded it by mistake, remove it. The previous date comes back and you show in lists as before.",
+                fontSize = 14.sp, lineHeight = 20.sp, color = RokkhonPalette.Muted
             )
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
+                    .height(50.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color.Black)
                     .springClick {
-                        viewModel.markDonatedToday()
-                        lastDonationDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                        showDonatedConfirm = false
+                        viewModel.undoLastDonation()?.let { restored -> lastDonationDate = restored }
+                        showUndoDonation = false
                     }
-                    .testTag("confirm_donated_today"),
+                    .testTag("confirm_undo_donation"),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(if (bn) "হ্যাঁ, আজ দিয়েছি" else "Yes, I donated today", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(if (bn) "হ্যাঁ, বাতিল করুন" else "Yes, remove it", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
             Text(
-                text = if (bn) "না, ভুল করে চাপ লেগেছে" else "No, cancel",
-                fontSize = 15.sp,
-                color = RokkhonPalette.Ink,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp)
-                    .clip(CircleShape)
-                    .springClick { showDonatedConfirm = false }
-                    .padding(vertical = 12.dp)
+                text = if (bn) "না, ঠিক আছে" else "No, keep it",
+                fontSize = 14.sp, color = RokkhonPalette.Ink, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clip(CircleShape).springClick { showUndoDonation = false }.padding(vertical = 12.dp)
             )
         }
     }
@@ -637,7 +644,13 @@ private fun SettingsRow(
  * Nothing needs switching back on — the app shows them as available again after 90 days.
  */
 @Composable
-private fun DonationCycleCard(bn: Boolean, lastDonationDate: String, onDonatedToday: () -> Unit) {
+internal fun DonationCycleCard(
+    bn: Boolean,
+    lastDonationDate: String,
+    onLogDonation: () -> Unit,
+    canUndo: Boolean,
+    onUndo: () -> Unit
+) {
     val last = parseDonationDateMillis(lastDonationDate)
     val daysLeft = daysUntilEligible(lastDonationDate)
     val resting = last != null && daysLeft > 0
@@ -646,68 +659,170 @@ private fun DonationCycleCard(bn: Boolean, lastDonationDate: String, onDonatedTo
         animationSpec = tween(900),
         label = "cycle_progress"
     )
+    val locale = if (bn) java.util.Locale("bn", "BD") else java.util.Locale.ENGLISH
     val activeAgain = last?.let {
-        java.text.SimpleDateFormat("d MMMM", if (bn) java.util.Locale("bn", "BD") else java.util.Locale.ENGLISH)
-            .format(java.util.Date(it + DONATION_GAP_DAYS * 24L * 60L * 60L * 1000L))
+        java.text.SimpleDateFormat("d MMMM", locale).format(java.util.Date(it + DONATION_GAP_DAYS * 24L * 60L * 60L * 1000L))
     }
+    val lastText = last?.let { java.text.SimpleDateFormat("d MMM yyyy", locale).format(java.util.Date(it)) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(RokkhonPalette.Subtle)
-            .padding(16.dp)
+            .padding(14.dp)
             .testTag("donation_cycle_card")
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(60.dp)) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
                 CircularProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.fillMaxSize(),
                     color = if (resting) Color.Black else RokkhonPalette.Positive,
                     trackColor = Color.White,
-                    strokeWidth = 5.dp,
+                    strokeWidth = 4.dp,
                     strokeCap = StrokeCap.Round
                 )
                 if (resting) {
-                    Text(if (bn) bnDigits(daysLeft) else "$daysLeft", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
+                    Text(if (bn) bnDigits(daysLeft) else "$daysLeft", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
                 } else {
-                    Icon(UIcons.CheckCircle, contentDescription = null, tint = RokkhonPalette.Positive, modifier = Modifier.size(24.dp))
+                    Icon(UIcons.CheckCircle, contentDescription = null, tint = RokkhonPalette.Positive, modifier = Modifier.size(20.dp))
                 }
             }
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (resting) (if (bn) "বিশ্রামে আছেন — আর ${bnDigits(daysLeft)} দিন" else "Resting — $daysLeft days left")
+                    text = if (resting) (if (bn) "বিশ্রামে — আর ${bnDigits(daysLeft)} দিন" else "Resting — $daysLeft days left")
                     else (if (bn) "এখন রক্ত দিতে পারবেন" else "You can donate now"),
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = RokkhonPalette.Ink
                 )
                 Text(
-                    text = if (resting) (if (bn) "$activeAgain থেকে নিজে থেকেই আবার সক্রিয় দেখাবে" else "Active again automatically from $activeAgain")
-                    else (if (bn) "রক্ত দেওয়ার পর নিচের বাটনে চাপুন" else "Tap below after you donate"),
-                    fontSize = 13.sp,
+                    text = when {
+                        resting -> if (bn) "$activeAgain থেকে নিজে থেকেই আবার সক্রিয়" else "Active again automatically from $activeAgain"
+                        lastText != null -> if (bn) "শেষ রক্তদান $lastText" else "Last donated $lastText"
+                        else -> if (bn) "এখনও কোনো রক্তদান রেকর্ড নেই" else "No donation recorded yet"
+                    },
+                    fontSize = 12.5.sp,
                     color = RokkhonPalette.Muted
                 )
             }
         }
-        if (!resting || last == null) {
-            Spacer(modifier = Modifier.height(14.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White)
-                    .springClick(pressedScale = 0.97f, onClick = onDonatedToday)
-                    .testTag("profile_donated_today_button"),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(UIcons.Bloodtype, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (bn) "আজ রক্ত দিয়েছি" else "I donated today", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
+        when {
+            resting && canUndo -> SmallLinkRow(
+                text = if (bn) "ভুল করে রেকর্ড হয়েছে? বাতিল করুন" else "Recorded by mistake? Remove it",
+                onClick = onUndo,
+                testTag = "profile_undo_donation"
+            )
+            !resting -> SmallLinkRow(
+                text = if (bn) "রক্ত দিয়েছেন? রেকর্ড করুন" else "Gave blood? Record it",
+                onClick = onLogDonation,
+                testTag = "profile_donated_today_button"
+            )
+        }
+    }
+}
+
+@Composable
+private fun SmallLinkRow(text: String, onClick: () -> Unit, testTag: String) {
+    Spacer(modifier = Modifier.height(10.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .springClick(pressedScale = 0.98f, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp)
+            .testTag(testTag),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Ink, modifier = Modifier.weight(1f))
+        Icon(UIcons.KeyboardArrowRight, contentDescription = null, tint = RokkhonPalette.Faint, modifier = Modifier.size(16.dp))
+    }
+}
+
+/**
+ * Recording a donation, made hard to do by accident: pick which of the last 7 days it was, see
+ * what it changes, then press and hold to confirm. Dates the rules refuse are shown as such.
+ */
+@Composable
+internal fun LogDonationSheet(bn: Boolean, lastDonationDate: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    val iso = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US) }
+    val locale = if (bn) java.util.Locale("bn", "BD") else java.util.Locale.ENGLISH
+    val today = remember { iso.format(java.util.Date()) }
+    val days = remember {
+        (0 until DONATION_LOG_WINDOW_DAYS).map { iso.format(java.util.Date(System.currentTimeMillis() - it * 24L * 60L * 60L * 1000L)) }
+    }
+    var picked by remember { mutableStateOf<String?>(null) }
+    val problem = picked?.let { donationDateProblem(it, lastDonationDate, today) }
+    val allBlocked = days.all { donationDateProblem(it, lastDonationDate, today) != null }
+
+    RokkhonBottomSheet(onDismiss = onDismiss, title = if (bn) "রক্তদান রেকর্ড করুন" else "Record a donation", testTag = "donated_today_sheet") {
+        Text(if (bn) "কবে রক্ত দিয়েছেন?" else "When did you give?", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Muted)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            days.forEachIndexed { i, d ->
+                val blocked = donationDateProblem(d, lastDonationDate, today) != null
+                val sel = picked == d
+                val millis = parseDonationDateMillis(d) ?: 0L
+                Column(
+                    modifier = Modifier
+                        .width(64.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (sel) RokkhonPalette.Primary else RokkhonPalette.Subtle)
+                        .springClick(enabled = !blocked, pressedScale = 0.94f) { picked = d }
+                        .padding(vertical = 10.dp)
+                        .testTag("donation_day_$i"),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        when (i) {
+                            0 -> if (bn) "আজ" else "Today"
+                            1 -> if (bn) "গতকাল" else "Yest."
+                            else -> java.text.SimpleDateFormat("EEE", locale).format(java.util.Date(millis))
+                        },
+                        fontSize = 11.5.sp, maxLines = 1,
+                        color = when { sel -> Color.White.copy(alpha = 0.8f); blocked -> RokkhonPalette.Faint; else -> RokkhonPalette.Muted }
+                    )
+                    Text(
+                        java.text.SimpleDateFormat("d", locale).format(java.util.Date(millis)),
+                        fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                        color = when { sel -> Color.White; blocked -> RokkhonPalette.Faint; else -> RokkhonPalette.Ink }
+                    )
+                    Text(
+                        java.text.SimpleDateFormat("MMM", locale).format(java.util.Date(millis)),
+                        fontSize = 11.sp, maxLines = 1,
+                        color = when { sel -> Color.White.copy(alpha = 0.8f); blocked -> RokkhonPalette.Faint; else -> RokkhonPalette.Muted }
+                    )
+                }
             }
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        val note = when {
+            allBlocked -> if (bn) "আগের রক্তদানের ৯০ দিন পার হয়নি, তাই নতুন রক্তদান রেকর্ড করা যাবে না। তারিখ ভুল থাকলে \"ডোনার তথ্য\" থেকে ঠিক করুন।"
+                else "It's under 90 days since your last donation, so a new one can't be recorded. If that date is wrong, fix it in Donor details."
+            problem == DonationProblem.TOO_SOON_AFTER_LAST -> if (bn) "আগের রক্তদানের ৯০ দিনের মধ্যে আবার রক্ত দেওয়া যায় না।" else "Blood can't be given again within 90 days."
+            picked != null -> if (bn) "পরের ৯০ দিন আপনি তালিকায় \"বিশ্রামে\" দেখাবেন, তারপর নিজে থেকেই আবার সক্রিয়। এর জন্য কোনো পয়েন্ট নেই। ভুল হলে পরে বাতিল করা যাবে।"
+                else "For the next 90 days you'll show as resting, then active again by itself. No points for this. You can remove it later if it's a mistake."
+            else -> if (bn) "শুধু শেষ ৭ দিনের রক্তদান এখানে রেকর্ড হয়। পুরনো তারিখ \"ডোনার তথ্য\" থেকে বসান।"
+                else "Only the last 7 days can be recorded here. Older dates go in Donor details."
+        }
+        Text(note, fontSize = 13.sp, lineHeight = 19.sp, color = RokkhonPalette.Muted, modifier = Modifier.testTag("donation_note"))
+        Spacer(modifier = Modifier.height(14.dp))
+        HoldToConfirmButton(
+            label = if (picked == null) (if (bn) "আগে দিন বেছে নিন" else "Pick the day first") else (if (bn) "চেপে ধরে নিশ্চিত করুন" else "Press and hold to confirm"),
+            holdingLabel = if (bn) "ধরে রাখুন…" else "Keep holding…",
+            enabled = picked != null && problem == null,
+            onConfirmed = { picked?.let(onConfirm) },
+            testTag = "confirm_donated_today"
+        )
+        Text(
+            text = if (bn) "বাতিল" else "Cancel",
+            fontSize = 14.sp, color = RokkhonPalette.Ink, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clip(CircleShape).springClick(onClick = onDismiss).padding(vertical = 12.dp)
+        )
     }
 }
