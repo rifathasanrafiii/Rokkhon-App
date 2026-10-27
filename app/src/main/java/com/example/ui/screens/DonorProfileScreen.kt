@@ -132,6 +132,7 @@ fun DonorProfileScreen(
     var showUndoDonation by remember { mutableStateOf(false) }
     val donationUndoFor by viewModel.donationUndoFor.collectAsStateWithLifecycle()
     var showProfileAreaPicker by remember { mutableStateOf(false) }
+    var reopenEditAfterPicker by remember { mutableStateOf(false) }
 
     fun saveProfile(): Boolean {
         if (phoneInvalid || dateInvalid) {
@@ -401,7 +402,13 @@ fun DonorProfileScreen(
                 viewModel.selectDistrict(picked)
                 if (myDonor != null) saveProfile()
             },
-            onDismiss = { showProfileAreaPicker = false }
+            onDismiss = {
+                showProfileAreaPicker = false
+                if (reopenEditAfterPicker) {
+                    reopenEditAfterPicker = false
+                    showEditSheet = true
+                }
+            }
         )
     }
 
@@ -523,7 +530,12 @@ fun DonorProfileScreen(
                         Icon(
                             UIcons.Search,
                             contentDescription = if (bn) "৬৪ জেলা" else "64 districts",
-                            modifier = Modifier.springClick { showProfileAreaPicker = true }
+                            // The picker is a full page over the app; the sheet steps aside and comes back after.
+                            modifier = Modifier.springClick {
+                                reopenEditAfterPicker = true
+                                showEditSheet = false
+                                showProfileAreaPicker = true
+                            }
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),

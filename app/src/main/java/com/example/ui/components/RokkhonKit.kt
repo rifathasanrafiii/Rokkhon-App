@@ -32,10 +32,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,14 +48,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -66,7 +73,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -78,7 +84,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.RokkhonPalette
 import kotlinx.coroutines.delay
@@ -482,7 +487,7 @@ fun RokkhonBottomSheet(
         modifier = Modifier.testTag(testTag)
     ) {
         // The sheet is its own window, which resets density: re-apply the app's compact scale.
-        MyApplicationTheme {
+        CompositionLocalProvider(LocalInSeparateWindow provides true) { MyApplicationTheme {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -495,7 +500,7 @@ fun RokkhonBottomSheet(
                 }
                 content()
             }
-        }
+        } }
     }
 }
 
@@ -525,26 +530,84 @@ fun BloodGroupGrid(selected: String?, onSelect: (String) -> Unit, modifier: Modi
     }
 }
 
+/** Full-screen pages shown on top of the app inside the activity window (see [FullScreenDialog]). */
+class FullScreenHost {
+    internal class Entry(content: @Composable () -> Unit) {
+        var content by mutableStateOf(content)
+    }
+
+    internal val entries = mutableStateListOf<Entry>()
+}
+
+val LocalFullScreenHost = staticCompositionLocalOf<FullScreenHost?> { null }
+
+/** True inside a separate window (bottom sheet, dialog): pages opened there can't use the host. */
+val LocalInSeparateWindow = staticCompositionLocalOf { false }
+
 /**
- * A full-screen page in its own window (area picker, request form, notifications). The window sits
- * between the status bar and the navigation bar on every phone, so nothing ends up behind the
- * gesture bar, and it resizes for the keyboard. No dim: the page covers the screen anyway.
+ * Wraps the app once (MyApplicationTheme does it) and draws open full-screen pages above it,
+ * between the status bar and the navigation bar, moving up for the keyboard.
+ */
+@Composable
+fun FullScreenHostBox(content: @Composable () -> Unit) {
+    val host = remember { FullScreenHost() }
+    CompositionLocalProvider(LocalFullScreenHost provides host) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            content()
+            host.entries.forEach { entry ->
+                key(entry) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White)
+                            // Swallow touches so nothing underneath reacts.
+                            .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false).consume() } }
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                            .imePadding()
+                    ) {
+                        entry.content()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A full-screen page (area picker, request form, notifications). It is drawn in the app's own
+ * window, not a dialog window: on Android 15+ every window is edge-to-edge and dialog windows did
+ * not get the navigation-bar inset, which hid bottom buttons behind the gesture bar on some phones.
+ * Inside a bottom sheet (its own window) it falls back to a dialog.
  */
 @Composable
 fun FullScreenDialog(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    val host = LocalFullScreenHost.current
+    if (host != null && !LocalInSeparateWindow.current) {
+        val latest by rememberUpdatedState(content)
+        val entry = remember { FullScreenHost.Entry { latest() } }
+        DisposableEffect(host) {
+            host.entries.add(entry)
+            onDispose { host.entries.remove(entry) }
+        }
+        return
+    }
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        SideEffect {
-            window?.setDimAmount(0f)
-            @Suppress("DEPRECATION")
-            window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        }
         // A dialog window resets density: re-apply the app's compact scale and font cap.
-        MyApplicationTheme {
-            Box(modifier = Modifier.fillMaxSize().background(Color.White)) { content() }
+        CompositionLocalProvider(LocalInSeparateWindow provides true) {
+            MyApplicationTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White)
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .imePadding()
+                ) { content() }
+            }
         }
     }
 }

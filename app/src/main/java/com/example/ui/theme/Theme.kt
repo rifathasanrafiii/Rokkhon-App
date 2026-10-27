@@ -12,6 +12,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.FullScreenHostBox
+import com.example.ui.components.LocalFullScreenHost
 
 private val IosDarkColorScheme = darkColorScheme(
     primary = IosSystemRed,
@@ -99,8 +101,10 @@ fun MyApplicationTheme(
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
-            shapes = IosShapes,
-            content = content
-        )
+            shapes = IosShapes
+        ) {
+            // Full-screen pages are drawn by one host at the root of the app (see FullScreenDialog).
+            if (LocalFullScreenHost.current == null) FullScreenHostBox(content) else content()
+        }
     }
 }

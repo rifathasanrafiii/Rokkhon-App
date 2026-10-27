@@ -21,7 +21,6 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
 import org.robolectric.annotation.GraphicsMode
-import org.robolectric.shadows.ShadowDialog
 
 /**
  * A small phone with a large display size and the biggest font setting: the request form must
@@ -62,8 +61,7 @@ class LargeFontLayoutTest {
         assertTrue("bags label wrapped ($bags > $plus)", bags <= plus)
 
         System.getenv("ROKKHON_SCREENSHOTS")?.let { dir ->
-            val dialog = ShadowDialog.getLatestDialog()
-            val view = dialog.window!!.decorView
+            val view = composeRule.activity.window.decorView
             val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
             view.draw(Canvas(bmp))
             File(dir).mkdirs()
