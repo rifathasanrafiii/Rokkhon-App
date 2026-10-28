@@ -44,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -173,16 +175,32 @@ fun HomeMatchHubScreen(
     ) {
         item(key = "header") {
             Column(modifier = Modifier.fillMaxWidth()) {
-            // Red gradient behind the top bar, greeting and search, like the first design.
+            // Deep crimson behind the top bar, greeting and search, like the first design: a dark
+            // wine gradient with a soft glow, and the white page rising over it with round corners.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFFE11900), Color(0xFFA8150C))))
+                    .drawBehind {
+                        drawRect(Brush.verticalGradient(listOf(Color(0xFF5E0B16), Color(0xFF861020), Color(0xFF9B1424))))
+                        drawRect(
+                            Brush.radialGradient(
+                                colors = listOf(Color(0x40FF5A6A), Color.Transparent),
+                                center = Offset(size.width * 0.85f, size.height * 0.15f),
+                                radius = size.width * 0.75f
+                            )
+                        )
+                        drawRect(
+                            Brush.radialGradient(
+                                colors = listOf(Color(0x30000000), Color.Transparent),
+                                center = Offset(0f, size.height),
+                                radius = size.width * 0.8f
+                            )
+                        )
+                    }
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 20.dp)
                     .testTag("home_red_header")
             ) {
+            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 22.dp)) {
                 HomeTopBar(
                     onDark = true,
                     language = language,
@@ -259,9 +277,27 @@ fun HomeMatchHubScreen(
                         Icon(UIcons.KeyboardArrowDown, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(16.dp))
                     }
                 }
-
             }
-            Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
+                // The white page starts here, over the crimson, with a big top radius and a grabber.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(30.dp)
+                        .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+                        .background(Color.White),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .width(40.dp)
+                            .height(4.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFE2E2E2))
+                    )
+                }
+            }
+            Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp)) {
                 if (isLocationDisabledByAdmin) {
                     Row(
                         modifier = Modifier
