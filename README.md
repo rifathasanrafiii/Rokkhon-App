@@ -8,10 +8,10 @@ Bangladesh blood-donor network (Kotlin, Jetpack Compose, Firebase). A personal-s
 - **Safety network (background):** a foreground service (`data/guard/RokkhonGuardService`) keeps listening and relaying while the app is closed, keeps a low-power location fix, and for signed-in users alerts on new cloud SOS within 1 km. It restarts after a reboot and can be turned off from the SOS tab, Profile or its notification.
 - **Find:** search every donor and open request by name, area, hospital and blood group, across all 8 divisions, 64 districts and 494 upazilas (area data: nuhil/bangladesh-geocode, MIT).
 - **90-day rule:** after "I donated today" a donor shows as resting with a countdown and becomes available again automatically after 90 days.
-- **Rewards:** points, daily check-in streak and badges on their own tab.
+- **Rewards:** points, daily check-in streak, badges and reward cards (claimed with points, approved from the admin panel), opened from Profile.
 - **Real data only:** every donor, request and SOS comes from Firestore. Without sign-in (or without Firebase config) lists stay empty and only the offline SOS tools work (Bluetooth mesh, 999, SMS).
 - **Private SOS (`docs/PRIVATE_SOS.md`):** hold 3 s to share live GPS (and, if you choose, live microphone audio) only with Rokkhon accounts you trust, with per-person permissions, instant revocation, a secure `rokkhon.com/live/{id}` link and listener-side recording that never leaves their phone. Needs Realtime Database turned on (free); see the doc.
-- **Admin web (`admin-web/`):** rewards, location off, account suspend and device ban, written to `admin_controls/global_policy` and applied live in the app.
+- **Admin panel (`web/admin`, on Vercel):** push notifications to everyone, a blood group or a district; reward cards and claim approval; points, location off, account suspend and device ban; moderation of blood requests. See `docs/ADMIN_PANEL.md`.
 
 ## Build and install
 
@@ -38,7 +38,7 @@ Without `google-services.json` the app still builds and runs, but sign-in and th
 
 ## Admin setup
 
-Open `admin-web/index.html` (any static host or locally) and sign in with Google. Only accounts listed in Firestore can change the policy: create a document `admins/{uid}` (any fields) in the Firebase Console for each admin's Auth UID. Apps register their hardware ID in `device_registry/{uid}`, which is what device bans match.
+Deploy `web/` to Vercel and open `/admin/`; see `docs/ADMIN_PANEL.md` for the environment variables and steps. Only accounts listed in Firestore can use it: create a document `admins/{uid}` (any fields) in the Firebase Console for each admin's Auth UID. Apps register their hardware ID in `device_registry/{uid}`, which is what device bans match.
 
 ## Tests
 

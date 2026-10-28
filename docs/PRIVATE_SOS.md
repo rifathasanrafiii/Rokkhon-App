@@ -43,7 +43,8 @@ connection, the listener's screen switches to "Access removed" and stops listeni
    (`sos_rtdb_url`).
 2. **Deploy the rules**: `firebase deploy --only database` (uses `database.rules.json`).
 3. **Push alerts (optional but recommended)**: deploy `web/` to Vercel (Hobby, free) on the
-   rokkhon.com domain, and set two environment variables there:
+   rokkhon.com domain, and set these environment variables there (the admin panel also needs
+   `FIRESTORE_DATABASE_ID`, see `docs/ADMIN_PANEL.md`):
    - `FIREBASE_SERVICE_ACCOUNT`: Firebase console → Project settings → Service accounts →
      Generate new private key (paste the JSON). Keep it only in Vercel.
    - `FIREBASE_DATABASE_URL`: the Realtime Database URL.

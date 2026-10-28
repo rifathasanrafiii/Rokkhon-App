@@ -15,6 +15,10 @@ import com.example.data.media.LiveAudioVerifier
 import com.example.data.model.AppLanguage
 import com.example.data.model.BANGLADESH_AREAS
 import com.example.data.model.AreaDetect
+import com.example.data.push.PushTopics
+import com.example.data.model.Announcement
+import com.example.data.model.RewardClaim
+import com.example.data.model.RewardOffer
 import com.example.data.model.donationDateProblem
 import com.example.data.model.BANGLADESH_DISTRICTS
 import com.example.data.model.BangladeshDistrict
@@ -47,6 +51,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -467,15 +472,42 @@ class RokkhonViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), 0)
 
+    private val _announcements = MutableStateFlow<List<Announcement>>(emptyList())
+
+    private val _rewardOffers = MutableStateFlow<List<RewardOffer>>(emptyList())
+    /** Reward cards the admins created; empty without sign-in. */
+    val rewardOffers: StateFlow<List<RewardOffer>> = _rewardOffers.asStateFlow()
+
+    private val _rewardClaims = MutableStateFlow<Map<String, RewardClaim>>(emptyMap())
+    /** This account's reward requests by offer id. */
+    val rewardClaims: StateFlow<Map<String, RewardClaim>> = _rewardClaims.asStateFlow()
+
     val notificationsState: StateFlow<List<RokkhonNotificationItem>> = combine(
-        _customNotifications,
+        combine(_customNotifications, _announcements) { custom, ann -> custom to ann },
         sosAlertsState,
         bloodRequestsState,
         _readNotificationIds,
         donorNodesState
-    ) { customList, sosUi, reqUi, readIds, _ ->
+    ) { (customList, announcements), sosUi, reqUi, readIds, _ ->
         val items = mutableListOf<RokkhonNotificationItem>()
         items.addAll(customList)
+        val dateFmt = java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault())
+        // A push sent to one blood group or district is listed only for the people it went to.
+        val myTopics = PushTopics.wanted(myDonorNode()?.bloodGroup, _selectedDistrict.value)
+        announcements.filter { a -> a.target.split('&').all { it.trim() in myTopics } }.take(10).forEach { a ->
+            items.add(
+                RokkhonNotificationItem(
+                    id = "notif_ann_${a.id}",
+                    kind = NotificationKind.ANNOUNCEMENT,
+                    titleBn = a.title,
+                    titleEn = a.title,
+                    bodyBn = a.body,
+                    bodyEn = a.body,
+                    timestampLabel = if (a.createdAtMillis > 0) dateFmt.format(java.util.Date(a.createdAtMillis)) else "",
+                    areaName = "রক্ষণ"
+                )
+            )
+        }
 
         val sosList = (sosUi as? UiState.Success)?.data.orEmpty()
         sosList.filter { alert ->
@@ -600,6 +632,20 @@ class RokkhonViewModel(
                 viewModelScope.launch {
                     repository.registerDevice(currentDeviceId)
                         .onFailure { Log.w(TAG, "Device registration failed", it) }
+                }
+            }
+            viewModelScope.launch { repository.observeAnnouncements().collect { _announcements.value = it } }
+            // Push topics follow the blood group and district, so admin pushes reach the right people.
+            viewModelScope.launch {
+                combine(_selectedDistrict, donorNodesState) { area, _ -> myDonorNode()?.bloodGroup to area }
+                    .distinctUntilChanged()
+                    .collect { (group, area) -> PushTopics.sync(appContext, group, area) }
+            }
+            viewModelScope.launch { repository.observeRewardOffers().collect { _rewardOffers.value = it } }
+            viewModelScope.launch {
+                repository.observeMyRewardClaims().collect { list ->
+                    _rewardClaims.value = list.associateBy { it.offerId }
+                    chargeApprovedClaims(list)
                 }
             }
             viewModelScope.launch {
@@ -921,6 +967,42 @@ class RokkhonViewModel(
     }
 
     // ---------------------------------------------------------------- notifications & banners
+
+    /**
+     * Takes the points of each approved reward once. On a fresh install there are no points yet,
+     * so claims approved before it are only marked as handled.
+     */
+    private fun chargeApprovedClaims(claims: List<RewardClaim>) {
+        val firstLoad = !prefs.contains(KEY_CHARGED_CLAIMS)
+        val charged = prefs.getStringSet(KEY_CHARGED_CLAIMS, emptySet()).orEmpty()
+        val due = claims.filter { (it.status == "approved" || it.status == "fulfilled") && it.id !in charged }
+        if (due.isEmpty() && !firstLoad) return
+        if (!firstLoad) {
+            val next = (_guardianPoints.value - due.sumOf { it.cost }).coerceAtLeast(0)
+            _guardianPoints.value = next
+            prefs.edit().putInt(KEY_GUARDIAN_POINTS, next).apply()
+        }
+        prefs.edit().putStringSet(KEY_CHARGED_CLAIMS, charged + due.map { it.id }).apply()
+    }
+
+    /** Sends a reward request to the admins; points are taken when they approve it. */
+    fun claimReward(offer: RewardOffer) {
+        val repo = repository
+        if (repo == null || isGuestSession) {
+            showToast("রিওয়ার্ড নিতে লগইন করুন", "Sign in to claim rewards")
+            return
+        }
+        if (_guardianPoints.value < offer.points) {
+            showToast("আরও পয়েন্ট দরকার", "You need more points")
+            return
+        }
+        viewModelScope.launch {
+            val me = myDonorNode()
+            repo.claimReward(offer, me?.displayName ?: currentUserName, me?.contactPhone.orEmpty(), _guardianPoints.value)
+                .onSuccess { showToast("অনুরোধ পাঠানো হয়েছে। অ্যাডমিন দেখে জানাবেন।", "Request sent. The team will review it.") }
+                .onFailure { showToast("পাঠানো যায়নি, আবার চেষ্টা করুন", "Couldn't send, try again") }
+        }
+    }
 
     fun markNotificationRead(id: String) {
         val next = _readNotificationIds.value + id
@@ -1897,5 +1979,6 @@ class RokkhonViewModel(
         private const val KEY_ADMIN_GLOBAL_LOC_OFF = "admin_global_location_off"
         private const val KEY_ADMIN_SUSPENDED_USERS = "admin_suspended_user_ids"
         private const val KEY_ADMIN_BANNED_DEVICES = "admin_banned_device_ids"
+        private const val KEY_CHARGED_CLAIMS = "reward_claims_charged"
     }
 }

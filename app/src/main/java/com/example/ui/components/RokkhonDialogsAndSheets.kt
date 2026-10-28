@@ -183,6 +183,7 @@ private fun NotificationRow(item: RokkhonNotificationItem, bn: Boolean, onClick:
         NotificationKind.BLOOD_REQUEST -> UIcons.Bloodtype
         NotificationKind.RESPONDER_UPDATE -> UIcons.People
         NotificationKind.FALSE_SOS_WARNING -> UIcons.ReportProblem
+        NotificationKind.ANNOUNCEMENT -> UIcons.NotificationsActive
     }
     Row(
         modifier = Modifier

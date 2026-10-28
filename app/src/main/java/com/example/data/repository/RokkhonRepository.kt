@@ -5,6 +5,9 @@ import com.example.R
 import com.example.data.model.BloodRequest
 import com.example.data.model.DonorNode
 import com.example.data.model.SosAlert
+import com.example.data.model.Announcement
+import com.example.data.model.RewardClaim
+import com.example.data.model.RewardOffer
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.DocumentReference
@@ -15,6 +18,7 @@ import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
@@ -103,6 +107,78 @@ class RokkhonRepository(
             )
         ).await()
     }
+
+    /** Active reward cards, in the order the admin set. */
+    fun observeRewardOffers(): Flow<List<RewardOffer>> =
+        db.collection("reward_offers").whereEqualTo("active", true).snapshots()
+            .map { snap ->
+                snap.documents.mapNotNull { d ->
+                    RewardOffer(
+                        id = d.id,
+                        title = d.getString("title") ?: return@mapNotNull null,
+                        titleBn = d.getString("titleBn") ?: d.getString("title") ?: "",
+                        description = d.getString("description").orEmpty(),
+                        descriptionBn = d.getString("descriptionBn") ?: d.getString("description").orEmpty(),
+                        partner = d.getString("partner").orEmpty(),
+                        points = d.getLong("points")?.toInt() ?: return@mapNotNull null,
+                        order = d.getLong("order")?.toInt() ?: 0
+                    )
+                }.sortedWith(compareBy({ it.order }, { it.points }))
+            }
+            .catch { emit(emptyList()) }
+
+    fun observeMyRewardClaims(): Flow<List<RewardClaim>> {
+        val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
+        return db.collection("reward_claims").whereEqualTo("userId", uid).snapshots()
+            .map { snap ->
+                snap.documents.mapNotNull { d ->
+                    RewardClaim(
+                        offerId = d.getString("offerId") ?: return@mapNotNull null,
+                        status = d.getString("status") ?: "pending",
+                        note = d.getString("note"),
+                        id = d.id,
+                        cost = d.getLong("cost")?.toInt() ?: 0
+                    )
+                }
+            }
+            .catch { emit(emptyList()) }
+    }
+
+    /** Asks for a reward; the claim id makes it one per reward per user (see firestore.rules). */
+    suspend fun claimReward(offer: RewardOffer, userName: String, phone: String, userPoints: Int): Result<Unit> = runCatching {
+        val uid = requireUserId()
+        val data = mutableMapOf<String, Any>(
+            "userId" to uid,
+            "userName" to userName.take(60).ifBlank { "Rokkhon user" },
+            "offerId" to offer.id,
+            "offerTitle" to offer.title.take(80),
+            "cost" to offer.points,
+            "userPoints" to userPoints,
+            "status" to "pending",
+            "createdAt" to FieldValue.serverTimestamp()
+        )
+        if (phone.isNotBlank()) data["phone"] = phone.take(20)
+        db.collection("reward_claims").document("${offer.id}_$uid").set(data).await()
+    }
+
+    /** The latest admin announcements, newest first. */
+    fun observeAnnouncements(): Flow<List<Announcement>> =
+        db.collection("announcements")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(30)
+            .snapshots()
+            .map { snap ->
+                snap.documents.mapNotNull { d ->
+                    Announcement(
+                        id = d.id,
+                        title = d.getString("title") ?: return@mapNotNull null,
+                        body = d.getString("body").orEmpty(),
+                        createdAtMillis = d.getTimestamp("createdAt")?.toDate()?.time ?: 0L,
+                        target = d.getString("target") ?: "all"
+                    )
+                }
+            }
+            .catch { emit(emptyList()) }
 
     private fun DocumentSnapshot.stringMap(field: String): Map<String, String> =
         (get(field) as? Map<*, *>)?.mapNotNull { (k, v) ->

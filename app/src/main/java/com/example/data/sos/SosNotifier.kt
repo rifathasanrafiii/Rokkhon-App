@@ -19,6 +19,8 @@ import com.example.R
 object SosNotifier {
     const val CHANNEL_ALERT = "rokkhon_private_sos_alert"
     const val CHANNEL_ONGOING = "rokkhon_private_sos_ongoing"
+    const val CHANNEL_UPDATES = "rokkhon_updates"
+    const val EXTRA_OPEN_TAB = "rokkhon_open_tab"
     const val EXTRA_SESSION = "rokkhon_sos_session"
     const val EXTRA_OPEN_OWNER = "rokkhon_sos_open_owner"
     const val ID_OWNER = 7101
@@ -33,6 +35,11 @@ object SosNotifier {
                 description = "Someone who added you to their SOS needs help"
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 600, 250, 600, 250, 600)
+            }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_UPDATES, "Rokkhon updates", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Blood camps, urgent appeals and news from the Rokkhon team"
             }
         )
         nm.createNotificationChannel(
@@ -137,5 +144,26 @@ object SosNotifier {
             .setContentIntent(openOwnerIntent(context))
             .build()
         post(context, ID_OWNER + 50, n)
+    }
+
+    /** A push the Rokkhon team sent from the admin panel; tapping opens the app (on [tab]). */
+    fun broadcast(context: Context, title: String, body: String, tab: String?) {
+        ensureChannels(context)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            tab?.let { putExtra(EXTRA_OPEN_TAB, it) }
+        }
+        val id = 7300 + (title.hashCode() and 0xff)
+        val pi = PendingIntent.getActivity(context, id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(context, CHANNEL_UPDATES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        post(context, id, n)
     }
 }

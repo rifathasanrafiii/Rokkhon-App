@@ -1,7 +1,7 @@
 {
   "name": "rokkhon-web",
   "private": true,
-  "description": "rokkhon.com: private SOS live page and the trusted server that sends SOS push alerts",
+  "description": "rokkhon.com: private SOS live page, admin panel, and the trusted server that sends push notifications",
   "engines": { "node": ">=18" },
   "dependencies": {
     "firebase-admin": "12.7.0"

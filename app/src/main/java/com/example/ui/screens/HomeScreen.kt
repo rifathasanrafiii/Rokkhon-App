@@ -710,6 +710,7 @@ fun HomeMatchHubScreen(
                         viewModel.setMapLayerFilter(MapLayerFilter.BLOOD_REQUESTS_ONLY)
                         viewModel.selectTab(RokkhonTab.RADAR_MAP)
                     }
+                    NotificationKind.ANNOUNCEMENT -> Unit
                 }
             },
             onDismiss = { showNotificationCenterDialog = false }

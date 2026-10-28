@@ -171,6 +171,11 @@ service cloud.firestore {
                        ]) &&
                        isValidBloodRequest(incoming());
 
+      // Admins may close a request (and only that) from the admin panel.
+      allow update: if isAdmin() && isValidId(requestId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+                       incoming().status in ['OPEN', 'FULFILLED'];
+
       allow update: if isValidBloodRequest(incoming()) &&
                        isSignedIn() &&
                        isValidId(requestId) &&
@@ -194,7 +199,8 @@ service cloud.firestore {
                           existsAfter(/databases/$(database)/documents/blood_requests/$(requestId)/pledges/$(request.auth.uid)))
                        );
 
-      allow delete: if isSignedIn() && isValidId(requestId) && existing().userId == request.auth.uid;
+      // The requester, or an admin moderating from the admin panel.
+      allow delete: if isSignedIn() && isValidId(requestId) && (existing().userId == request.auth.uid || isAdmin());
 
       match /pledges/{voterId} {
         allow get: if isSignedIn() && isValidId(requestId) && isValidId(voterId) && request.auth.uid == voterId;
@@ -325,6 +331,60 @@ service cloud.firestore {
                                incoming().deviceId.matches('^DEV-BD-[A-Z0-9]{1,16}$') &&
                                incoming().updatedAt is timestamp &&
                                incoming().updatedAt <= request.time;
+    }
+
+    // Collection 6: /reward_offers/{offerId}
+    // Reward cards on the Rewards page; created and edited from the admin panel only.
+    match /reward_offers/{offerId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isAdmin() && isValidId(offerId) &&
+                               incoming().keys().hasAll(['title', 'titleBn', 'points', 'active']) &&
+                               incoming().keys().hasOnly(['title', 'titleBn', 'description', 'descriptionBn',
+                                                          'partner', 'points', 'active', 'order', 'updatedAt']) &&
+                               incoming().title is string && incoming().title.size() <= 80 &&
+                               incoming().titleBn is string && incoming().titleBn.size() <= 80 &&
+                               incoming().points is int && incoming().points > 0 && incoming().points <= 100000 &&
+                               incoming().active is bool;
+      allow delete: if isAdmin();
+    }
+
+    // Collection 7: /reward_claims/{claimId}, claimId = "{offerId}_{uid}"
+    // A user asks for a reward; an admin approves (points are taken then) or rejects it.
+    // Points live on the phone, so every claim is checked by a person before it is fulfilled.
+    match /reward_claims/{claimId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() &&
+                       claimId == incoming().offerId + '_' + request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'userName', 'offerId', 'offerTitle', 'cost', 'userPoints', 'status', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'userName', 'phone', 'offerId', 'offerTitle', 'cost', 'userPoints', 'status', 'createdAt']) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'pending' &&
+                       incoming().userName is string && incoming().userName.size() <= 60 &&
+                       incoming().offerTitle is string && incoming().offerTitle.size() <= 80 &&
+                       incoming().cost is int && incoming().userPoints is int &&
+                       incoming().userPoints >= incoming().cost &&
+                       exists(/databases/$(database)/documents/reward_offers/$(incoming().offerId)) &&
+                       get(/databases/$(database)/documents/reward_offers/$(incoming().offerId)).data.active == true &&
+                       get(/databases/$(database)/documents/reward_offers/$(incoming().offerId)).data.points == incoming().cost &&
+                       incoming().createdAt == request.time;
+      allow update: if isAdmin() &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'note', 'decidedAt']) &&
+                       incoming().status in ['approved', 'rejected', 'fulfilled'];
+      // The user can withdraw a pending claim; admins can clear any so it can be claimed again.
+      allow delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid && existing().status == 'pending');
+    }
+
+    // Collection 8: /announcements/{id}
+    // What admins sent as push notifications, also listed in the app's notification centre.
+    match /announcements/{id} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin() &&
+                       incoming().keys().hasAll(['title', 'body', 'target', 'createdAt']) &&
+                       incoming().keys().hasOnly(['title', 'body', 'target', 'tab', 'sentBy', 'createdAt']) &&
+                       incoming().title is string && incoming().title.size() <= 80 &&
+                       incoming().body is string && incoming().body.size() <= 400;
+      allow delete: if isAdmin();
     }
   }
 }

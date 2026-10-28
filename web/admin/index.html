@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="/admin/favicon.svg" type="image/svg+xml" />
+  <title>রক্ষণ অ্যাডমিন</title>
+  <style>
+    :root {
+      --bg: #F6F6F6;
+      --card: #FFFFFF;
+      --ink: #000000;
+      --text: #111111;
+      --muted: #6B6B6B;
+      --line: #E8E8E8;
+      --subtle: #F1F1F1;
+      --accent: #D10F2F;
+      --ok: #0E8345;
+      --warn: #B35C00;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--text); }
+    body {
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Bengali", sans-serif;
+      min-height: 100vh;
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    a { color: inherit; }
+    [hidden] { display: none !important; }
+
+    /* Sign-in */
+    .gate { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+    .gate-card { width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 28px 24px; text-align: center; }
+    .gate-card img { height: 34px; margin-bottom: 18px; }
+    .gate-card h1 { font-size: 20px; margin-bottom: 6px; }
+    .gate-card p { color: var(--muted); margin-bottom: 18px; }
+    .gate-card code { display: block; background: var(--subtle); border-radius: 10px; padding: 10px; font-size: 12px; word-break: break-all; margin: 10px 0; text-align: left; }
+
+    /* Shell */
+    .shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+    .side { background: var(--ink); color: #fff; padding: 20px 12px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 4px; }
+    .side .logo { height: 26px; margin: 2px 10px 22px; align-self: flex-start; }
+    .nav { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; color: #BDBDBD; padding: 10px 12px; border-radius: 10px; cursor: pointer; text-align: left; font-weight: 500; }
+    .nav:hover { background: #1A1A1A; color: #fff; }
+    .nav.active { background: #fff; color: #000; }
+    .nav svg { width: 18px; height: 18px; flex: none; }
+    .nav .count { margin-left: auto; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+    .side .me { margin-top: auto; padding: 12px; border-top: 1px solid #222; font-size: 12px; color: #9A9A9A; }
+    .side .me b { display: block; color: #fff; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .side .me button { margin-top: 8px; background: transparent; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+
+    main { padding: 24px 28px 64px; min-width: 0; }
+    .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+    .head h2 { font-size: 22px; letter-spacing: -0.3px; }
+    .head p { color: var(--muted); font-size: 13px; }
+    .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+
+    .grid { display: grid; gap: 14px; }
+    .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 18px; }
+    .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
+    .card h3 { font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .card h3 small { font-weight: 400; color: var(--muted); font-size: 12px; }
+    .stat .k { color: var(--muted); font-size: 12px; }
+    .stat .v { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-top: 2px; }
+    .stat.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .stat.dark .k { color: #A8A8A8; }
+
+    .row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+    .row:first-of-type { border-top: 0; }
+    .row .grow { flex: 1; min-width: 0; }
+    .row .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row .s { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--subtle); display: grid; place-items: center; font-weight: 700; font-size: 12px; flex: none; }
+    .avatar.dark { background: var(--ink); color: #fff; }
+    .empty { color: var(--muted); text-align: center; padding: 22px 8px; font-size: 13px; }
+
+    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--subtle); color: var(--text); white-space: nowrap; }
+    .pill.ok { background: #E7F4EC; color: var(--ok); }
+    .pill.warn { background: #FFF1E2; color: var(--warn); }
+    .pill.bad { background: #FDE9EC; color: var(--accent); }
+    .pill.dark { background: var(--ink); color: #fff; }
+
+    .btn { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 7px 12px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; }
+    .btn:hover { background: var(--subtle); }
+    .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .btn.primary:hover { background: #222; }
+    .btn.danger { color: var(--accent); }
+    .btn.big { padding: 11px 16px; font-size: 14px; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+    .in { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 9px 11px; outline: none; }
+    .in:focus { border-color: var(--ink); }
+    textarea.in { resize: vertical; min-height: 86px; }
+    .form { display: grid; gap: 12px; }
+    .form .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+    .hint { color: var(--muted); font-size: 12px; }
+
+    .seg { display: inline-flex; background: var(--subtle); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+    .seg button { border: 0; background: transparent; padding: 6px 11px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); }
+    .seg button.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+    .tools { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+    .tools .in { max-width: 280px; }
+
+    .offer { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; }
+    .offer .badge { width: 54px; height: 54px; border-radius: 12px; background: var(--ink); color: #fff; display: grid; place-items: center; text-align: center; font-weight: 700; font-size: 14px; line-height: 1.05; flex: none; }
+    .offer .badge small { display: block; font-size: 9px; font-weight: 500; color: #BDBDBD; }
+    .offer.off { opacity: 0.55; }
+    .offer .grow { flex: 1; min-width: 0; }
+
+    /* Phone preview of a push */
+    .phone { background: #1B1B1B; border-radius: 22px; padding: 18px 12px 26px; }
+    .phone .time { color: #fff; text-align: center; font-size: 30px; font-weight: 300; margin-bottom: 14px; }
+    .notif { background: rgba(255,255,255,.94); border-radius: 16px; padding: 10px 12px; display: flex; gap: 10px; }
+    .notif .ic { width: 26px; height: 26px; border-radius: 7px; background: #000; flex: none; display: grid; place-items: center; }
+    .notif .ic img { width: 16px; }
+    .notif .app { font-size: 11px; color: #666; }
+    .notif .tt { font-weight: 700; font-size: 13px; }
+    .notif .bb { font-size: 13px; color: #222; white-space: pre-wrap; word-break: break-word; }
+
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 11px 16px; border-radius: 12px; font-weight: 500; opacity: 0; transition: .2s; pointer-events: none; z-index: 60; max-width: calc(100% - 32px); }
+    .toast.show { opacity: 1; transform: translateX(-50%); }
+
+    dialog { border: 0; border-radius: 18px; padding: 0; width: min(440px, calc(100% - 32px)); }
+    dialog::backdrop { background: rgba(0,0,0,.45); }
+    dialog .dlg { padding: 20px; display: grid; gap: 12px; }
+    dialog .dlg h4 { font-size: 17px; }
+    dialog .dlg .end { display: flex; justify-content: flex-end; gap: 8px; }
+
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .side { position: sticky; top: 0; z-index: 30; height: auto; flex-direction: row; overflow-x: auto; padding: 10px; gap: 4px; }
+      .side .logo, .side .me { display: none; }
+      .nav { width: auto; white-space: nowrap; padding: 8px 11px; }
+      .nav svg { display: none; }
+      main { padding: 18px 16px 64px; }
+      .two { grid-template-columns: 1fr; }
+      .form .pair { grid-template-columns: 1fr; }
+      .row { flex-wrap: wrap; }
+      .row .actions { width: 100%; justify-content: flex-start; }
+      .tools .in { max-width: none; flex: 1 1 100%; }
+    }
+  </style>
+</head>
+<body>
+  <section class="gate" id="gate">
+    <div class="gate-card">
+      <img src="/admin/logo-black.svg" alt="রক্ষণ" />
+      <h1>অ্যাডমিন প্যানেল</h1>
+      <p id="gateText">অ্যাডমিন Google অ্যাকাউন্ট দিয়ে সাইন ইন করুন।</p>
+      <div id="gateUid" hidden>
+        <p class="hint">এই অ্যাকাউন্ট অ্যাডমিন তালিকায় নেই। Firebase console → Firestore (অ্যাপের ডেটাবেস) → <b>admins</b> কালেকশনে এই UID দিয়ে একটি ডকুমেন্ট বানান:</p>
+        <code id="gateUidText"></code>
+      </div>
+      <button class="btn primary big" id="signInBtn" style="width:100%">Google দিয়ে সাইন ইন</button>
+      <button class="btn" id="gateSignOut" style="width:100%;margin-top:8px" hidden>অন্য অ্যাকাউন্ট</button>
+    </div>
+  </section>
+
+  <div class="shell" id="shell" hidden>
+    <aside class="side">
+      <img class="logo" src="/admin/logo-white.svg" alt="রক্ষণ" />
+      <button class="nav active" data-view="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>ড্যাশবোর্ড</button>
+      <button class="nav" data-view="push"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>পুশ নোটিফিকেশন</button>
+      <button class="nav" data-view="rewards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>রিওয়ার্ড কার্ড</button>
+      <button class="nav" data-view="claims"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>ক্লেইম<span class="count" id="claimCount" hidden></span></button>
+      <button class="nav" data-view="donors"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>ডোনার</button>
+      <button class="nav" data-view="requests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2.7s6 6.6 6 11.3a6 6 0 0 1-12 0c0-4.7 6-11.3 6-11.3z"/></svg>রক্তের অনুরোধ</button>
+      <button class="nav" data-view="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>ডিভাইস ও নীতি</button>
+      <div class="me"><b id="meName"></b><span id="meEmail"></span><br /><button id="signOutBtn">সাইন আউট</button></div>
+    </aside>
+
+    <main>
+      <!-- Dashboard -->
+      <section data-page="dash">
+        <div class="head"><div><h2>ড্যাশবোর্ড</h2><p>অ্যাপের লাইভ ডেটা, Firestore থেকে</p></div><span class="live"><i></i>লাইভ</span></div>
+        <div class="grid stats">
+          <div class="card stat dark"><div class="k">মোট ডোনার</div><div class="v" id="stDonors">—</div></div>
+          <div class="card stat"><div class="k">এখন রক্ত দিতে পারবেন</div><div class="v" id="stReady">—</div></div>
+          <div class="card stat"><div class="k">খোলা অনুরোধ</div><div class="v" id="stOpen">—</div></div>
+          <div class="card stat"><div class="k">অপেক্ষমাণ ক্লেইম</div><div class="v" id="stClaims">—</div></div>
+          <div class="card stat"><div class="k">ফোন রেজিস্টার্ড</div><div class="v" id="stDevices">—</div></div>
+        </div>
+        <div class="grid two">
+          <div class="card"><h3>নতুন ক্লেইম <button class="btn" data-go="claims">সব দেখুন</button></h3><div id="dashClaims"></div></div>
+          <div class="card"><h3>সাম্প্রতিক অনুরোধ <button class="btn" data-go="requests">সব দেখুন</button></h3><div id="dashRequests"></div></div>
+          <div class="card"><h3>ব্লাড গ্রুপ অনুযায়ী ডোনার</h3><div id="dashGroups"></div></div>
+          <div class="card"><h3>শেষ পুশ <button class="btn" data-go="push">নতুন পুশ</button></h3><div id="dashPush"></div></div>
+        </div>
+      </section>
+
+      <!-- Push -->
+      <section data-page="push" hidden>
+        <div class="head"><div><h2>পুশ নোটিফিকেশন</h2><p>সবাইকে, একটি ব্লাড গ্রুপকে বা একটি জেলাকে পাঠান। অ্যাপের নোটিফিকেশন পেজেও দেখাবে।</p></div></div>
+        <div class="grid two">
+          <div class="card">
+            <form class="form" id="pushForm">
+              <div><label class="f" for="pTitle">শিরোনাম</label><input class="in" id="pTitle" maxlength="80" required placeholder="যেমন: আজ ঢাকা মেডিকেলে O− রক্ত দরকার" /></div>
+              <div><label class="f" for="pBody">বার্তা</label><textarea class="in" id="pBody" maxlength="400" required placeholder="বিস্তারিত লিখুন"></textarea><div class="hint"><span id="pBodyCount">0</span>/400</div></div>
+              <div>
+                <label class="f">কাকে পাঠাবেন</label>
+                <div class="seg" id="pTargetSeg">
+                  <button type="button" class="on" data-t="all">সবাই</button>
+                  <button type="button" data-t="bg">ব্লাড গ্রুপ</button>
+                  <button type="button" data-t="dist">জেলা</button>
+                  <button type="button" data-t="both">গ্রুপ + জেলা</button>
+                </div>
+              </div>
+              <div class="pair">
+                <div id="pGroupWrap" hidden><label class="f" for="pGroup">ব্লাড গ্রুপ</label><select class="in" id="pGroup"></select></div>
+                <div id="pDistWrap" hidden><label class="f" for="pDist">জেলা</label><select class="in" id="pDist"></select></div>
+              </div>
+              <div><label class="f" for="pTab">ট্যাপ করলে খুলবে</label>
+                <select class="in" id="pTab">
+                  <option value="home">হোম</option><option value="find">ডোনার খুঁজুন</option><option value="sos">SOS</option>
+                  <option value="profile">প্রোফাইল</option><option value="rewards">রিওয়ার্ড</option>
+                </select>
+              </div>
+              <p class="hint" id="pReach"></p>
+              <button class="btn primary big" id="pSend" type="submit">পাঠান</button>
+            </form>
+          </div>
+          <div class="grid" style="align-content:start">
+            <div class="phone"><div class="time" id="phoneTime">9:41</div>
+              <div class="notif"><div class="ic"><img src="/admin/favicon.svg" alt="" /></div>
+                <div style="min-width:0"><div class="app">রক্ষণ · এখন</div><div class="tt" id="pvTitle">শিরোনাম</div><div class="bb" id="pvBody">বার্তা এখানে দেখাবে</div></div>
+              </div>
+            </div>
+            <div class="card"><h3>পাঠানো পুশ <small>শেষ ৩০টি</small></h3><div id="pushHistory"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Rewards -->
+      <section data-page="rewards" hidden>
+        <div class="head"><div><h2>রিওয়ার্ড কার্ড</h2><p>অ্যাপের রিওয়ার্ড পেজে এই কার্ডগুলো দেখায়। ব্যবহারকারী পয়েন্ট দিয়ে ক্লেইম করেন, আপনি অনুমোদন দেন।</p></div><button class="btn primary" id="newOfferBtn">+ নতুন কার্ড</button></div>
+        <div class="grid two">
+          <div class="card"><h3>কার্ডসমূহ <small id="offerCount"></small></h3><div id="offerList"></div></div>
+          <div class="grid" style="align-content:start">
+            <div class="card">
+              <h3 id="offerFormTitle">নতুন কার্ড</h3>
+              <form class="form" id="offerForm">
+                <div class="pair">
+                  <div><label class="f" for="oTitleBn">নাম (বাংলা)</label><input class="in" id="oTitleBn" maxlength="80" required placeholder="ফ্রি হেলথ চেকআপ" /></div>
+                  <div><label class="f" for="oTitle">নাম (English)</label><input class="in" id="oTitle" maxlength="80" required placeholder="Free health check-up" /></div>
+                </div>
+                <div class="pair">
+                  <div><label class="f" for="oDescBn">বিবরণ (বাংলা)</label><input class="in" id="oDescBn" maxlength="160" /></div>
+                  <div><label class="f" for="oDesc">বিবরণ (English)</label><input class="in" id="oDesc" maxlength="160" /></div>
+                </div>
+                <div class="pair">
+                  <div><label class="f" for="oPartner">পার্টনার</label><input class="in" id="oPartner" maxlength="60" placeholder="যেমন: Popular Diagnostic" /></div>
+                  <div><label class="f" for="oPoints">পয়েন্ট লাগবে</label><input class="in" id="oPoints" type="number" min="1" max="100000" required value="500" /></div>
+                </div>
+                <div class="pair">
+                  <div><label class="f" for="oOrder">ক্রম (ছোট আগে)</label><input class="in" id="oOrder" type="number" value="0" /></div>
+                  <div style="align-self:end"><label class="check"><input type="checkbox" id="oActive" checked /> অ্যাপে দেখাবে</label></div>
+                </div>
+                <div style="display:flex;gap:8px"><button class="btn primary big" type="submit" id="oSave">সেভ করুন</button><button class="btn big" type="button" id="oCancel" hidden>বাতিল</button></div>
+              </form>
+            </div>
+            <div class="card">
+              <h3>পয়েন্ট কীভাবে পাওয়া যায়</h3>
+              <form class="form" id="earnForm">
+                <div class="pair">
+                  <div><label class="f" for="eCheckIn">দৈনিক চেক-ইন</label><input class="in" id="eCheckIn" type="number" min="5" max="1000" /></div>
+                  <div><label class="f" for="ePledge">রক্তের অনুরোধে সাড়া</label><input class="in" id="ePledge" type="number" min="10" max="2000" /></div>
+                </div>
+                <div><label class="f" for="eSos">SOS-এ সাড়া</label><input class="in" id="eSos" type="number" min="10" max="2000" /></div>
+                <button class="btn primary" type="submit">সেভ করুন</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Claims -->
+      <section data-page="claims" hidden>
+        <div class="head"><div><h2>রিওয়ার্ড ক্লেইম</h2><p>অনুমোদন দিলে ব্যবহারকারীর ফোনে পয়েন্ট কেটে যাবে। দেওয়া শেষ হলে "দেওয়া হয়েছে" চাপুন।</p></div>
+          <div class="seg" id="claimSeg"><button class="on" data-s="pending">অপেক্ষমাণ</button><button data-s="approved">অনুমোদিত</button><button data-s="fulfilled">দেওয়া হয়েছে</button><button data-s="rejected">বাতিল</button><button data-s="all">সব</button></div>
+        </div>
+        <div class="card"><div id="claimList"></div></div>
+      </section>
+
+      <!-- Donors -->
+      <section data-page="donors" hidden>
+        <div class="head"><div><h2>ডোনার</h2><p>পয়েন্ট ঠিক করুন, অ্যাকাউন্ট সাসপেন্ড বা ডিভাইস ব্যান করুন।</p></div></div>
+        <div class="tools">
+          <input class="in" id="donorSearch" placeholder="নাম, ফোন, এলাকা বা UID দিয়ে খুঁজুন" />
+          <select class="in" id="donorGroup" style="max-width:140px"><option value="">সব গ্রুপ</option></select>
+          <div class="seg" id="donorSeg"><button class="on" data-f="all">সব</button><button data-f="suspended">সাসপেন্ড</button><button data-f="banned">ব্যান</button></div>
+        </div>
+        <div class="card"><div id="donorList"></div></div>
+      </section>
+
+      <!-- Requests -->
+      <section data-page="requests" hidden>
+        <div class="head"><div><h2>রক্তের অনুরোধ</h2><p>ভুয়া বা পুরনো অনুরোধ বন্ধ বা মুছে দিন।</p></div>
+          <div class="seg" id="reqSeg"><button class="on" data-s="OPEN">খোলা</button><button data-s="FULFILLED">পূরণ হয়েছে</button><button data-s="all">সব</button></div>
+        </div>
+        <div class="card"><div id="reqList"></div></div>
+      </section>
+
+      <!-- Settings -->
+      <section data-page="settings" hidden>
+        <div class="head"><div><h2>ডিভাইস ও নীতি</h2><p>সব অ্যাপে সঙ্গে সঙ্গে প্রযোজ্য।</p></div></div>
+        <div class="grid two">
+          <div class="card">
+            <h3>লোকেশন</h3>
+            <label class="check"><input type="checkbox" id="globalLoc" /> সবার জন্য লোকেশন শেয়ার বন্ধ</label>
+            <p class="hint" style="margin-top:8px">জরুরি অবস্থায় (যেমন অপব্যবহার ঠেকাতে) ব্যবহার করুন। প্রাইভেট SOS এতে বন্ধ হয় না।</p>
+          </div>
+          <div class="card">
+            <h3>ডিভাইস ব্যান (হাতে লিখে)</h3>
+            <form class="form" id="banForm">
+              <div><label class="f" for="banId">ডিভাইস আইডি</label><input class="in" id="banId" placeholder="DEV-BD-XXXXXXXX" /></div>
+              <div><label class="f" for="banReason">কারণ</label><input class="in" id="banReason" maxlength="120" /></div>
+              <div style="display:flex;gap:8px"><button class="btn primary" type="submit">ব্যান</button><button class="btn" type="button" id="unbanBtn">আনব্যান</button></div>
+            </form>
+          </div>
+          <div class="card"><h3>ব্যান করা ডিভাইস</h3><div id="bannedList"></div></div>
+          <div class="card"><h3>রেজিস্টার্ড ফোন <small id="deviceCount"></small></h3><div id="deviceList"></div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="dlg"><form class="dlg" method="dialog" id="dlgForm">
+    <h4 id="dlgTitle"></h4><p class="hint" id="dlgText"></p>
+    <div id="dlgFields"></div>
+    <div class="end"><button class="btn" type="button" id="dlgCancel">বাতিল</button><button class="btn primary" value="ok" id="dlgOk">ঠিক আছে</button></div>
+  </form></dialog>
+  <div class="toast" id="toast"></div>
+
+  <script src="/admin/districts.js"></script>
+  <script type="module" src="/admin/app.js"></script>
+</body>
+</html>

@@ -60,6 +60,14 @@ import com.example.FeatureFlags
 import com.example.data.model.AppLanguage
 import com.example.data.model.GUARDIAN_REWARD_TIERS
 import com.example.ui.components.RoundIconButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import com.example.ui.components.riseIn
+import com.example.ui.components.RokkhonBottomSheet
+import com.example.data.model.RewardClaim
+import com.example.data.model.RewardOffer
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.enterOnce
 import com.example.ui.components.springClick
@@ -79,6 +87,9 @@ fun RewardsScreen(viewModel: RokkhonViewModel, onBack: (() -> Unit)? = null) {
     val pledgePoints by viewModel.rewardBloodPledgePoints.collectAsStateWithLifecycle()
     val sosPoints by viewModel.rewardSosRespondPoints.collectAsStateWithLifecycle()
     val bn = language == AppLanguage.BENGALI
+    val offers by viewModel.rewardOffers.collectAsStateWithLifecycle()
+    val claims by viewModel.rewardClaims.collectAsStateWithLifecycle()
+    var confirmOffer by remember { mutableStateOf<RewardOffer?>(null) }
 
     val tiers = GUARDIAN_REWARD_TIERS
     val current = tiers.lastOrNull { points >= it.requiredPoints }
@@ -189,6 +200,16 @@ fun RewardsScreen(viewModel: RokkhonViewModel, onBack: (() -> Unit)? = null) {
             )
         }
 
+        item(key = "reward_cards") {
+            RewardCardsRow(
+                bn = bn,
+                offers = offers,
+                claims = claims,
+                points = points,
+                onClaim = { confirmOffer = it }
+            )
+        }
+
         item(key = "earn_header") {
             SectionHeader(
                 title = if (bn) "যেভাবে পয়েন্ট পাবেন" else "Ways to earn",
@@ -227,6 +248,152 @@ fun RewardsScreen(viewModel: RokkhonViewModel, onBack: (() -> Unit)? = null) {
         }
 
         item { Spacer(modifier = Modifier.height(28.dp)) }
+    }
+
+    confirmOffer?.let { offer ->
+        RokkhonBottomSheet(onDismiss = { confirmOffer = null }, title = if (bn) offer.titleBn else offer.title, testTag = "reward_claim_sheet") {
+            val desc = if (bn) offer.descriptionBn else offer.description
+            if (desc.isNotBlank()) {
+                Text(desc, fontSize = 14.sp, lineHeight = 20.sp, color = RokkhonPalette.Ink)
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+            Text(
+                if (bn) "অনুরোধ পাঠালে রক্ষণ টিম দেখে অনুমোদন করবে। অনুমোদন হলে আপনার ${offer.points} পয়েন্ট কাটা হবে, আর টিম আপনার সাথে যোগাযোগ করবে।"
+                else "The Rokkhon team reviews each request. When it's approved, ${offer.points} points are taken and the team contacts you.",
+                fontSize = 13.sp, lineHeight = 19.sp, color = RokkhonPalette.Muted
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(RokkhonPalette.Primary)
+                    .springClick {
+                        viewModel.claimReward(offer)
+                        confirmOffer = null
+                    }
+                    .testTag("reward_claim_confirm"),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(if (bn) "অনুরোধ পাঠান" else "Send request", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+/** Reward cards from the admin panel: cost, how close you are, and where your request stands. */
+@Composable
+internal fun RewardCardsRow(
+    bn: Boolean,
+    offers: List<RewardOffer>,
+    claims: Map<String, RewardClaim>,
+    points: Int,
+    onClaim: (RewardOffer) -> Unit
+) {
+    Column(modifier = Modifier.padding(top = 28.dp)) {
+        SectionHeader(
+            title = if (bn) "রিওয়ার্ড নিন" else "Get rewards",
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+        )
+        if (offers.isEmpty()) {
+            Text(
+                if (bn) "শীঘ্রই এখানে রিওয়ার্ড আসবে — পয়েন্ট জমাতে থাকুন।" else "Rewards appear here soon — keep collecting points.",
+                fontSize = 13.sp, color = RokkhonPalette.Muted,
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(RokkhonPalette.Subtle)
+                    .padding(16.dp)
+                    .testTag("reward_cards_empty")
+            )
+            return
+        }
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            itemsIndexed(offers, key = { _, o -> o.id }) { i, offer ->
+                val claim = claims[offer.id]
+                val enough = points >= offer.points
+                Column(
+                    modifier = Modifier
+                        .width(220.dp)
+                        .riseIn(i)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (i == 0) RokkhonPalette.Primary else RokkhonPalette.Subtle)
+                        .padding(16.dp)
+                        .testTag("reward_card_${offer.id}")
+                ) {
+                    val dark = i == 0
+                    val fg = if (dark) Color.White else RokkhonPalette.Ink
+                    val muted = if (dark) Color.White.copy(alpha = 0.7f) else RokkhonPalette.Muted
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier.size(34.dp).clip(CircleShape).background(if (dark) Color.White.copy(alpha = 0.14f) else Color.White),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(UIcons.CardGiftcard, contentDescription = null, tint = fg, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(offer.partner.ifBlank { if (bn) "রক্ষণ" else "Rokkhon" }, fontSize = 12.sp, color = muted, maxLines = 1)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(if (bn) offer.titleBn else offer.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 2, minLines = 2)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(UIcons.Star, contentDescription = null, tint = fg, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (bn) "${offer.points} পয়েন্ট" else "${offer.points} pts", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = fg)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { (points.toFloat() / offer.points).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
+                        color = fg,
+                        trackColor = if (dark) Color.White.copy(alpha = 0.2f) else Color.White
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val (label, clickable) = when (claim?.status) {
+                        "pending" -> (if (bn) "অপেক্ষায় আছে" else "Waiting for review") to false
+                        "approved", "fulfilled" -> (if (bn) "অনুমোদিত ✓" else "Approved ✓") to false
+                        "rejected" -> (if (bn) "বাতিল হয়েছে" else "Not approved") to false
+                        else -> (if (enough) (if (bn) "নিন" else "Claim") else (if (bn) "আর ${offer.points - points} পয়েন্ট" else "${offer.points - points} more pts")) to enough
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                when {
+                                    clickable && dark -> Color.White
+                                    clickable -> RokkhonPalette.Primary
+                                    dark -> Color.White.copy(alpha = 0.12f)
+                                    else -> Color.White
+                                }
+                            )
+                            .springClick(enabled = clickable) { onClaim(offer) }
+                            .testTag("reward_claim_${offer.id}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label, fontSize = 13.5.sp, fontWeight = FontWeight.Bold,
+                            color = when {
+                                clickable && dark -> RokkhonPalette.Ink
+                                clickable -> Color.White
+                                else -> muted
+                            }
+                        )
+                    }
+                    claim?.note?.takeIf { it.isNotBlank() }?.let {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(it, fontSize = 11.5.sp, color = muted, maxLines = 2)
+                    }
+                }
+            }
+        }
     }
 }
 

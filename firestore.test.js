@@ -5,6 +5,8 @@ const {
 } = require("@firebase/rules-unit-testing");
 const { test, before, after, beforeEach } = require("node:test");
 const fs = require("node:fs");
+const firebase = require("firebase/compat/app");
+require("firebase/compat/firestore");
 
 let testEnv;
 const PROJECT_ID = process.env.GCP_PROJECT || "demo-no-project";
@@ -270,4 +272,74 @@ test("Device registry: owner writes their own device ID, only admins can list it
   await assertFails(aliceDb.doc(`device_registry/${ALICE_UID}`).set({ ...entry, trustScore: 100 }));
   await assertFails(aliceDb.collection("device_registry").get());
   await assertSucceeds(bobDb.collection("device_registry").get());
+});
+
+test("Reward cards: everyone signed in reads them, only admins write them", async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`admins/${BOB_UID}`).set({ addedAt: new Date() });
+  });
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const offer = { title: "Free health check", titleBn: "ফ্রি হেলথ চেকআপ", points: 500, active: true };
+  await assertFails(aliceDb.doc("reward_offers/checkup").set(offer));
+  await assertSucceeds(bobDb.doc("reward_offers/checkup").set(offer));
+  await assertFails(bobDb.doc("reward_offers/bad").set({ ...offer, points: -5 }));
+  await assertSucceeds(aliceDb.collection("reward_offers").get());
+  await assertFails(testEnv.unauthenticatedContext().firestore().collection("reward_offers").get());
+});
+
+test("Reward claims: one per offer per user, must match the offer, only admins decide", async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`admins/${BOB_UID}`).set({ addedAt: new Date() });
+    await ctx.firestore().doc("reward_offers/checkup").set({ title: "Checkup", titleBn: "চেকআপ", points: 500, active: true });
+    await ctx.firestore().doc("reward_offers/old").set({ title: "Old", titleBn: "পুরনো", points: 100, active: false });
+  });
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const claim = (offerId, cost, points) => ({
+    userId: ALICE_UID, userName: "Alice", offerId, offerTitle: "Checkup", cost, userPoints: points,
+    status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  // Wrong id, not enough points, wrong price, inactive offer, already approved: refused.
+  await assertFails(aliceDb.doc(`reward_claims/checkup_${BOB_UID}`).set(claim("checkup", 500, 600)));
+  await assertFails(aliceDb.doc(`reward_claims/checkup_${ALICE_UID}`).set(claim("checkup", 500, 300)));
+  await assertFails(aliceDb.doc(`reward_claims/checkup_${ALICE_UID}`).set(claim("checkup", 50, 600)));
+  await assertFails(aliceDb.doc(`reward_claims/old_${ALICE_UID}`).set(claim("old", 100, 600)));
+  await assertFails(aliceDb.doc(`reward_claims/checkup_${ALICE_UID}`).set({ ...claim("checkup", 500, 600), status: "approved" }));
+  await assertSucceeds(aliceDb.doc(`reward_claims/checkup_${ALICE_UID}`).set(claim("checkup", 500, 600)));
+  // Can't claim the same reward twice, can't approve it yourself.
+  await assertFails(aliceDb.doc(`reward_claims/checkup_${ALICE_UID}`).set(claim("checkup", 500, 600)));
+  await assertFails(aliceDb.doc(`reward_claims/checkup_${ALICE_UID}`).update({ status: "approved" }));
+  await assertSucceeds(aliceDb.collection("reward_claims").where("userId", "==", ALICE_UID).get());
+  await assertFails(aliceDb.collection("reward_claims").get());
+  await assertSucceeds(bobDb.collection("reward_claims").get());
+  await assertSucceeds(bobDb.doc(`reward_claims/checkup_${ALICE_UID}`).update({ status: "approved", decidedAt: new Date() }));
+  // Once decided the user can no longer withdraw it.
+  await assertFails(aliceDb.doc(`reward_claims/checkup_${ALICE_UID}`).delete());
+});
+
+test("Announcements: admins post, every signed-in app reads", async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`admins/${BOB_UID}`).set({ addedAt: new Date() });
+  });
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const a = { title: "Blood camp", body: "Saturday at DMCH", target: "all", createdAt: new Date() };
+  await assertFails(aliceDb.collection("announcements").add(a));
+  await assertSucceeds(bobDb.collection("announcements").add(a));
+  await assertSucceeds(aliceDb.collection("announcements").get());
+});
+
+test("Admins can close or remove any blood request; others only their own", async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`admins/${BOB_UID}`).set({ addedAt: new Date() });
+    await ctx.firestore().doc("blood_requests/r1").set({ userId: "someone", status: "OPEN", networkKey: "BD_ROKKHON", patientName: "X" });
+  });
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  await assertFails(aliceDb.doc("blood_requests/r1").update({ status: "FULFILLED", updatedAt: new Date() }));
+  await assertFails(aliceDb.doc("blood_requests/r1").delete());
+  await assertFails(bobDb.doc("blood_requests/r1").update({ patientName: "changed" }));
+  await assertSucceeds(bobDb.doc("blood_requests/r1").update({ status: "FULFILLED", updatedAt: new Date() }));
+  await assertSucceeds(bobDb.doc("blood_requests/r1").delete());
 });

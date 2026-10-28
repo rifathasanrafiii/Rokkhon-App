@@ -138,6 +138,8 @@ class MainActivity : ComponentActivity() {
             ?: SosIds.sessionIdFromLink(i.dataString)
         when {
             sid != null -> _pendingSosLaunch.value = SosLaunch.Session(sid)
+            i.getStringExtra(SosNotifier.EXTRA_OPEN_TAB) != null ->
+                _pendingSosLaunch.value = SosLaunch.Tab(i.getStringExtra(SosNotifier.EXTRA_OPEN_TAB)!!)
             i.getBooleanExtra(SosNotifier.EXTRA_OPEN_OWNER, false) -> _pendingSosLaunch.value = SosLaunch.Owner
         }
     }
@@ -228,6 +230,8 @@ internal const val KEY_OTP_VERIFIED_NAME = "otp_verified_name"
 sealed interface SosLaunch {
     data class Session(val sessionId: String) : SosLaunch
     data object Owner : SosLaunch
+    /** An admin push asked to open a tab: home, find, sos, profile or rewards. */
+    data class Tab(val name: String) : SosLaunch
 }
 
 @Composable
@@ -429,6 +433,16 @@ fun RokkhonAuthenticatedShell(
         when (val l = sosLaunch) {
             is SosLaunch.Session -> { sosRoute = SosRoute.Monitor(l.sessionId); onConsumeSosLaunch() }
             SosLaunch.Owner -> { sosRoute = null; viewModel.selectTab(RokkhonTab.SOS_GUARDIAN); onConsumeSosLaunch() }
+            is SosLaunch.Tab -> {
+                when (l.name) {
+                    "find" -> viewModel.selectTab(RokkhonTab.RADAR_MAP)
+                    "sos" -> viewModel.selectTab(RokkhonTab.SOS_GUARDIAN)
+                    "profile" -> viewModel.selectTab(RokkhonTab.DONOR_PROFILE)
+                    "rewards" -> viewModel.selectTab(RokkhonTab.REWARDS)
+                    else -> viewModel.selectTab(RokkhonTab.HOME_MATCH)
+                }
+                onConsumeSosLaunch()
+            }
             null -> Unit
         }
     }

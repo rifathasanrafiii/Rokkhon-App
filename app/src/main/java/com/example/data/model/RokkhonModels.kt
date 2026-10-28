@@ -1003,7 +1003,8 @@ enum class NotificationKind {
     SOS_ALERT,
     BLOOD_REQUEST,
     RESPONDER_UPDATE,
-    FALSE_SOS_WARNING
+    FALSE_SOS_WARNING,
+    ANNOUNCEMENT
 }
 
 data class RokkhonNotificationItem(
@@ -1269,3 +1270,34 @@ fun isValidBangladeshMobile(phone: String): Boolean {
     }
     return Regex("""01[3-9]\d{8}""").matches(local)
 }
+
+/** A reward card created in the admin panel (/reward_offers). */
+data class RewardOffer(
+    val id: String,
+    val title: String,
+    val titleBn: String,
+    val description: String,
+    val descriptionBn: String,
+    val partner: String,
+    val points: Int,
+    val order: Int
+)
+
+/** A user's request for a reward (/reward_claims), decided by an admin. */
+data class RewardClaim(
+    val offerId: String,
+    val status: String,
+    val note: String?,
+    val id: String = offerId,
+    val cost: Int = 0
+)
+
+/** A message admins sent from the admin panel (/announcements). */
+data class Announcement(
+    val id: String,
+    val title: String,
+    val body: String,
+    val createdAtMillis: Long,
+    /** "all", or topics joined with "&" (e.g. "bg_O_POS&dist_dhaka"); see PushTopics. */
+    val target: String = "all"
+)

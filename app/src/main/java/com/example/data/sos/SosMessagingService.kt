@@ -23,6 +23,16 @@ class SosMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
+        if (data["type"] == "broadcast") {
+            // Sent from the admin panel (web/api/admin-push.js).
+            SosNotifier.broadcast(
+                this,
+                title = data["title"]?.take(80) ?: return,
+                body = data["body"]?.take(400).orEmpty(),
+                tab = data["tab"]
+            )
+            return
+        }
         val sid = data["sessionId"]?.takeIf { SosIds.isSessionId(it) } ?: return
         val name = data["ownerName"]?.take(60) ?: "Someone"
         when (data["type"]) {
