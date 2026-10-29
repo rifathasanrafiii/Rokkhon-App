@@ -7,10 +7,13 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.model.TrustedContact
+import com.example.data.model.isValidBangladeshMobile
 import com.example.data.sos.GrantStatus
 import com.example.data.sos.Live
 import com.example.data.sos.PrivateSosService
 import com.example.data.sos.PushStatus
+import com.example.data.sos.SmsStatus
 import com.example.data.sos.SosAccount
 import com.example.data.sos.SosDatabase
 import com.example.data.sos.SosGrant
@@ -22,6 +25,9 @@ import com.example.data.sos.SosPerms
 import com.example.data.sos.SosRepository
 import com.example.data.sos.SosRuntime
 import com.example.data.sos.SosSession
+import com.example.data.sos.SosSms
+import com.example.data.sos.SosSmsText
+import com.example.data.sos.TrustedSmsContacts
 import com.example.data.sos.WatchedSos
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
@@ -36,6 +42,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 sealed interface AccountSearch {
@@ -109,6 +116,30 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _allowRecording = MutableStateFlow(settings.getBoolean(KEY_RECORDING, false))
     val allowRecording: StateFlow<Boolean> = _allowRecording.asStateFlow()
+
+    /** Numbers that get an SMS from this phone when an SOS starts. Only on this device. */
+    private val _smsContacts = MutableStateFlow(myUid?.let { TrustedSmsContacts.load(ctx, it) }.orEmpty())
+    val smsContacts: StateFlow<List<TrustedContact>> = _smsContacts.asStateFlow()
+
+    val hasSmsPermission: Boolean get() = SosSms.hasPermission(ctx)
+
+    /** Saves up to three numbers; false (with a message) when one is not a valid mobile number. */
+    fun saveSmsContacts(contacts: List<TrustedContact>): Boolean {
+        val uid = myUid ?: return false
+        val cleaned = contacts
+            .map { TrustedContact(it.name.trim().replace("\t", " ").replace("\n", " "), it.phone.trim()) }
+            .filter { it.phone.isNotBlank() }
+            .distinctBy { SosSmsText.destination(it.phone) }
+            .take(MAX_SMS_CONTACTS)
+        if (cleaned.any { !isValidBangladeshMobile(it.phone) }) {
+            say("সঠিক মোবাইল নম্বর দিন (যেমন 01712345678)")
+            return false
+        }
+        TrustedSmsContacts.save(ctx, uid, cleaned)
+        _smsContacts.value = cleaned
+        say(if (cleaned.isEmpty()) "অটো SMS নম্বর মুছে ফেলা হয়েছে" else "অটো SMS নম্বর সেভ হয়েছে")
+        return true
+    }
 
     init {
         val r = repo
@@ -214,6 +245,7 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
             SosRuntime.update { it.copy(sessionId = sid, startedAtMs = System.currentTimeMillis(), push = PushStatus.Sending) }
             if (hasLocationPermission) PrivateSosService.start(ctx, sid, audio)
             _busy.value = false
+            sendSms(sid, update = false)
             val push = SosNotifyClient.notifyTrusted(ctx, sid)
             SosRuntime.update { if (it.sessionId == sid) it.copy(push = push) else it }
         }
@@ -228,6 +260,8 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
     fun endSos() {
         val r = repo ?: return
         val sid = owner.value.sessionId ?: _stranded.value ?: return
+        val toldBySms = (owner.value.sms as? SmsStatus.Sent)?.ok?.let { it > 0 } == true
+        val smsContactsNow = _smsContacts.value
         SosRuntime.scope.launch {
             _busy.value = true
             val ok = runCatching { r.endSession(sid) }.isSuccess
@@ -239,6 +273,8 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
             if (!ok) _stranded.value = sid
             // Tell trusted people it is over (best effort; their screens also see "ended" live).
             if (ok) SosNotifyClient.notifyTrusted(ctx, sid, event = "ended")
+            // Whoever got the alarm text also hears that it is over.
+            if (ok && toldBySms && SosSms.hasPermission(ctx)) SosSms.send(ctx, smsContactsNow, SosSmsText.safe(ownerName))
         }
     }
 
@@ -271,6 +307,57 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { runCatching { r.setRecordingAllowed(sid, on) } }
     }
 
+    private val ownerName: String get() = FirebaseAuth.getInstance().currentUser?.displayName.orEmpty()
+
+    /**
+     * Texts the saved numbers from this phone: the live link, plus a map link when a position is
+     * known. [update] sends the newest position again while the SOS is still running.
+     */
+    private fun sendSms(sid: String, update: Boolean) {
+        val contacts = _smsContacts.value
+        if (contacts.isEmpty()) return
+        fun setStatus(status: SmsStatus) = SosRuntime.update { if (it.sessionId == sid) it.copy(sms = status) else it }
+        setStatus(SmsStatus.Sending)
+        SosRuntime.scope.launch {
+            if (!SosSms.hasTelephony(ctx)) return@launch setStatus(SmsStatus.NoTelephony)
+            if (!SosSms.hasPermission(ctx)) return@launch setStatus(SmsStatus.NeedsPermission)
+            // Go with a position the phone already has; otherwise give the GPS a few seconds.
+            var where = SosRuntime.owner.value.lastFix?.let { it.lat to it.lng } ?: SosSms.lastKnownPosition(ctx)
+            var waited = 0
+            while (where == null && waited < 10) {
+                delay(500)
+                waited++
+                where = SosRuntime.owner.value.lastFix?.let { it.lat to it.lng }
+            }
+            val body = SosSmsText.alert(
+                ownerName,
+                ctx.getString(com.example.R.string.sos_live_link_base) + sid,
+                where?.let { com.example.data.model.mapsLink(it.first, it.second) },
+                update
+            )
+            val out = SosSms.send(ctx, contacts, body)
+            setStatus(SmsStatus.Sent(out.ok, out.failed))
+        }
+    }
+
+    /** Text the saved numbers again with the newest position (also the way in after allowing SMS). */
+    fun sendSmsNow() {
+        val sid = owner.value.sessionId ?: return
+        sendSms(sid, update = owner.value.sms is SmsStatus.Sent)
+    }
+
+    /** The text for the SMS-app fallback when this phone may not send SMS by itself. */
+    fun smsFallbackBody(): String {
+        val sid = owner.value.sessionId.orEmpty()
+        val where = owner.value.lastFix?.let { it.lat to it.lng } ?: SosSms.lastKnownPosition(ctx)
+        return SosSmsText.alert(
+            ownerName,
+            ctx.getString(com.example.R.string.sos_live_link_base) + sid,
+            where?.let { com.example.data.model.mapsLink(it.first, it.second) },
+            update = false
+        )
+    }
+
     fun resendAlert() {
         val sid = owner.value.sessionId ?: return
         SosRuntime.update { it.copy(push = PushStatus.Sending) }
@@ -282,8 +369,9 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteHistory(item: SosHistoryItem) = act("মুছে ফেলা হয়েছে") { it.deleteSessionHistory(item.sessionId) }
 
-    private companion object {
-        const val KEY_AUDIO = "share_audio"
-        const val KEY_RECORDING = "allow_recording"
+    companion object {
+        const val MAX_SMS_CONTACTS = 3
+        private const val KEY_AUDIO = "share_audio"
+        private const val KEY_RECORDING = "allow_recording"
     }
 }

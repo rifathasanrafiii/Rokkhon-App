@@ -19,6 +19,7 @@ notification, or a `https://rokkhon.com/live/{sessionId}` link.
 | Recording | Listener's phone only (`files/sos_recordings`, AAC .m4a) | Only if the sender allowed recording; the listener confirms a consent notice; the sender sees "Recording". Play, share, save to Downloads/Rokkhon, delete. Never uploaded. |
 | Map | MapLibre + OpenFreeMap tiles | Free, no API key. "Open in Google Maps" hands over only the current coordinates. |
 | Push alerts | FCM, sent by `web/api/sos-notify.js` | Needs the trusted server below. The service-account key is never in the app. |
+| Auto SMS | `data/sos/SosSms.kt`, SOS home → *Auto SMS to numbers* | Up to 3 mobile numbers, stored only on the phone. When an SOS starts, the phone itself texts them (its own SIM, `SEND_SMS`) the `rokkhon.com/live/{id}` link and a Google Maps link of the position it knows; "Again" texts the newest position, and ending the SOS texts "I'm safe". No SMS provider or server is involved. |
 | Web link | `web/live/index.html` | Same rules: sign in with an authorised account, otherwise nothing is shown. Shows status, map, accuracy, time. Audio is app-only. |
 
 Access control lives in `database.rules.json` (Realtime Database rules), next to the data it
@@ -59,6 +60,12 @@ the link or call 999.
 
 ## Limitations (honest list)
 
+- **Auto SMS.** It costs the sender's SIM SMS balance (a Bangla text is 2-3 segments per number).
+  "Sent" means the phone handed the text to the network, not that it arrived. The live link opens
+  only for Rokkhon accounts on the sender's list; other recipients see the position through the
+  Google Maps link in the same SMS, which is a snapshot (use "Again" to send a newer one). If
+  `SEND_SMS` is denied the dashboard offers the SMS app with the text filled in. Google Play
+  restricts `SEND_SMS`; this app is installed from an APK.
 - **Not guaranteed.** Location and audio need the internet, permissions and Android not killing
   the app. The app never claims otherwise and always offers 999.
 - **Push needs a server.** FCM sends must come from a trusted server; free Firebase (Spark) has no

@@ -20,6 +20,16 @@ sealed interface PushStatus {
     data class Unavailable(val reason: String) : PushStatus
 }
 
+/** The automatic SMS to the numbers the user set (separate from the push to Rokkhon accounts). */
+sealed interface SmsStatus {
+    data object None : SmsStatus
+    data object Sending : SmsStatus
+    /** [ok] texts left the phone; that is not a delivery receipt. */
+    data class Sent(val ok: Int, val failed: Int) : SmsStatus
+    data object NeedsPermission : SmsStatus
+    data object NoTelephony : SmsStatus
+}
+
 /** What the SOS sender's phone is doing right now. Written by [PrivateSosService], read by the UI. */
 data class OwnerSosState(
     val sessionId: String? = null,
@@ -32,7 +42,8 @@ data class OwnerSosState(
     val mic: MicStatus = MicStatus.OFF,
     val listening: Set<String> = emptySet(),
     val online: Boolean = true,
-    val push: PushStatus = PushStatus.NotSent
+    val push: PushStatus = PushStatus.NotSent,
+    val sms: SmsStatus = SmsStatus.None
 ) {
     val active: Boolean get() = sessionId != null
 }

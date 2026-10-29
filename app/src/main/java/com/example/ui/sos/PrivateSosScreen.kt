@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,18 +43,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.AppLanguage
+import com.example.data.model.TrustedContact
 import com.example.data.sos.GpsProblem
 import com.example.data.sos.GrantStatus
 import com.example.data.sos.Live
 import com.example.data.sos.MicStatus
 import com.example.data.sos.OwnerSosState
 import com.example.data.sos.PushStatus
+import com.example.data.sos.SmsStatus
+import com.example.data.sos.SosSms
 import com.example.data.sos.SosGrant
 import com.example.data.sos.SosHistoryItem
 import com.example.data.sos.SosSession
@@ -130,6 +138,8 @@ private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenAccess: () -> Un
     val busy by vm.busy.collectAsStateWithLifecycle()
     val history by vm.myHistory.collectAsStateWithLifecycle()
     var showHistory by remember { mutableStateOf(false) }
+    var showSmsSheet by remember { mutableStateOf(false) }
+    val smsContacts by vm.smsContacts.collectAsStateWithLifecycle()
 
     val trusted = viewers.count { it.status == GrantStatus.ACCEPTED && it.perms.anyLive }
     val pendingOut = viewers.count { it.status == GrantStatus.PENDING }
@@ -196,6 +206,8 @@ private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenAccess: () -> Un
                     val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
                     if (shareAudio) perms += Manifest.permission.RECORD_AUDIO
                     if (Build.VERSION.SDK_INT >= 33) perms += Manifest.permission.POST_NOTIFICATIONS
+                    // The automatic SMS needs its permission before the text can go out by itself.
+                    if (smsContacts.isNotEmpty() && !vm.hasSmsPermission && SosSms.hasTelephony(context)) perms += Manifest.permission.SEND_SMS
                     startLauncher.launch(perms.toTypedArray())
                 }
             )
@@ -224,6 +236,19 @@ private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenAccess: () -> Un
                     onClick = onOpenAccess
                 )
             }
+        }
+        Spacer(Modifier.height(12.dp))
+
+        SosCard {
+            NavRow(
+                icon = UIcons.Sms,
+                title = if (smsContacts.isEmpty()) t(bn, "নম্বরে অটো SMS", "Auto SMS to numbers")
+                else t(bn, "${bnDigits(smsContacts.size)} নম্বরে SMS যাবে", "SMS goes to ${smsContacts.size} numbers"),
+                subtitle = if (smsContacts.isEmpty()) t(bn, "SOS চালু হলেই লাইভ লিংকসহ SMS নিজে থেকে চলে যাবে — Rokkhon না থাকলেও", "As soon as SOS starts, a text with the live link goes out by itself — even to people without Rokkhon")
+                else smsContacts.joinToString(", ") { it.name.ifBlank { it.phone } },
+                onClick = { showSmsSheet = true },
+                testTag = "sos_sms_row"
+            )
         }
         Spacer(Modifier.height(12.dp))
 
@@ -266,6 +291,7 @@ private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenAccess: () -> Un
         )
     }
 
+    if (showSmsSheet) SmsContactsSheet(vm, bn, smsContacts, onDismiss = { showSmsSheet = false })
     if (showHistory) HistorySheet(bn, history, onDismiss = { showHistory = false }, onOpen = { onOpenSession(it.sessionId); showHistory = false }, onDelete = { vm.deleteHistory(it) })
 }
 
@@ -346,6 +372,10 @@ private fun OwnerDashboard(vm: PrivateSosViewModel, bn: Boolean, owner: OwnerSos
     }
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) vm.setLiveAudio(true)
+    }
+    val smsContacts by vm.smsContacts.collectAsStateWithLifecycle()
+    val smsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) vm.sendSmsNow()
     }
 
     Column(
@@ -439,6 +469,17 @@ private fun OwnerDashboard(vm: PrivateSosViewModel, bn: Boolean, owner: OwnerSos
         SectionHeader(t(bn, "কারা জানল", "Who knows"))
         Spacer(Modifier.height(4.dp))
         PushLine(bn, owner.push, onRetry = { vm.resendAlert() })
+        if (smsContacts.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            SmsLine(
+                bn, owner.sms,
+                onSend = { vm.sendSmsNow() },
+                onAllow = { smsPermission.launch(Manifest.permission.SEND_SMS) },
+                onOpenSmsApp = {
+                    RokkhonIntents.smsComposer(context, smsContacts, vm.smsFallbackBody(), if (bn) AppLanguage.BENGALI else AppLanguage.ENGLISH)
+                }
+            )
+        }
         Spacer(Modifier.height(8.dp))
         val told = viewers.filter { it.status == GrantStatus.ACCEPTED && it.perms.anyLive }
         if (told.isEmpty()) {
@@ -493,6 +534,111 @@ private fun Indicator(modifier: Modifier, icon: androidx.compose.ui.graphics.vec
         Spacer(Modifier.height(8.dp))
         Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink, maxLines = 1)
         Text(detail ?: " ", fontSize = 12.sp, color = RokkhonPalette.Muted, maxLines = 1)
+    }
+}
+
+@Composable
+internal fun SmsLine(bn: Boolean, sms: SmsStatus, onSend: () -> Unit, onAllow: () -> Unit, onOpenSmsApp: () -> Unit) {
+    val text = when (sms) {
+        SmsStatus.None -> t(bn, "অটো SMS এখনও যায়নি", "Auto SMS hasn't gone yet")
+        SmsStatus.Sending -> t(bn, "SMS পাঠানো হচ্ছে…", "Sending SMS…")
+        is SmsStatus.Sent -> if (sms.ok > 0) t(bn,
+            "SMS পাঠানো হয়েছে ${bnDigits(sms.ok)} নম্বরে" + if (sms.failed > 0) " · ${bnDigits(sms.failed)} নম্বরে যায়নি" else "",
+            "SMS sent to ${sms.ok} numbers" + if (sms.failed > 0) " · ${sms.failed} failed" else ""
+        ) else t(bn, "SMS যায়নি — সিম, ব্যালেন্স বা নম্বর দেখুন", "SMS didn't go — check SIM, balance or numbers")
+        SmsStatus.NeedsPermission -> t(bn, "SMS নিজে পাঠাতে অনুমতি লাগবে", "Allow SMS so it can go out by itself")
+        SmsStatus.NoTelephony -> t(bn, "এই ফোন থেকে SMS পাঠানো যায় না", "This device can't send SMS")
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (sms == SmsStatus.NeedsPermission || sms == SmsStatus.NoTelephony) Color(0xFFFFF4E5) else RokkhonPalette.Subtle)
+            .padding(12.dp)
+            .testTag("sos_sms_status"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(UIcons.Sms, null, tint = RokkhonPalette.Ink, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(text, fontSize = 12.5.sp, lineHeight = 17.sp, color = RokkhonPalette.Ink)
+            if (sms is SmsStatus.Sent && sms.ok > 0) {
+                Text(t(bn, "নতুন লোকেশন আবার পাঠাতে ডানের বাটন চাপুন", "Tap the button to text your newest position"), fontSize = 11.5.sp, color = RokkhonPalette.Muted)
+            }
+        }
+        val action: Pair<String, () -> Unit>? = when (sms) {
+            SmsStatus.NeedsPermission -> t(bn, "অনুমতি", "Allow") to onAllow
+            SmsStatus.NoTelephony -> null
+            SmsStatus.Sending -> null
+            else -> t(bn, if (sms is SmsStatus.Sent && sms.ok > 0) "আবার" else "পাঠান", if (sms is SmsStatus.Sent && sms.ok > 0) "Again" else "Send") to onSend
+        }
+        action?.let { (label, onClick) ->
+            Spacer(Modifier.width(8.dp))
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink, modifier = Modifier.springClick(onClick = onClick).padding(6.dp).testTag("sos_sms_action"))
+        }
+        if (sms == SmsStatus.NeedsPermission || sms == SmsStatus.NoTelephony || (sms is SmsStatus.Sent && sms.ok == 0)) {
+            Text(t(bn, "SMS অ্যাপ", "SMS app"), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink, modifier = Modifier.springClick(onClick = onOpenSmsApp).padding(6.dp).testTag("sos_sms_open_app"))
+        }
+    }
+}
+
+/** Up to three numbers that get the SOS text from this phone, plus the SMS permission it needs. */
+@Composable
+internal fun SmsContactsSheet(vm: PrivateSosViewModel, bn: Boolean, initial: List<TrustedContact>, onDismiss: () -> Unit) {
+    val max = PrivateSosViewModel.MAX_SMS_CONTACTS
+    val names = remember { mutableStateListOf(*Array(max) { initial.getOrNull(it)?.name ?: "" }) }
+    val phones = remember { mutableStateListOf(*Array(max) { initial.getOrNull(it)?.phone ?: "" }) }
+    val context = LocalContext.current
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    RokkhonBottomSheet(onDismiss = onDismiss, title = t(bn, "অটো SMS নম্বর (সর্বোচ্চ ৩)", "Auto SMS numbers (up to 3)"), testTag = "sos_sms_sheet") {
+        Text(
+            t(bn, "SOS চালু হলেই আপনার ফোন থেকে এই নম্বরগুলোতে লাইভ লিংক আর অবস্থানসহ SMS চলে যাবে, আর শেষ করলে \"নিরাপদ\" SMS যাবে। খরচ আপনার সিম থেকে কাটবে। নম্বরগুলো শুধু এই ফোনে থাকে।",
+                "When SOS starts, your phone texts these numbers the live link and position, and a \"safe\" text when you end it. It uses your SIM's SMS balance. Numbers stay on this phone only."),
+            fontSize = 13.sp, lineHeight = 19.sp, color = RokkhonPalette.Muted
+        )
+        Text(
+            t(bn, "লাইভ লিংক খুলতে Rokkhon অ্যাকাউন্ট লাগে (আপনার তালিকায় থাকলে); সবাই SMS-এর ম্যাপ লিংকে অবস্থান দেখতে পারবেন।",
+                "The live link opens for Rokkhon accounts on your list; anyone can see the position in the map link."),
+            fontSize = 12.sp, lineHeight = 17.sp, color = RokkhonPalette.Muted, modifier = Modifier.padding(top = 6.dp)
+        )
+        for (i in 0 until max) {
+            Spacer(Modifier.height(10.dp))
+            SheetField(names[i], { names[i] = it.take(40) }, t(bn, "নাম ${bnDigits(i + 1)}", "Name ${i + 1}"), KeyboardType.Text, "sos_sms_name_$i")
+            Spacer(Modifier.height(6.dp))
+            SheetField(phones[i], { phones[i] = it.filter { ch -> ch.isDigit() || ch == '+' }.take(14) }, "01XXXXXXXXX", KeyboardType.Phone, "sos_sms_phone_$i")
+        }
+        Spacer(Modifier.height(16.dp))
+        PrimaryButton(t(bn, "সেভ করুন", "Save"), onClick = {
+            if (vm.saveSmsContacts((0 until max).map { TrustedContact(names[it], phones[it]) })) {
+                val any = (0 until max).any { phones[it].isNotBlank() }
+                if (any && !vm.hasSmsPermission && SosSms.hasTelephony(context)) permission.launch(Manifest.permission.SEND_SMS)
+                onDismiss()
+            }
+        }, testTag = "sos_sms_save")
+    }
+}
+
+@Composable
+private fun SheetField(value: String, onChange: (String) -> Unit, hint: String, type: KeyboardType, testTag: String) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(RokkhonPalette.Subtle)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (value.isEmpty()) Text(hint, color = RokkhonPalette.Faint, fontSize = 15.sp)
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = TextStyle(fontSize = 15.sp, color = RokkhonPalette.Ink),
+            keyboardOptions = KeyboardOptions(keyboardType = type),
+            modifier = Modifier.fillMaxWidth().testTag(testTag)
+        )
     }
 }
 

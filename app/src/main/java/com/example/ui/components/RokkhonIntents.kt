@@ -69,6 +69,13 @@ object RokkhonIntents {
         launch(context, intent, language)
     }
 
+    /** Opens the SMS app to all [contacts] with [body] filled in; the user presses send. */
+    fun smsComposer(context: Context, contacts: List<TrustedContact>, body: String, language: AppLanguage) {
+        if (contacts.isEmpty()) return
+        val recipients = contacts.joinToString(";") { it.phone.trim() }
+        launch(context, Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$recipients")).putExtra("sms_body", body), language)
+    }
+
     fun shareLocation(context: Context, senderName: String, lat: Double, lng: Double, language: AppLanguage) {
         share(context, sosMessage(senderName, lat, lng), language)
     }

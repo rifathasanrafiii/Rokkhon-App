@@ -5,12 +5,24 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.sos.GpsProblem
 import com.example.data.sos.LiveFix
 import com.example.data.sos.MicStatus
 import com.example.data.sos.PushStatus
+import com.example.data.sos.SmsStatus
+import com.example.ui.sos.SmsContactsSheet
+import com.example.ui.sos.SmsLine
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.example.data.model.TrustedContact
 import com.example.data.sos.SosRuntime
 import com.example.ui.sos.PrivateSosScreen
 import com.example.ui.sos.SosAccessScreen
@@ -104,5 +116,33 @@ class SosScreenshotTest {
         composeRule.setContent { MyApplicationTheme { SosMonitorScreen(vm, bn = true, onBack = {}) } }
         composeRule.onNodeWithTag("monitor_blocked").assertExists()
         save("sos_monitor_blocked")
+    }
+
+    @Test
+    fun smsStatusLineSaysWhatHappened() {
+        composeRule.setContent {
+            MyApplicationTheme {
+                Column(Modifier.padding(16.dp)) {
+                    listOf(SmsStatus.Sending, SmsStatus.Sent(2, 1), SmsStatus.Sent(0, 2), SmsStatus.NeedsPermission).forEach {
+                        SmsLine(bn = true, sms = it, onSend = {}, onAllow = {}, onOpenSmsApp = {})
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
+        // Offered only when the phone could not send by itself: no permission, or every number failed.
+        composeRule.onAllNodesWithTag("sos_sms_open_app", useUnmergedTree = true).assertCountEquals(2)
+        save("sos_sms_status")
+    }
+
+    @Test
+    fun smsContactsSheetHasThreeNumberFields() {
+        val vm = PrivateSosViewModel(app)
+        composeRule.setContent {
+            MyApplicationTheme { SmsContactsSheet(vm, bn = true, initial = listOf(TrustedContact("মা", "01712345678")), onDismiss = {}) }
+        }
+        composeRule.waitForIdle()
+        (0..2).forEach { composeRule.onNodeWithTag("sos_sms_phone_$it").assertExists() }
+        composeRule.onNodeWithTag("sos_sms_save").assertExists()
     }
 }

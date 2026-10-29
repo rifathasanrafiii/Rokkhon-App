@@ -7,6 +7,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <uses-feature android:name="android.hardware.location.network" android:required="false" />
@@ -18,6 +19,9 @@
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"
         tools:targetApi="33" />
+
+    <!-- SOS texts the numbers the user chose, from their own SIM (no SMS app to open) -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
 
     <!-- Live Location Radar Permissions -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

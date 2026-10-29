@@ -10,7 +10,7 @@ Bangladesh blood-donor network (Kotlin, Jetpack Compose, Firebase). A personal-s
 - **90-day rule:** after "I donated today" a donor shows as resting with a countdown and becomes available again automatically after 90 days.
 - **Rewards:** points, daily check-in streak, badges and reward cards (claimed with points, approved from the admin panel), opened from Profile.
 - **Real data only:** every donor, request and SOS comes from Firestore. Without sign-in (or without Firebase config) lists stay empty and only the offline SOS tools work (Bluetooth mesh, 999, SMS).
-- **Private SOS (`docs/PRIVATE_SOS.md`):** hold 3 s to share live GPS (and, if you choose, live microphone audio) only with Rokkhon accounts you trust, with per-person permissions, instant revocation, a secure `rokkhon.com/live/{id}` link and listener-side recording that never leaves their phone. Needs Realtime Database turned on (free); see the doc.
+- **Private SOS (`docs/PRIVATE_SOS.md`):** hold 3 s to share live GPS (and, if you choose, live microphone audio) only with Rokkhon accounts you trust, with per-person permissions, instant revocation, a secure `rokkhon.com/live/{id}` link and listener-side recording that never leaves their phone. Optionally texts up to 3 saved numbers by itself when the SOS starts (live link + map link). Needs Realtime Database turned on (free); see the doc.
 - **Admin panel (`web/admin`, on Vercel):** push notifications to everyone, a blood group or a district; reward cards and claim approval; points, location off, account suspend and device ban; moderation of blood requests. See `docs/ADMIN_PANEL.md`.
 
 ## Build and install
