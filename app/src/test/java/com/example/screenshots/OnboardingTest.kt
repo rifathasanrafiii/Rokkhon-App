@@ -35,15 +35,15 @@ class OnboardingTest {
     @Test
     fun newGoogleAccountGoesNameThenBloodThenNumber() {
         composeRule.setContent { MyApplicationTheme { OnboardingScreen(UserProfile("", null, null), onDone = {}) } }
-        composeRule.onNodeWithText("আপনার নাম").assertIsDisplayed()
+        composeRule.onNodeWithText("নাম কী", substring = true).assertIsDisplayed()
         save("40_onboarding_name")
         composeRule.onNodeWithTag("onboarding_name").performTextInput("রাফি হাসান")
         composeRule.onNodeWithTag("onboarding_next").performClick()
-        composeRule.onNodeWithText("রক্তের গ্রুপ").assertIsDisplayed()
+        composeRule.onNodeWithText("কোনটি", substring = true).assertIsDisplayed()
         composeRule.onNodeWithTag("onboarding_blood_O+").performClick()
         save("41_onboarding_blood")
         composeRule.onNodeWithTag("onboarding_next").performClick()
-        composeRule.onNodeWithText("মোবাইল নম্বর").assertIsDisplayed()
+        composeRule.onNodeWithText("নম্বর দিন", substring = true).assertIsDisplayed()
         composeRule.onNodeWithTag("onboarding_phone").performTextInput("01712345678")
         save("42_onboarding_phone")
     }
@@ -54,7 +54,7 @@ class OnboardingTest {
         composeRule.setContent {
             MyApplicationTheme { OnboardingScreen(UserProfile("রাফি", null, "+8801712345678"), onDone = { done = true }) }
         }
-        composeRule.onNodeWithText("রক্তের গ্রুপ").assertIsDisplayed()
+        composeRule.onNodeWithText("কোনটি", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("শুরু করুন").assertExists()
         composeRule.onNodeWithTag("onboarding_phone").assertDoesNotExist()
     }

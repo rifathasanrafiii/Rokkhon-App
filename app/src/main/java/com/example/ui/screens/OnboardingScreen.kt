@@ -1,10 +1,15 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -12,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,10 +25,12 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -43,15 +51,20 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.isValidBangladeshMobile
 import com.example.data.profile.UserProfile
 import com.example.data.profile.UserProfileStore
+import com.example.ui.components.StoryArt
+import com.example.ui.components.StoryBars
+import com.example.ui.components.StoryHero
 import com.example.ui.components.springClick
 import com.example.ui.icons.UIcons
 import com.example.ui.theme.RokkhonPalette
@@ -71,6 +84,7 @@ private enum class OnboardStep { NAME, BLOOD, PHONE }
  * phone sign-in, or a donor profile) are skipped. The number is verified with an SMS code and
  * added to the same account, so people can add this account to their SOS by number.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingScreen(initial: UserProfile, onDone: () -> Unit) {
     val context = LocalContext.current
@@ -164,76 +178,91 @@ fun OnboardingScreen(initial: UserProfile, onDone: () -> Unit) {
         if (codeStep) { verificationId = null; code = "" } else index--
     }
 
+    // The current bar fills as the page opens, like a story.
+    val barFill = remember { Animatable(0f) }
+    LaunchedEffect(index) {
+        barFill.snapTo(0f)
+        barFill.animateTo(1f, tween(700))
+    }
+    val keyboardOpen = WindowInsets.isImeVisible
+    val heroHeight by animateDpAsState(if (keyboardOpen) 130.dp else 250.dp, label = "hero")
+
     Column(
         Modifier
             .fillMaxSize()
             .background(Color.White)
             .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.navigationBars).union(WindowInsets.ime))
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 16.dp)
+            .padding(horizontal = 24.dp, vertical = 14.dp)
             .testTag("onboarding")
     ) {
-        Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+        StoryBars(count = steps.size, index = index, progress = barFill.value, modifier = Modifier.padding(bottom = 12.dp))
+        Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
             if (index > 0 || codeStep) {
                 Box(
                     Modifier.size(40.dp).clip(CircleShape).background(RokkhonPalette.Subtle).springClick {
                         error = null
                         if (codeStep) { verificationId = null; code = "" } else index--
-                    },
+                    }.testTag("onboarding_back"),
                     contentAlignment = Alignment.Center
                 ) { Icon(UIcons.ArrowBack, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(20.dp)) }
+            } else {
+                Image(painterResource(R.drawable.rokkhon_wordmark_black), contentDescription = "রক্ষণ", modifier = Modifier.height(28.dp))
             }
-            Spacer(Modifier.weight(1f))
-            if (steps.size > 1) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    steps.indices.forEach { i ->
-                        Box(Modifier.width(if (i == index) 22.dp else 8.dp).height(8.dp).clip(CircleShape)
-                            .background(if (i <= index) RokkhonPalette.Primary else RokkhonPalette.Divider))
+        }
+
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Spacer(Modifier.height(20.dp))
+            StoryHero(
+                when {
+                    codeStep -> StoryArt.CODE
+                    step == OnboardStep.NAME -> StoryArt.NAME
+                    step == OnboardStep.BLOOD -> StoryArt.BLOOD
+                    else -> StoryArt.PHONE
+                },
+                height = heroHeight
+            )
+            Spacer(Modifier.height(28.dp))
+            Text(
+                when {
+                    codeStep -> "কোডটি\nলিখুন"
+                    step == OnboardStep.NAME -> "আপনার\nনাম কী?"
+                    step == OnboardStep.BLOOD -> "রক্তের গ্রুপ\nকোনটি?"
+                    else -> "মোবাইল\nনম্বর দিন"
+                },
+                fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink
+            )
+            if (codeStep) {
+                Text(normalizeBangladeshPhoneE164(phone), fontSize = 16.sp, color = RokkhonPalette.Muted, modifier = Modifier.padding(top = 8.dp))
+            }
+            Spacer(Modifier.height(24.dp))
+
+            when {
+                codeStep -> BigField(code, { code = it.filter(Char::isDigit).take(6) }, "••••••", KeyboardType.NumberPassword, "onboarding_code", center = true)
+                step == OnboardStep.NAME -> BigField(name, { name = it.take(60) }, "নাম", KeyboardType.Text, "onboarding_name")
+                step == OnboardStep.BLOOD -> BloodTiles(blood) { blood = it }
+                else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.height(60.dp).clip(RoundedCornerShape(16.dp)).background(RokkhonPalette.Subtle).padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text("+88", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Ink) }
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.weight(1f)) {
+                        BigField(phone, { phone = it.filter(Char::isDigit).take(11) }, "01XXXXXXXXX", KeyboardType.Phone, "onboarding_phone")
                     }
                 }
             }
-        }
-        Spacer(Modifier.height(24.dp))
-        Text(
-            when {
-                codeStep -> "কোড লিখুন"
-                step == OnboardStep.NAME -> "আপনার নাম"
-                step == OnboardStep.BLOOD -> "রক্তের গ্রুপ"
-                else -> "মোবাইল নম্বর"
-            },
-            fontSize = 30.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink
-        )
-        if (codeStep) {
-            Text(normalizeBangladeshPhoneE164(phone), fontSize = 15.sp, color = RokkhonPalette.Muted, modifier = Modifier.padding(top = 4.dp))
-        }
-        Spacer(Modifier.height(24.dp))
 
-        when {
-            codeStep -> BigField(code, { code = it.filter(Char::isDigit).take(6) }, "••••••", KeyboardType.NumberPassword, "onboarding_code", center = true)
-            step == OnboardStep.NAME -> BigField(name, { name = it.take(60) }, "নাম", KeyboardType.Text, "onboarding_name")
-            step == OnboardStep.BLOOD -> BloodTiles(blood) { blood = it }
-            else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.height(60.dp).clip(RoundedCornerShape(16.dp)).background(RokkhonPalette.Subtle).padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.Center
-                ) { Text("+88", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Ink) }
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.weight(1f)) {
-                    BigField(phone, { phone = it.filter(Char::isDigit).take(11) }, "01XXXXXXXXX", KeyboardType.Phone, "onboarding_phone")
-                }
+            if (codeStep) {
+                Text(
+                    if (resendIn > 0) "আবার পাঠান · ${bnDigits(resendIn)}" else "আবার পাঠান",
+                    fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (resendIn > 0) RokkhonPalette.Faint else RokkhonPalette.Ink,
+                    modifier = Modifier.padding(top = 14.dp).springClick(enabled = resendIn == 0 && !busy) { sendCode(resend = true) }.padding(vertical = 6.dp)
+                )
             }
+            Spacer(Modifier.height(16.dp))
         }
 
-        if (codeStep) {
-            Text(
-                if (resendIn > 0) "আবার পাঠান · ${bnDigits(resendIn)}" else "আবার পাঠান",
-                fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                color = if (resendIn > 0) RokkhonPalette.Faint else RokkhonPalette.Ink,
-                modifier = Modifier.padding(top = 14.dp).springClick(enabled = resendIn == 0 && !busy) { sendCode(resend = true) }.padding(vertical = 6.dp)
-            )
-        }
-
-        Spacer(Modifier.weight(1f))
         error?.let {
             Text(it, fontSize = 13.5.sp, color = RokkhonPalette.Sos, modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).testTag("onboarding_error"))
         }
@@ -247,9 +276,9 @@ fun OnboardingScreen(initial: UserProfile, onDone: () -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .height(56.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(if (ready && !busy) RokkhonPalette.Primary else RokkhonPalette.Divider)
-                .springClick(enabled = ready && !busy) {
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (ready && !busy) Color.Black else RokkhonPalette.Chip)
+                .springClick(enabled = ready && !busy, pressedScale = 0.98f) {
                     when {
                         codeStep -> linkNumber(PhoneAuthProvider.getCredential(verificationId!!, code))
                         step == OnboardStep.PHONE -> sendCode(resend = false)
@@ -267,7 +296,7 @@ fun OnboardingScreen(initial: UserProfile, onDone: () -> Unit) {
                     index == steps.lastIndex -> "শুরু করুন"
                     else -> "পরবর্তী"
                 },
-                fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (ready) Color.White else RokkhonPalette.Muted
+                fontSize = 17.sp, fontWeight = FontWeight.Bold, color = if (ready) Color.White else RokkhonPalette.Muted
             )
         }
         // Only when the SMS code could not be sent or checked, so a Firebase problem never locks the app.
@@ -315,7 +344,7 @@ private fun BloodTiles(selected: String?, onSelect: (String) -> Unit) {
                             .weight(1f)
                             .height(64.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(if (sel) RokkhonPalette.Primary else RokkhonPalette.Subtle)
+                            .background(if (sel) Color.Black else RokkhonPalette.Subtle)
                             .springClick(pressedScale = 0.94f) { onSelect(bg) }
                             .testTag("onboarding_blood_$bg"),
                         contentAlignment = Alignment.Center

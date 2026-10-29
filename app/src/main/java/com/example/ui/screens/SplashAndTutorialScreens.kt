@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,6 +53,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.FeatureFlags
 import com.example.R
+import com.example.ui.components.StoryArt
+import com.example.ui.components.StoryBars
+import com.example.ui.components.StoryHero
 import com.example.ui.components.springClick
 import com.example.ui.icons.UIcons
 import com.example.ui.theme.RokkhonPalette
@@ -116,7 +122,8 @@ private data class TutorialSlide(
     val subtitleBn: String,
     val descriptionBn: String,
     val highlightPoints: List<TutorialHighlightPoint>,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val art: StoryArt
 )
 
 /**
@@ -140,7 +147,8 @@ fun RokkhonTutorialScreen(
                 TutorialHighlightPoint(UIcons.Event, "শেষ রক্তদানের ৯০ দিন নিজে থেকেই হিসাব হয়"),
                 TutorialHighlightPoint(UIcons.Call, "এক ট্যাপে কল বা মেসেজ")
             ),
-            icon = UIcons.People
+            icon = UIcons.People,
+            art = StoryArt.DONORS
         ),
         TutorialSlide(
             badge = "",
@@ -152,7 +160,8 @@ fun RokkhonTutorialScreen(
                 TutorialHighlightPoint(UIcons.Share, "হোয়াটসঅ্যাপ বা ফেসবুকে শেয়ার করুন"),
                 TutorialHighlightPoint(UIcons.CheckCircle, "রক্ত পেলে আবেদন বন্ধ করুন")
             ),
-            icon = UIcons.Bloodtype
+            icon = UIcons.Bloodtype,
+            art = StoryArt.REQUEST
         ),
         TutorialSlide(
             badge = "",
@@ -164,7 +173,8 @@ fun RokkhonTutorialScreen(
                 TutorialHighlightPoint(UIcons.MyLocation, "জিপিএস দিয়ে নিজের এলাকা"),
                 TutorialHighlightPoint(UIcons.Star, "প্রতিদিন চেক-ইন করে পয়েন্ট")
             ),
-            icon = UIcons.Map
+            icon = UIcons.Map,
+            art = StoryArt.MAP
         ),
         if (FeatureFlags.SOS_ENABLED) TutorialSlide(
             badge = "",
@@ -176,11 +186,19 @@ fun RokkhonTutorialScreen(
                 TutorialHighlightPoint(UIcons.Call, "৯৯৯ কল ও পরিবারকে SMS"),
                 TutorialHighlightPoint(UIcons.LocationOn, "নিরাপদ না হওয়া পর্যন্ত লাইভ লোকেশন")
             ),
-            icon = UIcons.FlashOn
+            icon = UIcons.FlashOn,
+            art = StoryArt.SOS
         ) else null
     )
 
     val slide = slides[currentStep]
+    // Like a story: each page fills its bar and moves on by itself; tapping the picture skips.
+    val storyProgress = remember { Animatable(0f) }
+    LaunchedEffect(currentStep) {
+        storyProgress.snapTo(0f)
+        storyProgress.animateTo(1f, tween(STORY_PAGE_MS, easing = LinearEasing))
+        if (currentStep < slides.lastIndex) currentStep += 1
+    }
 
     Column(
         modifier = Modifier
@@ -191,6 +209,7 @@ fun RokkhonTutorialScreen(
             .padding(horizontal = 24.dp, vertical = 14.dp)
             .testTag("rokkhon_tutorial_screen")
     ) {
+        StoryBars(count = slides.size, index = currentStep, progress = storyProgress.value, modifier = Modifier.padding(bottom = 12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -223,12 +242,14 @@ fun RokkhonTutorialScreen(
             label = "tutorial_slide"
         ) { s ->
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                Spacer(modifier = Modifier.height(48.dp))
-                Box(
-                    modifier = Modifier.size(88.dp).clip(CircleShape).background(RokkhonPalette.Subtle),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(s.icon, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(40.dp))
+                Spacer(modifier = Modifier.height(20.dp))
+                Box {
+                    StoryHero(s.art)
+                    // Tap the left half to go back, the right half to go on, like a story.
+                    Row(Modifier.matchParentSize()) {
+                        Box(Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = null, indication = null) { if (currentStep > 0) currentStep -= 1 })
+                        Box(Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = null, indication = null) { if (currentStep < slides.lastIndex) currentStep += 1 })
+                    }
                 }
                 Spacer(modifier = Modifier.height(28.dp))
                 Text(s.titleBn, fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
@@ -245,19 +266,7 @@ fun RokkhonTutorialScreen(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 16.dp)) {
-            slides.indices.forEach { idx ->
-                val w by animateDpAsState(if (idx == currentStep) 24.dp else 8.dp, label = "dot")
-                Box(
-                    modifier = Modifier
-                        .height(8.dp)
-                        .width(w)
-                        .clip(CircleShape)
-                        .background(if (idx == currentStep) Color.Black else RokkhonPalette.Chip)
-                )
-            }
-        }
-
+        Spacer(Modifier.height(12.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -280,3 +289,6 @@ fun RokkhonTutorialScreen(
         }
     }
 }
+
+/** How long one intro page shows before moving on by itself. */
+internal const val STORY_PAGE_MS = 6_000
