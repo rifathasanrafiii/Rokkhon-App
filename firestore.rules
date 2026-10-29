@@ -333,6 +333,21 @@ service cloud.firestore {
                                incoming().updatedAt <= request.time;
     }
 
+    // /user_profiles/{userId}: name and blood group from onboarding. Private to the account
+    // (admins may read). A phone number can only be the one Firebase verified for this account.
+    match /user_profiles/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create, update: if isSignedIn() &&
+                               isValidId(userId) &&
+                               request.auth.uid == userId &&
+                               incoming().keys().hasAll(['name', 'bloodGroup', 'updatedAt']) &&
+                               incoming().keys().hasOnly(['name', 'bloodGroup', 'phone', 'updatedAt']) &&
+                               incoming().name is string && incoming().name.size() >= 1 && incoming().name.size() <= 80 &&
+                               isValidBloodGroup(incoming().bloodGroup) &&
+                               (!('phone' in incoming()) || incoming().phone == request.auth.token.phone_number) &&
+                               incoming().updatedAt == request.time;
+    }
+
     // Collection 6: /reward_offers/{offerId}
     // Reward cards on the Rewards page; created and edited from the admin panel only.
     match /reward_offers/{offerId} {

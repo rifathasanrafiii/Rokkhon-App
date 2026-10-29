@@ -637,7 +637,9 @@ class RokkhonViewModel(
             viewModelScope.launch { repository.observeAnnouncements().collect { _announcements.value = it } }
             // Push topics follow the blood group and district, so admin pushes reach the right people.
             viewModelScope.launch {
-                combine(_selectedDistrict, donorNodesState) { area, _ -> myDonorNode()?.bloodGroup to area }
+                combine(_selectedDistrict, donorNodesState) { area, _ ->
+                    (myDonorNode()?.bloodGroup ?: prefs.getString(KEY_OWN_BLOOD, null)) to area
+                }
                     .distinctUntilChanged()
                     .collect { (group, area) -> PushTopics.sync(appContext, group, area) }
             }
@@ -1946,6 +1948,15 @@ class RokkhonViewModel(
     companion object {
         private const val TAG = "RokkhonViewModel"
         const val APP_PREFS = "rokkhon_app_prefs"
+
+        /** Onboarding answers pre-fill the donor form and pick the blood-group push topic. */
+        fun rememberOnboarding(context: Context, userId: String, name: String, bloodGroup: String, e164Phone: String?) {
+            context.getSharedPreferences("rokkhon_guardian_state_${userId.take(32)}", Context.MODE_PRIVATE).edit().apply {
+                putString(KEY_OWN_NAME, name)
+                putString(KEY_OWN_BLOOD, bloodGroup)
+                e164Phone?.filter { it.isDigit() }?.let { d -> putString(KEY_OWN_PHONE, if (d.startsWith("880")) "0" + d.drop(3) else d) }
+            }.apply()
+        }
         const val MAX_TRUSTED_CONTACTS = 3
         const val HARDWARE_SOS_CANCEL_SECONDS = 5
         private const val TOAST_DURATION_MS = 4500L

@@ -12,14 +12,15 @@ notification, or a `https://rokkhon.com/live/{sessionId}` link.
 
 | Part | Where | Notes |
 |---|---|---|
-| Trusted accounts and permissions | Realtime Database `sosAccess`, `sosAccessIndex`, `sosLookup` | Find someone by their exact verified email or phone (no name search, no listing). Invite → they accept/decline. Per person: live location, live audio, alerts, history. Revoke at any time. |
+| People on the list | Realtime Database `sosContacts`, `sosAccess`, `sosAccessIndex`, `sosLookup` | The user adds up to 5 people by name and mobile number (typed or picked from the phone book). If the number is a Rokkhon account's verified number (`sosLookup/phone`), that account is added straight away, with no invitation: push alert, live map and, per person, live audio. Everyone on the list gets the SOS text. The person added can leave from *Who added me*; the owner can remove anyone. |
 | Session | `sosSessions/{id}`, `sosActive/{uid}`, `sosHistory/{uid}` | Starts after a 3-second hold. 128-bit random id. Runs until the sender ends it. |
 | Live GPS | `liveLocations/{id}/latest` (+ last 30 points, one a minute, in `trail`) | Foreground service `PrivateSosService` (type location). Every 5 s while moving, 10 s when still or when the battery is ≤20 %. The last known position is shown first, clearly marked. Time is in server time. |
 | Live audio | WebRTC (`io.getstream:stream-webrtc-android`, Apache-2.0), signalling in `sosSignaling/{id}/{listenerUid}` | One-way, a peer connection per listener, DTLS-SRTP encrypted phone-to-phone. Nothing is stored on Firebase. The mic only captures while someone is connected. |
 | Recording | Listener's phone only (`files/sos_recordings`, AAC .m4a) | Only if the sender allowed recording; the listener confirms a consent notice; the sender sees "Recording". Play, share, save to Downloads/Rokkhon, delete. Never uploaded. |
 | Map | MapLibre + OpenFreeMap tiles | Free, no API key. "Open in Google Maps" hands over only the current coordinates. |
 | Push alerts | FCM, sent by `web/api/sos-notify.js` | Needs the trusted server below. The service-account key is never in the app. |
-| Auto SMS | `data/sos/SosSms.kt`, SOS home → *Auto SMS to numbers* | Up to 3 mobile numbers, stored only on the phone. When an SOS starts, the phone itself texts them (its own SIM, `SEND_SMS`) the `rokkhon.com/live/{id}` link and a Google Maps link of the position it knows; "Again" texts the newest position, and ending the SOS texts "I'm safe". No SMS provider or server is involved. |
+| SOS text | `data/sos/SosSms.kt` | When an SOS starts the phone itself texts every number on the list (its own SIM, `SEND_SMS`) the `rokkhon.com/live/{id}` link and a Google Maps link of the position it knows, before the session is written, so it leaves even without internet (the numbers are also kept on the phone for that). "Text new location" sends the newest position; ending the SOS texts "I'm safe". No SMS provider or server is involved. |
+| Onboarding | `ui/screens/OnboardingScreen.kt`, Firestore `user_profiles` | After sign-in: name, blood group, and a mobile number verified by SMS code and linked to the same account (skipped when the account already has one). That verified number is what makes the account findable when someone adds it. |
 | Web link | `web/live/index.html` | Same rules: sign in with an authorised account, otherwise nothing is shown. Shows status, map, accuracy, time. Audio is app-only. |
 
 Access control lives in `database.rules.json` (Realtime Database rules), next to the data it
@@ -86,7 +87,7 @@ the link or call 999.
 ## Tests
 
 ```bash
-# Realtime Database rules (11 tests: lookup, invite/accept, revoke, GPS privacy, signalling, recording consent, ...)
+# Realtime Database rules (12 tests: lookup, adding people, private numbers, revoke, GPS privacy, signalling, recording consent, ...)
 firebase emulators:exec --only database --project demo-no-project "node --test database.test.js"
 # Pure logic (session ids, email/phone keys, link parsing, adaptive GPS interval)
 gradle testDebugUnitTest --tests '*SosLogicTest*'

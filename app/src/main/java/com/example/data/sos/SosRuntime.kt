@@ -25,7 +25,7 @@ sealed interface SmsStatus {
     data object None : SmsStatus
     data object Sending : SmsStatus
     /** [ok] texts left the phone; that is not a delivery receipt. */
-    data class Sent(val ok: Int, val failed: Int) : SmsStatus
+    data class Sent(val ok: Int, val failed: Int, val failedNumbers: Set<String> = emptySet()) : SmsStatus
     data object NeedsPermission : SmsStatus
     data object NoTelephony : SmsStatus
 }

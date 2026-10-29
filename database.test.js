@@ -89,15 +89,33 @@ test("lookup: phone numbers come from the auth token", async () => {
   await assertFails(set(ref(me, "sosLookup/phone/8801999999999"), { uid: OWNER, name: "Rafi" }));
 });
 
-test("invite: owner creates a pending invite and cannot accept it", async () => {
+test("add: owner adds someone directly (no invitation), only for themselves", async () => {
   const owner = db(OWNER);
-  await assertSucceeds(set(ref(owner, `sosAccess/${OWNER}/${VIEWER}`), grant("pending")));
+  await assertSucceeds(set(ref(owner, `sosAccess/${OWNER}/${VIEWER}`), grant("accepted")));
   await assertSucceeds(set(ref(owner, `sosAccessIndex/${VIEWER}/${OWNER}`), true));
-  await assertFails(set(ref(owner, `sosAccess/${OWNER}/${VIEWER}/status`), "accepted"));
-  await assertFails(set(ref(owner, `sosAccess/${OWNER}/${OWNER}`), grant("pending")));
-  await assertFails(set(ref(owner, `sosAccess/${OWNER}/${STRANGER}`), grant("accepted")));
-  // A stranger cannot invite on the owner's behalf.
-  await assertFails(set(ref(db(STRANGER), `sosAccess/${OWNER}/${STRANGER}`), grant("pending")));
+  // Older pending entries can be switched to added by the owner.
+  await assertSucceeds(set(ref(owner, `sosAccess/${OWNER}/${STRANGER}`), grant("pending")));
+  await assertSucceeds(set(ref(owner, `sosAccess/${OWNER}/${STRANGER}/status`), "accepted"));
+  await assertFails(set(ref(owner, `sosAccess/${OWNER}/${STRANGER}/status`), "declined"));
+  await assertFails(set(ref(owner, `sosAccess/${OWNER}/${OWNER}`), grant("accepted")));
+  // A stranger cannot add themselves to the owner's list.
+  await assertFails(set(ref(db(STRANGER), `sosAccess/${OWNER}/${STRANGER}`), grant("accepted")));
+  // The person added can always leave.
+  await assertSucceeds(remove(ref(db(VIEWER), `sosAccess/${OWNER}/${VIEWER}`)));
+});
+
+test("contacts: numbers are private to the owner and keyed by the number", async () => {
+  const owner = db(OWNER);
+  const c = { name: "মা", phone: "+8801712345678", createdAt: serverTimestamp() };
+  await assertSucceeds(set(ref(owner, `sosContacts/${OWNER}/8801712345678`), c));
+  await assertSucceeds(set(ref(owner, `sosContacts/${OWNER}/8801712345678/uid`), VIEWER));
+  await assertFails(set(ref(owner, `sosContacts/${OWNER}/8801712345678/uid`), OWNER));
+  await assertFails(set(ref(owner, `sosContacts/${OWNER}/8801999999999`), c));
+  await assertFails(set(ref(owner, `sosContacts/${OWNER}/abc`), { ...c, phone: "+abc" }));
+  await assertFails(set(ref(owner, `sosContacts/${OWNER}/8801812345678`), { ...c, phone: "+8801812345678", extra: 1 }));
+  await assertFails(get(ref(db(VIEWER), `sosContacts/${OWNER}`)));
+  await assertFails(set(ref(db(STRANGER), `sosContacts/${OWNER}/8801812345678`), { ...c, phone: "+8801812345678" }));
+  await assertSucceeds(get(ref(owner, `sosContacts/${OWNER}`)));
 });
 
 test("invite: viewer accepts or declines, cannot change permissions, can leave", async () => {

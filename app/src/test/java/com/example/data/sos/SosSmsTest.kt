@@ -99,13 +99,13 @@ class SosSmsTest {
             "জরুরি", sms
         )
         assertEquals(3, sms.sent.size)
-        assertEquals(SmsOutcome(ok = 2, failed = 1), out)
+        assertEquals(SmsOutcome(ok = 2, failed = 1, failedNumbers = setOf("+8801912345678")), out)
     }
 
     @Test
     fun noReportFromTheRadioIsNotCountedAsSent() {
         val out = sendAndPumpLooper(listOf(TrustedContact("মা", "01712345678")), "জরুরি", FakeSms(silent = true), timeoutMs = 200)
-        assertEquals(SmsOutcome(ok = 0, failed = 1), out)
+        assertEquals(SmsOutcome(ok = 0, failed = 1, failedNumbers = setOf("+8801712345678")), out)
     }
 
     @Test

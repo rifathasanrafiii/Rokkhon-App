@@ -33,6 +33,13 @@ data class SosGrant(
     val updatedAt: Long
 )
 
+/**
+ * Someone the user added by mobile number (sosContacts/{owner}/{phoneKey}). Every contact gets the
+ * SOS text message; one whose number belongs to a Rokkhon account ([uid]) also gets the push, the
+ * live map and, if allowed, the audio.
+ */
+data class SosContact(val key: String, val name: String, val phone: String, val uid: String?)
+
 /** A Rokkhon account found by its exact verified email or phone number. */
 data class SosAccount(val uid: String, val name: String)
 

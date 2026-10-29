@@ -98,6 +98,11 @@ import com.example.ui.screens.RewardsScreen
 import com.example.ui.screens.RokkhonSplashScreen
 import com.example.ui.screens.RokkhonTutorialScreen
 import com.example.ui.screens.SosGuardianAndBleScreen
+import com.example.ui.screens.OnboardingScreen
+import androidx.compose.material3.CircularProgressIndicator
+import kotlinx.coroutines.launch
+import com.example.data.profile.UserProfile
+import com.example.data.profile.UserProfileStore
 import com.example.ui.screens.signOutRokkhon
 import com.example.ui.sos.HistorySheet
 import com.example.ui.sos.PrivateSosScreen
@@ -261,6 +266,24 @@ fun RokkhonAppRoot(
 
     var permissionsCallbackTick by remember { mutableStateOf(0) }
 
+    var onboardedUid by rememberSaveable { mutableStateOf<String?>(null) }
+    var onboardingProfile by remember(user?.uid) { mutableStateOf<UserProfile?>(null) }
+    val needsOnboarding = user != null && firebaseReady && onboardedUid != user.uid && !UserProfileStore.isDone(context, user.uid)
+    LaunchedEffect(user?.uid, needsOnboarding) {
+        val uid = user?.uid ?: return@LaunchedEffect
+        if (!needsOnboarding) return@LaunchedEffect
+        val profile = UserProfileStore.load(context)
+        when {
+            profile == null -> onboardedUid = uid
+            profile.complete -> {
+                // Everything is known already (say a phone sign-in with a donor profile): just save it.
+                launch { runCatching { UserProfileStore.save(context, profile.name, profile.bloodGroup!!, markDone = true) } }
+                onboardedUid = uid
+            }
+            else -> onboardingProfile = profile
+        }
+    }
+
     // Request all permissions (Camera, Voice/Microphone, Location, Bluetooth, Notifications) upfront right at app entry.
     val upfrontPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -307,6 +330,18 @@ fun RokkhonAppRoot(
                 onAuthSuccess = { isGuestChosen = false },
                 onSkipSignIn = { isGuestChosen = true }
             )
+            // Name, blood group and a verified number, once per account. An SOS alert or link opens
+            // straight away instead: someone may need help.
+            needsOnboarding && sosLaunch == null && hardwareTriggerMethod == null -> {
+                val profile = onboardingProfile
+                if (profile == null) {
+                    Box(Modifier.fillMaxSize().background(Color.White), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = RokkhonPalette.Primary, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                    }
+                } else {
+                    OnboardingScreen(profile, onDone = { onboardedUid = user?.uid })
+                }
+            }
             else -> {
                 val resolvedUserId = user?.uid ?: "guest_rokkhon_bd"
                 val resolvedUserName = when {
@@ -544,7 +579,7 @@ fun RokkhonAuthenticatedShell(
                 RokkhonTab.DONOR_PROFILE -> Column(modifier = Modifier.fillMaxSize()) {
                     DonorProfileScreen(
                         viewModel = viewModel,
-                        onOpenSosAccess = { sosRoute = SosRoute.Access },
+                        onOpenSosAccess = { sosRoute = null; viewModel.selectTab(RokkhonTab.SOS_GUARDIAN) },
                         onSignOut = {
                             if (isGuestSession) {
                                 onExitGuestOrSignOut()

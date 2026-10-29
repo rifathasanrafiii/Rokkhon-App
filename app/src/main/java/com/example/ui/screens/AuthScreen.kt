@@ -107,7 +107,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
@@ -124,7 +124,7 @@ private fun googleWebClientId(context: Context): String? {
     return context.getString(resId).takeIf { it.isNotBlank() }
 }
 
-private fun normalizeBangladeshPhoneE164(raw: String): String {
+internal fun normalizeBangladeshPhoneE164(raw: String): String {
     val digits = raw.filter { it.isDigit() }
     return when {
         digits.startsWith("880") && digits.length == 13 -> "+$digits"
@@ -138,7 +138,7 @@ private fun normalizeBangladeshPhoneE164(raw: String): String {
  * phone itself and showed it on screen, so anyone could sign in as any number and those
  * "accounts" never reached the cloud. Firebase sends the SMS and creates a real user.
  */
-private fun sendFirebaseOtp(
+internal fun sendFirebaseOtp(
     activity: Activity,
     e164Phone: String,
     resendToken: PhoneAuthProvider.ForceResendingToken?,
@@ -154,7 +154,7 @@ private fun sendFirebaseOtp(
 }
 
 /** Bangla message for a failed phone verification. */
-private fun phoneAuthErrorMessage(error: Throwable): String = when {
+internal fun phoneAuthErrorMessage(error: Throwable): String = when {
     error is FirebaseAuthInvalidCredentialsException && error.errorCode == "ERROR_INVALID_VERIFICATION_CODE" ->
         "কোডটি ভুল হয়েছে। SMS-এ আসা ৬ সংখ্যার কোড আবার লিখুন।"
     error is FirebaseAuthInvalidCredentialsException -> "নম্বরটি সঠিক নয়। ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।"

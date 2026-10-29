@@ -351,8 +351,8 @@ fun DonorProfileScreen(
                         if (onOpenSosAccess != null) {
                             SettingsDivider()
                             SettingsRow(
-                                UIcons.Shield, RokkhonPalette.Ink, if (bn) "SOS অ্যাক্সেস" else "SOS Access",
-                                if (bn) "কে দেখবে" else "Who sees it", onOpenSosAccess,
+                                UIcons.Shield, RokkhonPalette.Ink, "SOS",
+                                if (bn) "যারা খবর পাবেন" else "Who gets told", onOpenSosAccess,
                                 testTag = "profile_sos_access"
                             )
                         }

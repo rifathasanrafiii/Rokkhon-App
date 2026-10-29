@@ -37,7 +37,7 @@
           "viewerName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
           "status": {
             ".write": "auth != null && auth.uid == $viewer && data.val() == 'pending'",
-            ".validate": "newData.isString() && ((auth.uid == $owner && (newData.val() == data.val() || newData.val() == 'pending')) || (auth.uid == $viewer && (newData.val() == data.val() || (data.val() == 'pending' && (newData.val() == 'accepted' || newData.val() == 'declined')))))"
+            ".validate": "newData.isString() && ((auth.uid == $owner && (newData.val() == data.val() || newData.val() == 'pending' || newData.val() == 'accepted')) || (auth.uid == $viewer && (newData.val() == data.val() || (data.val() == 'pending' && (newData.val() == 'accepted' || newData.val() == 'declined')))))"
           },
           "location": { ".validate": "newData.isBoolean()" },
           "audio": { ".validate": "newData.isBoolean()" },
@@ -48,6 +48,21 @@
             ".write": "auth != null && auth.uid == $viewer && data.parent().child('status').val() == 'pending'",
             ".validate": "newData.isNumber() && newData.val() == now"
           },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "sosContacts": {
+      "$owner": {
+        ".read": "auth != null && auth.uid == $owner",
+        ".write": "auth != null && auth.uid == $owner",
+        "$key": {
+          ".validate": "$key.matches(/^[0-9]{8,15}$/) && newData.hasChildren(['name', 'phone', 'createdAt'])",
+          "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+          "phone": { ".validate": "newData.isString() && newData.val() == '+' + $key" },
+          "uid": { ".validate": "newData.isString() && newData.val() != $owner" },
+          "createdAt": { ".validate": "newData.isNumber() && ((data.exists() && newData.val() == data.val()) || (!data.exists() && newData.val() == now))" },
           "$other": { ".validate": false }
         }
       }

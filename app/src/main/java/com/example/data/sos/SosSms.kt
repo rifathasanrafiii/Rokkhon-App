@@ -74,8 +74,11 @@ private class SmsManagerTransport(private val sms: SmsManager) : SmsTransport {
         sms.sendMultipartTextMessage(destination, null, parts, sentIntents, null)
 }
 
-/** [ok] numbers whose text left the phone, [failed] the rest. This is not a delivery receipt. */
-data class SmsOutcome(val ok: Int, val failed: Int)
+/**
+ * [ok] numbers whose text left the phone, [failed] the rest ([failedNumbers], as dialled).
+ * This is not a delivery receipt.
+ */
+data class SmsOutcome(val ok: Int, val failed: Int, val failedNumbers: Set<String> = emptySet())
 
 /**
  * Sends the SOS text itself (no SMS app to open), through the phone's own SIM. Needs the SMS
@@ -125,8 +128,9 @@ object SosSms {
         withContext(Dispatchers.IO) {
             if (contacts.isEmpty()) return@withContext SmsOutcome(0, 0)
             val app = context.applicationContext
-            val sms = transport ?: manager(app)?.let { SmsManagerTransport(it) } ?: return@withContext SmsOutcome(0, contacts.size)
-            val parts = runCatching { sms.divide(body) }.getOrNull() ?: return@withContext SmsOutcome(0, contacts.size)
+            val allFailed = SmsOutcome(0, contacts.size, contacts.map { SosSmsText.destination(it.phone) }.toSet())
+            val sms = transport ?: manager(app)?.let { SmsManagerTransport(it) } ?: return@withContext allFailed
+            val parts = runCatching { sms.divide(body) }.getOrNull() ?: return@withContext allFailed
             val perContact = parts.size
 
             val action = "${app.packageName}.SOS_SMS_SENT.${System.nanoTime()}"
@@ -163,10 +167,10 @@ object SosSms {
                     }
                 }
                 withTimeoutOrNull(timeoutMs) { done.await() }
-                val ok = contacts.indices.count { index ->
-                    (0 until perContact).all { part -> partOk[index * perContact + part] == true }
-                }
-                SmsOutcome(ok, contacts.size - ok)
+                val failed = contacts.filterIndexed { index, _ ->
+                    !(0 until perContact).all { part -> partOk[index * perContact + part] == true }
+                }.map { SosSmsText.destination(it.phone) }.toSet()
+                SmsOutcome(contacts.size - failed.size, failed.size, failed)
             } finally {
                 runCatching { app.unregisterReceiver(receiver) }
             }

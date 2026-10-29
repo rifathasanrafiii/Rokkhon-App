@@ -76,29 +76,6 @@ class SosRepository(
 
     // ---------------------------------------------------------------- trusted access (owner side)
 
-    suspend fun invite(account: SosAccount, perms: SosPerms) {
-        val me = requireUid()
-        require(account.uid != me) { "self" }
-        val grant = mapOf(
-            "ownerName" to myName(),
-            "viewerName" to account.name.take(60).ifBlank { "Rokkhon user" },
-            "status" to GrantStatus.PENDING.wire,
-            "location" to perms.location,
-            "audio" to perms.audio,
-            "alerts" to perms.alerts,
-            "history" to perms.history,
-            "updatedAt" to ServerValue.TIMESTAMP
-        )
-        val existing = root.child("sosAccess/$me/${account.uid}").get().await()
-        val createdAt: Any = existing.child("createdAt").getValue(Long::class.java) ?: ServerValue.TIMESTAMP
-        root.updateChildren(
-            mapOf(
-                "sosAccess/$me/${account.uid}" to grant + ("createdAt" to createdAt),
-                "sosAccessIndex/${account.uid}/$me" to true
-            )
-        ).await()
-    }
-
     suspend fun updatePerms(viewerUid: String, perms: SosPerms) {
         val me = requireUid()
         root.child("sosAccess/$me/$viewerUid").updateChildren(
@@ -143,17 +120,108 @@ class SosRepository(
         awaitClose { ref.removeEventListener(listener) }
     }
 
-    // ---------------------------------------------------------------- trusted access (viewer side)
+    // ---------------------------------------------------------------- contacts by mobile number
 
-    suspend fun respond(ownerUid: String, accept: Boolean) {
-        val me = requireUid()
-        root.child("sosAccess/$ownerUid/$me").updateChildren(
-            mapOf(
-                "status" to (if (accept) GrantStatus.ACCEPTED else GrantStatus.DECLINED).wire,
-                "updatedAt" to ServerValue.TIMESTAMP
-            )
-        ).await()
+    fun observeContacts(): Flow<List<SosContact>> = callbackFlow {
+        val me = myUid
+        if (me == null) {
+            trySend(emptyList()); close(); return@callbackFlow
+        }
+        val ref = root.child("sosContacts/$me")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                trySend(snapshot.children.mapNotNull { c ->
+                    SosContact(
+                        key = c.key ?: return@mapNotNull null,
+                        name = c.child("name").getValue(String::class.java) ?: return@mapNotNull null,
+                        phone = c.child("phone").getValue(String::class.java) ?: return@mapNotNull null,
+                        uid = c.child("uid").getValue(String::class.java)
+                    ) to (c.child("createdAt").getValue(Long::class.java) ?: 0L)
+                }.sortedBy { it.second }.map { it.first })
+            }
+            override fun onCancelled(error: DatabaseError) { trySend(emptyList()) }
+        }
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
     }
+
+    /**
+     * Adds someone by mobile number. If the number belongs to a Rokkhon account they are added
+     * straight away (no invitation), with [perms]; either way the number gets the SOS text.
+     */
+    suspend fun addContact(name: String, phone: String, perms: SosPerms): SosContact {
+        val me = requireUid()
+        val key = SosIds.phoneKey(phone) ?: throw IllegalArgumentException("phone")
+        val account = findAccount("+$key")?.takeIf { it.uid != me }
+        val label = name.trim().take(60).ifBlank { account?.name ?: "+$key" }
+        val contact = mutableMapOf<String, Any>("name" to label, "phone" to "+$key", "createdAt" to ServerValue.TIMESTAMP)
+        val updates = mutableMapOf<String, Any?>()
+        if (account != null) {
+            contact["uid"] = account.uid
+            updates.putAll(grantWrite(me, account.uid, label, perms))
+        }
+        updates["sosContacts/$me/$key"] = contact
+        root.updateChildren(updates).await()
+        return SosContact(key, label, "+$key", account?.uid)
+    }
+
+    /** A contact whose number later became a Rokkhon account is connected to it. */
+    suspend fun connectContact(contact: SosContact, perms: SosPerms): Boolean {
+        val me = requireUid()
+        val account = findAccount(contact.phone)?.takeIf { it.uid != me } ?: return false
+        val updates = grantWrite(me, account.uid, contact.name, perms).toMutableMap()
+        updates["sosContacts/$me/${contact.key}/uid"] = account.uid
+        root.updateChildren(updates).await()
+        return true
+    }
+
+    private suspend fun grantWrite(me: String, viewer: String, viewerName: String, perms: SosPerms): Map<String, Any?> {
+        val existing = root.child("sosAccess/$me/$viewer").get().await()
+        val createdAt: Any = existing.child("createdAt").getValue(Long::class.java) ?: ServerValue.TIMESTAMP
+        return mapOf(
+            "sosAccess/$me/$viewer" to mapOf(
+                "ownerName" to myName(),
+                "viewerName" to viewerName.take(60).ifBlank { "Rokkhon user" },
+                "status" to GrantStatus.ACCEPTED.wire,
+                "location" to perms.location,
+                "audio" to perms.audio,
+                "alerts" to true,
+                "history" to perms.history,
+                "createdAt" to createdAt,
+                "updatedAt" to ServerValue.TIMESTAMP
+            ),
+            "sosAccessIndex/$viewer/$me" to true
+        )
+    }
+
+    /** Removes the number and, if it is an account, its access, in one write. */
+    suspend fun removeContact(contact: SosContact, activeSessionId: String?) {
+        val me = requireUid()
+        val updates = mutableMapOf<String, Any?>("sosContacts/$me/${contact.key}" to null)
+        contact.uid?.let { viewer ->
+            updates["sosAccess/$me/$viewer"] = null
+            updates["sosAccessIndex/$viewer/$me"] = null
+            if (activeSessionId != null) {
+                updates["sosSignaling/$activeSessionId/$viewer"] = null
+                updates["sosSessions/$activeSessionId/listeners/$viewer"] = null
+            }
+        }
+        root.updateChildren(updates).await()
+    }
+
+    /** People added before invitations were dropped: they count as added. */
+    suspend fun acceptPendingGrants(viewers: List<SosGrant>) {
+        val me = requireUid()
+        viewers.filter { it.ownerUid == me && it.status == GrantStatus.PENDING }.forEach { g ->
+            runCatching {
+                root.child("sosAccess/$me/${g.viewerUid}").updateChildren(
+                    mapOf("status" to GrantStatus.ACCEPTED.wire, "updatedAt" to ServerValue.TIMESTAMP)
+                ).await()
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- trusted access (viewer side)
 
     /** Stop being someone's trusted contact. */
     suspend fun leave(ownerUid: String) {
@@ -235,11 +303,13 @@ class SosRepository(
 
     // ---------------------------------------------------------------- sessions (owner)
 
-    /** Creates the session and the pointer viewers watch, atomically. Returns the new session id. */
-    suspend fun startSession(audio: Boolean, recordingAllowed: Boolean): String {
+    /**
+     * Creates the session [sid] and the pointer viewers watch, atomically. The write is issued at
+     * once (and queued while offline); the returned task completes when the server confirms it.
+     */
+    fun beginSession(sid: String, audio: Boolean, recordingAllowed: Boolean): com.google.android.gms.tasks.Task<Void> {
         val me = requireUid()
-        val sid = SosIds.newSessionId()
-        root.updateChildren(
+        return root.updateChildren(
             mapOf(
                 "sosSessions/$sid" to mapOf(
                     "ownerUid" to me,
@@ -254,9 +324,11 @@ class SosRepository(
                 "sosActive/$me" to mapOf("sessionId" to sid, "startedAt" to ServerValue.TIMESTAMP),
                 "sosHistory/$me/$sid" to mapOf("startedAt" to ServerValue.TIMESTAMP)
             )
-        ).await()
+        )
+    }
+
+    suspend fun logStarted(sid: String) {
         runCatching { logEvent(sid, "started") }
-        return sid
     }
 
     suspend fun endSession(sid: String) {
@@ -287,10 +359,6 @@ class SosRepository(
 
     suspend fun setLocationOn(sid: String, on: Boolean) {
         root.child("sosSessions/$sid/locationOn").setValue(on).await()
-    }
-
-    suspend fun setRecordingAllowed(sid: String, allowed: Boolean) {
-        root.child("sosSessions/$sid/recordingAllowed").setValue(allowed).await()
     }
 
     /** The active session of this account, if one was left running (app killed, phone restarted). */

@@ -14,10 +14,11 @@ import com.example.data.sos.Live
 import com.example.data.sos.PrivateSosService
 import com.example.data.sos.PushStatus
 import com.example.data.sos.SmsStatus
-import com.example.data.sos.SosAccount
+import com.example.data.sos.SosContact
 import com.example.data.sos.SosDatabase
 import com.example.data.sos.SosGrant
 import com.example.data.sos.SosHistoryItem
+import com.example.data.sos.SosIds
 import com.example.data.sos.SosMessagingService
 import com.example.data.sos.SosNotifier
 import com.example.data.sos.SosNotifyClient
@@ -32,6 +33,7 @@ import com.example.data.sos.WatchedSos
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,17 +44,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-sealed interface AccountSearch {
-    data object Idle : AccountSearch
-    data object Searching : AccountSearch
-    data class Found(val account: SosAccount, val existing: SosGrant?) : AccountSearch
-    data object NotFound : AccountSearch
-    data object Invalid : AccountSearch
-    data object Self : AccountSearch
-}
+import kotlinx.coroutines.tasks.await
 
 /**
  * Private SOS for the signed-in account: who may see your SOS, starting/ending it, and the SOS of
@@ -98,9 +91,6 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
 
     fun historyOf(ownerUid: String): Flow<Live<List<SosHistoryItem>>> = repo?.observeHistory(ownerUid) ?: emptyFlow()
 
-    private val _search = MutableStateFlow<AccountSearch>(AccountSearch.Idle)
-    val search: StateFlow<AccountSearch> = _search.asStateFlow()
-
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
@@ -111,34 +101,55 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
     private val _stranded = MutableStateFlow<String?>(null)
     val stranded: StateFlow<String?> = _stranded.asStateFlow()
 
-    private val _shareAudio = MutableStateFlow(settings.getBoolean(KEY_AUDIO, false))
-    val shareAudio: StateFlow<Boolean> = _shareAudio.asStateFlow()
-
-    private val _allowRecording = MutableStateFlow(settings.getBoolean(KEY_RECORDING, false))
-    val allowRecording: StateFlow<Boolean> = _allowRecording.asStateFlow()
-
-    /** Numbers that get an SMS from this phone when an SOS starts. Only on this device. */
-    private val _smsContacts = MutableStateFlow(myUid?.let { TrustedSmsContacts.load(ctx, it) }.orEmpty())
-    val smsContacts: StateFlow<List<TrustedContact>> = _smsContacts.asStateFlow()
+    /** Everyone the user added by mobile number; all get the SOS text. */
+    private val _contacts = MutableStateFlow<List<SosContact>>(emptyList())
+    val contacts: StateFlow<List<SosContact>> = _contacts.asStateFlow()
 
     val hasSmsPermission: Boolean get() = SosSms.hasPermission(ctx)
 
-    /** Saves up to three numbers; false (with a message) when one is not a valid mobile number. */
-    fun saveSmsContacts(contacts: List<TrustedContact>): Boolean {
-        val uid = myUid ?: return false
-        val cleaned = contacts
-            .map { TrustedContact(it.name.trim().replace("\t", " ").replace("\n", " "), it.phone.trim()) }
-            .filter { it.phone.isNotBlank() }
-            .distinctBy { SosSmsText.destination(it.phone) }
-            .take(MAX_SMS_CONTACTS)
-        if (cleaned.any { !isValidBangladeshMobile(it.phone) }) {
-            say("সঠিক মোবাইল নম্বর দিন (যেমন 01712345678)")
+    /** The mic goes on in an SOS only if someone on the list may listen. */
+    private val anyoneMayListen: Boolean
+        get() = viewers.value.any { it.status == GrantStatus.ACCEPTED && it.perms.audio }
+
+    val wantsMic: Boolean get() = anyoneMayListen
+
+    private fun mirrorForSms(list: List<SosContact>) {
+        // SMS must go out even without internet, so the numbers are also kept on the phone.
+        myUid?.let { uid -> TrustedSmsContacts.save(ctx, uid, list.map { TrustedContact(it.name, it.phone) }) }
+    }
+
+    /** Adds someone by name and number; false (with a message) when the number is not usable. */
+    fun addContact(name: String, phone: String, perms: SosPerms): Boolean {
+        if (repo == null) return false
+        if (!isValidBangladeshMobile(phone)) {
+            say("সঠিক মোবাইল নম্বর দিন")
             return false
         }
-        TrustedSmsContacts.save(ctx, uid, cleaned)
-        _smsContacts.value = cleaned
-        say(if (cleaned.isEmpty()) "অটো SMS নম্বর মুছে ফেলা হয়েছে" else "অটো SMS নম্বর সেভ হয়েছে")
+        val key = SosIds.phoneKey(phone)
+        if (key != null && FirebaseAuth.getInstance().currentUser?.phoneNumber?.let { SosIds.phoneKey(it) } == key) {
+            say("এটা আপনার নিজের নম্বর")
+            return false
+        }
+        if (_contacts.value.size >= MAX_CONTACTS && _contacts.value.none { it.key == key }) {
+            say("সর্বোচ্চ ${MAX_CONTACTS} জন")
+            return false
+        }
+        act(null) { it.addContact(name, phone, perms) }
         return true
+    }
+
+    fun removeContact(contact: SosContact) = act(null) { it.removeContact(contact, owner.value.sessionId) }
+
+    private fun migrateOldSmsNumbers(r: SosRepository, remote: List<SosContact>) {
+        val uid = myUid ?: return
+        if (settings.getBoolean("${KEY_MIGRATED}_$uid", false)) return
+        settings.edit().putBoolean("${KEY_MIGRATED}_$uid", true).apply()
+        if (remote.isNotEmpty()) return
+        val local = TrustedSmsContacts.load(ctx, uid)
+        if (local.isEmpty()) return
+        viewModelScope.launch {
+            local.forEach { c -> runCatching { r.addContact(c.name, c.phone, SosPerms(location = true, audio = true)) } }
+        }
     }
 
     init {
@@ -151,6 +162,25 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
                 val serverSid = runCatching { r.myActiveSessionId() }.getOrNull()
                 if (serverSid != null && owner.value.sessionId == null) _stranded.value = serverSid
             }
+            viewModelScope.launch {
+                var first = true
+                r.observeContacts().collect { list ->
+                    if (first) {
+                        first = false
+                        migrateOldSmsNumbers(r, list)
+                        // Numbers that have become Rokkhon accounts since they were added.
+                        list.filter { it.uid == null }.forEach { c ->
+                            launch { runCatching { r.connectContact(c, SosPerms(location = true, audio = true)) } }
+                        }
+                    }
+                    _contacts.value = list
+                    mirrorForSms(list)
+                }
+            }
+            viewModelScope.launch {
+                // People invited before invitations were dropped count as added.
+                viewers.collect { v -> if (v.any { it.status == GrantStatus.PENDING }) runCatching { r.acceptPendingGrants(v) } }
+            }
         }
     }
 
@@ -158,54 +188,15 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun say(text: String) { _message.value = text }
 
-    // -------------------------------------------------------------- settings
-
-    fun setShareAudioDefault(on: Boolean) {
-        _shareAudio.value = on
-        settings.edit().putBoolean(KEY_AUDIO, on).apply()
-    }
-
-    fun setAllowRecordingDefault(on: Boolean) {
-        _allowRecording.value = on
-        settings.edit().putBoolean(KEY_RECORDING, on).apply()
-    }
-
     // -------------------------------------------------------------- trusted access
-
-    fun clearSearch() { _search.value = AccountSearch.Idle }
-
-    fun searchAccount(query: String) {
-        val r = repo ?: return
-        val q = query.trim()
-        if (q.length < 6) { _search.value = AccountSearch.Invalid; return }
-        _search.value = AccountSearch.Searching
-        viewModelScope.launch {
-            val found = runCatching { r.findAccount(q) }.getOrNull()
-            _search.value = when {
-                found == null -> AccountSearch.NotFound
-                found.uid == r.myUid -> AccountSearch.Self
-                else -> AccountSearch.Found(found, viewers.value.firstOrNull { it.viewerUid == found.uid })
-            }
-        }
-    }
-
-    fun invite(account: SosAccount, perms: SosPerms) = act("আমন্ত্রণ পাঠানো হয়েছে") {
-        it.invite(account, perms)
-        _search.value = AccountSearch.Idle
-    }
 
     fun updatePerms(grant: SosGrant, perms: SosPerms) = act(null) { it.updatePerms(grant.viewerUid, perms) }
 
-    fun revoke(grant: SosGrant) = act("${grant.viewerName}-এর অ্যাক্সেস বাতিল হয়েছে") {
+    fun revoke(grant: SosGrant) = act(null) {
         it.revoke(grant.viewerUid, owner.value.sessionId)
     }
 
-    fun respond(grant: SosGrant, accept: Boolean) =
-        act(if (accept) "${grant.ownerName}-এর SOS এখন আপনি পাবেন" else "আমন্ত্রণ ফিরিয়ে দেওয়া হয়েছে") {
-            it.respond(grant.ownerUid, accept)
-        }
-
-    fun leave(grant: SosGrant) = act("${grant.ownerName}-এর তালিকা থেকে সরে এসেছেন") { it.leave(grant.ownerUid) }
+    fun leave(grant: SosGrant) = act(null) { it.leave(grant.ownerUid) }
 
     private fun act(success: String?, block: suspend (SosRepository) -> Unit) {
         val r = repo ?: return
@@ -228,24 +219,30 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
 
     val hasMicPermission: Boolean get() = has(Manifest.permission.RECORD_AUDIO)
 
-    val trustedCount: Int get() = viewers.value.count { it.status == GrantStatus.ACCEPTED }
-
-    /** Called after the 3-second hold and the permission prompt. */
+    /**
+     * Called after the 3-second hold and the permission prompt. The texts go out first, from the
+     * phone's own SIM, so they leave even without internet; the session write follows and is
+     * queued until the network is back.
+     */
     fun startSos() {
         val r = repo ?: return
         if (owner.value.active || _busy.value) return
-        val audio = _shareAudio.value && hasMicPermission
-        _busy.value = true
+        val audio = anyoneMayListen && hasMicPermission
+        val sid = SosIds.newSessionId()
+        val task = runCatching { r.beginSession(sid, audio, recordingAllowed = true) }.getOrElse {
+            say("SOS শুরু করা যায়নি — ৯৯৯-এ কল করুন")
+            return
+        }
+        SosRuntime.update { it.copy(sessionId = sid, startedAtMs = System.currentTimeMillis(), push = PushStatus.Sending) }
+        sendSms(sid, update = false)
+        if (hasLocationPermission) PrivateSosService.start(ctx, sid, audio)
         SosRuntime.scope.launch {
-            val sid = runCatching { r.startSession(audio, _allowRecording.value) }.getOrElse {
-                _busy.value = false
-                say("SOS শুরু করা যায়নি — ইন্টারনেট দেখে আবার চেষ্টা করুন, বা ৯৯৯-এ কল করুন")
+            val confirmed = runCatching { task.await() }.isSuccess
+            if (!confirmed) {
+                SosRuntime.update { if (it.sessionId == sid) it.copy(push = PushStatus.Unavailable("refused")) else it }
                 return@launch
             }
-            SosRuntime.update { it.copy(sessionId = sid, startedAtMs = System.currentTimeMillis(), push = PushStatus.Sending) }
-            if (hasLocationPermission) PrivateSosService.start(ctx, sid, audio)
-            _busy.value = false
-            sendSms(sid, update = false)
+            r.logStarted(sid)
             val push = SosNotifyClient.notifyTrusted(ctx, sid)
             SosRuntime.update { if (it.sessionId == sid) it.copy(push = push) else it }
         }
@@ -254,14 +251,14 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
     /** Location permission arrived after the SOS started. */
     fun startSharingNow() {
         val sid = owner.value.sessionId ?: return
-        if (hasLocationPermission) PrivateSosService.start(ctx, sid, _shareAudio.value && hasMicPermission, resume = true)
+        if (hasLocationPermission) PrivateSosService.start(ctx, sid, anyoneMayListen && hasMicPermission, resume = true)
     }
 
     fun endSos() {
         val r = repo ?: return
         val sid = owner.value.sessionId ?: _stranded.value ?: return
         val toldBySms = (owner.value.sms as? SmsStatus.Sent)?.ok?.let { it > 0 } == true
-        val smsContactsNow = _smsContacts.value
+        val smsContactsNow = _contacts.value.map { TrustedContact(it.name, it.phone) }
         SosRuntime.scope.launch {
             _busy.value = true
             val ok = runCatching { r.endSession(sid) }.isSuccess
@@ -282,7 +279,7 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
         val sid = _stranded.value ?: return
         _stranded.value = null
         SosRuntime.update { it.copy(sessionId = sid, startedAtMs = System.currentTimeMillis()) }
-        if (hasLocationPermission) PrivateSosService.start(ctx, sid, _shareAudio.value && hasMicPermission, resume = true)
+        if (hasLocationPermission) PrivateSosService.start(ctx, sid, anyoneMayListen && hasMicPermission, resume = true)
     }
 
     fun setLiveAudio(on: Boolean) {
@@ -296,17 +293,6 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setLocationSharing(on: Boolean) {
-        if (owner.value.sessionId == null) return
-        PrivateSosService.setLocation(ctx, on)
-    }
-
-    fun setSessionRecordingAllowed(on: Boolean) {
-        val r = repo ?: return
-        val sid = owner.value.sessionId ?: return
-        viewModelScope.launch { runCatching { r.setRecordingAllowed(sid, on) } }
-    }
-
     private val ownerName: String get() = FirebaseAuth.getInstance().currentUser?.displayName.orEmpty()
 
     /**
@@ -314,7 +300,7 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
      * known. [update] sends the newest position again while the SOS is still running.
      */
     private fun sendSms(sid: String, update: Boolean) {
-        val contacts = _smsContacts.value
+        val contacts = myUid?.let { TrustedSmsContacts.load(ctx, it) }.orEmpty()
         if (contacts.isEmpty()) return
         fun setStatus(status: SmsStatus) = SosRuntime.update { if (it.sessionId == sid) it.copy(sms = status) else it }
         setStatus(SmsStatus.Sending)
@@ -370,8 +356,7 @@ class PrivateSosViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteHistory(item: SosHistoryItem) = act("মুছে ফেলা হয়েছে") { it.deleteSessionHistory(item.sessionId) }
 
     companion object {
-        const val MAX_SMS_CONTACTS = 3
-        private const val KEY_AUDIO = "share_audio"
-        private const val KEY_RECORDING = "allow_recording"
+        const val MAX_CONTACTS = 5
+        private const val KEY_MIGRATED = "sms_numbers_moved_to_contacts"
     }
 }

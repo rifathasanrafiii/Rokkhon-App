@@ -343,3 +343,22 @@ test("Admins can close or remove any blood request; others only their own", asyn
   await assertSucceeds(bobDb.doc("blood_requests/r1").update({ status: "FULFILLED", updatedAt: new Date() }));
   await assertSucceeds(bobDb.doc("blood_requests/r1").delete());
 });
+
+test("Onboarding profile is private and its phone must be the verified one", async () => {
+  const me = testEnv.authenticatedContext(ALICE_UID, { phone_number: "+8801712345678" }).firestore();
+  const other = testEnv.authenticatedContext(BOB_UID).firestore();
+  const ok = { name: "Alice", bloodGroup: "O+", phone: "+8801712345678", updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+  await assertSucceeds(me.doc(`user_profiles/${ALICE_UID}`).set(ok));
+  await assertSucceeds(me.doc(`user_profiles/${ALICE_UID}`).get());
+  await assertFails(other.doc(`user_profiles/${ALICE_UID}`).get());
+  await assertFails(other.doc(`user_profiles/${ALICE_UID}`).set(ok));
+  await assertFails(me.doc(`user_profiles/${ALICE_UID}`).set({ ...ok, phone: "+8801999999999" }));
+  await assertFails(me.doc(`user_profiles/${ALICE_UID}`).set({ ...ok, bloodGroup: "X" }));
+  await assertFails(me.doc(`user_profiles/${ALICE_UID}`).set({ ...ok, trustScore: 100 }));
+  // Without a verified phone the profile is saved without one.
+  const google = testEnv.authenticatedContext(BOB_UID).firestore();
+  const { phone, ...noPhone } = ok;
+  await assertSucceeds(google.doc(`user_profiles/${BOB_UID}`).set({ ...noPhone, name: "Bob" }));
+  await assertFails(google.doc(`user_profiles/${BOB_UID}`).set({ ...ok, name: "Bob" }));
+});
+

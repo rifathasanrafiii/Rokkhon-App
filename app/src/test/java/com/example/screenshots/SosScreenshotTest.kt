@@ -14,7 +14,14 @@ import com.example.data.sos.LiveFix
 import com.example.data.sos.MicStatus
 import com.example.data.sos.PushStatus
 import com.example.data.sos.SmsStatus
-import com.example.ui.sos.SmsContactsSheet
+import com.example.ui.sos.AddPersonSheet
+import com.example.ui.sos.PeopleSection
+import com.example.ui.sos.sosPeople
+import com.example.data.sos.GrantStatus
+import com.example.data.sos.SosContact
+import com.example.data.sos.SosGrant
+import com.example.data.sos.SosPerms
+import androidx.compose.ui.test.onNodeWithText
 import com.example.ui.sos.SmsLine
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +29,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.data.model.TrustedContact
 import com.example.data.sos.SosRuntime
 import com.example.ui.sos.PrivateSosScreen
 import com.example.ui.sos.SosAccessScreen
@@ -97,7 +103,9 @@ class SosScreenshotTest {
         composeRule.onNodeWithTag("sos_owner_header").assertExists()
         composeRule.onNodeWithTag("sos_gps_indicator").assertExists()
         composeRule.onNodeWithTag("sos_mic_indicator").assertExists()
-        composeRule.onNodeWithTag("sos_push_status").assertExists()
+        // Nobody with a Rokkhon account is on the list, so there is no push to report on.
+        composeRule.onNodeWithTag("sos_push_status").assertDoesNotExist()
+        composeRule.onNodeWithTag("sos_end_button").assertExists()
         save("sos_owner_dashboard")
     }
 
@@ -105,8 +113,7 @@ class SosScreenshotTest {
     fun accessScreenRenders() {
         val vm = PrivateSosViewModel(app)
         composeRule.setContent { MyApplicationTheme { SosAccessScreen(vm, bn = true, onBack = {}, onOpenHistory = {}) } }
-        composeRule.onNodeWithTag("access_add_person").assertExists()
-        composeRule.onNodeWithTag("access_empty").assertExists()
+        composeRule.onNodeWithTag("added_me_empty").assertExists()
         save("sos_access")
     }
 
@@ -136,13 +143,30 @@ class SosScreenshotTest {
     }
 
     @Test
-    fun smsContactsSheetHasThreeNumberFields() {
+    fun addNumberSheetHasNameNumberAndTwoSwitches() {
         val vm = PrivateSosViewModel(app)
-        composeRule.setContent {
-            MyApplicationTheme { SmsContactsSheet(vm, bn = true, initial = listOf(TrustedContact("মা", "01712345678")), onDismiss = {}) }
-        }
+        composeRule.setContent { MyApplicationTheme { AddPersonSheet(vm, bn = true, onDismiss = {}) } }
         composeRule.waitForIdle()
-        (0..2).forEach { composeRule.onNodeWithTag("sos_sms_phone_$it").assertExists() }
-        composeRule.onNodeWithTag("sos_sms_save").assertExists()
+        listOf("sos_add_name", "sos_add_phone", "sos_add_pick", "perm_location", "perm_audio", "sos_add_save").forEach {
+            composeRule.onNodeWithTag(it).assertExists()
+        }
+    }
+
+    @Test
+    fun peopleListShowsWhatEachPersonGets() {
+        val grant = SosGrant("me", "u1", "Me", "মা", GrantStatus.ACCEPTED, SosPerms(location = true, audio = true), 0, 0)
+        val people = sosPeople(
+            listOf(SosContact("8801712345678", "মা", "+8801712345678", "u1"), SosContact("8801912345678", "ভাই", "+8801912345678", null)),
+            listOf(grant)
+        )
+        composeRule.setContent {
+            MyApplicationTheme {
+                Column(Modifier.padding(16.dp)) { PeopleSection(bn = true, people = people, max = 5, onAdd = {}, onOpen = {}) }
+            }
+        }
+        composeRule.onAllNodesWithTag("sos_person_row").assertCountEquals(2)
+        composeRule.onNodeWithText("লোকেশন · অডিও · SMS").assertExists()
+        composeRule.onNodeWithText("SMS").assertExists()
+        save("sos_people")
     }
 }
