@@ -1301,3 +1301,28 @@ data class Announcement(
     /** "all", or topics joined with "&" (e.g. "bg_O_POS&dist_dhaka"); see PushTopics. */
     val target: String = "all"
 )
+
+private val AREA_BY_NAME: Map<String, BangladeshDistrict> by lazy {
+    buildMap {
+        BANGLADESH_AREAS.forEach { a ->
+            listOf(a.nameEn.lowercase(), a.nameEn.substringBefore(",").trim().lowercase()).forEach { k -> if (k !in this) put(k, a) }
+        }
+    }
+}
+
+/**
+ * A stored area name ("Mirpur 10, Dhaka") in the user's language. Areas are saved in English;
+ * [short] keeps only the first part ("মিরপুর ১০").
+ */
+fun areaLabel(stored: String, bn: Boolean, short: Boolean = false): String {
+    val text = stored.trim()
+    if (text.isEmpty()) return ""
+    val area = AREA_BY_NAME[text.lowercase()] ?: AREA_BY_NAME[text.substringBefore(",").trim().lowercase()]
+    val name = if (area != null) (if (bn) area.nameBn else area.nameEn) else text
+    return if (short) name.substringBefore(",").trim() else name
+}
+
+/** Numbers in the user's script: "৩" in Bangla, "3" otherwise. Works on any text with digits. */
+fun localDigits(text: String, bn: Boolean): String =
+    if (!bn) text else buildString { text.forEach { append(if (it in '0'..'9') '০' + (it - '0') else it) } }
+

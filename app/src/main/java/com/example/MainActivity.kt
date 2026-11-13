@@ -573,7 +573,8 @@ fun RokkhonAuthenticatedShell(
                     onBack = { viewModel.selectTab(RokkhonTab.HOME_MATCH) },
                     onOpenAccess = { sosRoute = SosRoute.Access },
                     onOpenSession = { sosRoute = SosRoute.Monitor(it) },
-                    showBack = false
+                    showBack = false,
+                    onSignIn = if (isGuestSession) onExitGuestOrSignOut else null
                 )
                 RokkhonTab.REWARDS -> RewardsScreen(viewModel = viewModel, onBack = { viewModel.selectTab(RokkhonTab.DONOR_PROFILE) })
                 RokkhonTab.DONOR_PROFILE -> Column(modifier = Modifier.fillMaxSize()) {

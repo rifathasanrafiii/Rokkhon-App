@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.AppLanguage
+import com.example.data.model.areaLabel
+import com.example.data.model.localDigits
 import com.example.data.model.BANGLADESH_AREAS
 import com.example.data.model.DONATION_GAP_DAYS
 import com.example.data.model.DONATION_LOG_WINDOW_DAYS
@@ -166,7 +168,7 @@ fun DonorProfileScreen(
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = displayName.ifBlank { if (bn) "রক্ষণ গার্ডিয়ান" else "Rokkhon Guardian" },
+                            text = displayName.takeIf { it.isNotBlank() && it != "Guest" } ?: if (bn) "অতিথি" else "Guest",
                             color = RokkhonPalette.Ink,
                             fontSize = 30.sp,
                             lineHeight = 36.sp,
@@ -183,7 +185,7 @@ fun DonorProfileScreen(
                         ) {
                             Icon(UIcons.LocationOn, contentDescription = null, tint = RokkhonPalette.Muted, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(3.dp))
-                            Text(district.substringBefore(","), color = RokkhonPalette.Muted, fontSize = 13.sp, maxLines = 1)
+                            Text(areaLabel(district, bn, short = true), color = RokkhonPalette.Muted, fontSize = 13.sp, maxLines = 1)
                         }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -196,14 +198,16 @@ fun DonorProfileScreen(
                                 .springClick { showEditSheet = true },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(bloodGroup, color = RokkhonPalette.Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            // No group is shown until the person has really chosen one.
+                            if (myDonor != null) Text(bloodGroup, color = RokkhonPalette.Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            else Icon(UIcons.Person, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(30.dp))
                         }
                         Box(
                             modifier = Modifier
                                 .size(18.dp)
                                 .align(Alignment.BottomEnd)
                                 .clip(CircleShape)
-                                .background(if (isAvailableDonor) RokkhonPalette.Positive else RokkhonPalette.Faint)
+                                .background(if (myDonor != null && isAvailableDonor) RokkhonPalette.Positive else RokkhonPalette.Faint)
                                 .border(3.dp, Color.White, CircleShape)
                         )
                     }
@@ -219,6 +223,7 @@ fun DonorProfileScreen(
                         highlight = !checkedInToday,
                         onClick = { if (!checkedInToday) viewModel.performDailySafeCheckIn() },
                         modifier = Modifier.weight(1f),
+                        bn = bn,
                         testTag = "profile_daily_checkin_button"
                     )
                     HeroStat(
@@ -226,7 +231,8 @@ fun DonorProfileScreen(
                         value = guardianPoints,
                         label = if (bn) "পয়েন্ট" else "points",
                         onClick = { viewModel.selectTab(RokkhonTab.REWARDS) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        bn = bn
                     )
                     HeroStat(
                         icon = UIcons.CardGiftcard,
@@ -234,6 +240,7 @@ fun DonorProfileScreen(
                         label = if (bn) "ব্যাজ" else "badges",
                         onClick = { viewModel.selectTab(RokkhonTab.REWARDS) },
                         modifier = Modifier.weight(1f),
+                        bn = bn,
                         testTag = "profile_open_rewards"
                     )
                 }
@@ -271,8 +278,8 @@ fun DonorProfileScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
 
-                    // Availability: one switch
-                    SettingsGroup {
+                    // Availability: one switch, once there is a donor profile to show or hide
+                    if (myDonor != null) SettingsGroup {
                         SettingsRow(
                             icon = UIcons.Bloodtype,
                             iconTint = if (isAvailableDonor) RokkhonPalette.Positive else RokkhonPalette.Ink,
@@ -321,7 +328,7 @@ fun DonorProfileScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     SettingsGroup {
-                        SettingsRow(UIcons.Bloodtype, RokkhonPalette.Ink, if (bn) "রক্তের গ্রুপ" else "Blood group", bloodGroup, { showEditSheet = true })
+                        SettingsRow(UIcons.Bloodtype, RokkhonPalette.Ink, if (bn) "রক্তের গ্রুপ" else "Blood group", if (myDonor != null) bloodGroup else (if (bn) "যোগ করুন" else "Add"), { showEditSheet = true })
                         SettingsDivider()
                         SettingsRow(
                             UIcons.Phone, RokkhonPalette.Ink, if (bn) "জরুরি ফোন" else "Emergency phone",
@@ -330,11 +337,11 @@ fun DonorProfileScreen(
                         SettingsDivider()
                         SettingsRow(
                             UIcons.Event, RokkhonPalette.Ink, if (bn) "শেষ রক্তদান" else "Last donation",
-                            lastDonationDate.ifBlank { if (bn) "জানা নেই" else "Not set" }, { showEditSheet = true }
+                            localDigits(lastDonationDate, bn).ifBlank { if (bn) "জানা নেই" else "Not set" }, { showEditSheet = true }
                         )
                         SettingsDivider()
                         SettingsRow(
-                            UIcons.LocationOn, RokkhonPalette.Ink, if (bn) "এলাকা" else "Area", district,
+                            UIcons.LocationOn, RokkhonPalette.Ink, if (bn) "এলাকা" else "Area", areaLabel(district, bn),
                             { showProfileAreaPicker = true },
                             testTag = "profile_open_64_districts_button"
                         )
@@ -570,7 +577,8 @@ private fun HeroStat(
     modifier: Modifier = Modifier,
     suffix: String = "",
     highlight: Boolean = false,
-    testTag: String = ""
+    testTag: String = "",
+    bn: Boolean = false
 ) {
     Column(
         modifier = modifier
@@ -583,7 +591,7 @@ private fun HeroStat(
     ) {
         Icon(icon, contentDescription = null, tint = if (highlight) Color.White else RokkhonPalette.Ink, modifier = Modifier.size(22.dp))
         Spacer(modifier = Modifier.height(6.dp))
-        RollingNumber(value = value, fontSize = 20.sp, color = if (highlight) Color.White else RokkhonPalette.Ink, fontWeight = FontWeight.Bold, suffix = suffix)
+        RollingNumber(value = value, fontSize = 20.sp, color = if (highlight) Color.White else RokkhonPalette.Ink, fontWeight = FontWeight.Bold, suffix = suffix, bn = bn)
         Text(label, color = if (highlight) Color.White.copy(alpha = 0.8f) else RokkhonPalette.Muted, fontSize = 12.sp, maxLines = 1)
     }
 }

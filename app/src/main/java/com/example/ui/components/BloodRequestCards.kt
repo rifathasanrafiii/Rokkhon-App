@@ -34,6 +34,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.model.areaLabel
+import com.example.data.model.localDigits
+import com.example.ui.theme.RokkhonPalette
 import com.example.data.model.AppLanguage
 import com.example.data.model.BloodRequest
 import com.example.ui.components.RokkhonIntents
@@ -57,256 +61,107 @@ fun ClinicalBloodRequestCard(
     onCallClick: () -> Unit,
     onFulfillClick: () -> Unit
 ) {
-    Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Color(0xFFE8E8E8), RoundedCornerShape(22.dp))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
+    val bn = language == AppLanguage.BENGALI
+    val context = LocalContext.current
+    fun real(v: String) = v.trim().takeIf { it.isNotEmpty() && it != "-" }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(Color.Black), contentAlignment = Alignment.Center) {
+                Text(req.bloodGroup, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    req.patientName.ifBlank { req.requesterName }, fontSize = 20.sp, lineHeight = 26.sp,
+                    fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink, maxLines = 2
+                )
+                Text(
+                    listOfNotNull(
+                        localDigits(if (bn) "${req.unitsNeeded} ব্যাগ" else "${req.unitsNeeded} bag(s)", bn),
+                        real(req.neededDateTime)
+                    ).joinToString(" · "),
+                    fontSize = 14.sp, color = RokkhonPalette.Muted
+                )
+            }
+            if (req.urgencyLevel == "CRITICAL") {
+                Text(
+                    if (bn) "জরুরি" else "Urgent", color = RokkhonPalette.Sos, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(CircleShape).background(RokkhonPalette.Sos.copy(alpha = 0.1f)).padding(horizontal = 10.dp, vertical = 5.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Only what the requester really entered; nothing is filled in for them.
+        Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(RokkhonPalette.Subtle).padding(horizontal = 14.dp, vertical = 6.dp)) {
+            InfoLine(UIcons.LocalHospital, req.hospitalName, areaLabel(req.district, bn))
+            real(req.wardCabinNumber)?.let { InfoLine(UIcons.LocationOn, if (bn) "ওয়ার্ড / কেবিন" else "Ward / cabin", it) }
+            real(req.patientProblem)?.let { InfoLine(UIcons.MedicalServices, if (bn) "সমস্যা" else "Condition", it) }
+            real(req.hemoglobinLevel)?.let { InfoLine(UIcons.Bloodtype, if (bn) "হিমোগ্লোবিন" else "Hemoglobin", localDigits(it, bn)) }
+            if (req.respondersCount > 0) {
+                InfoLine(UIcons.People, localDigits(if (bn) "${req.respondersCount} জন সাড়া দিয়েছেন" else "${req.respondersCount} responded", bn), null)
+            }
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Your own request: no "Donate" (you can't pledge to yourself).
+            if (!isOwner) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(50.dp)
-                            .clip(RoundedCornerShape(15.dp))
-                            .background(IosSystemRed),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = req.bloodGroup,
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Text(
-                                text = "${req.unitsNeeded} ব্যাগ",
-                                color = Color.White.copy(alpha = 0.9f),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) {
-                                "রোগী: ${req.patientName}"
-                            } else {
-                                "Patient: ${req.patientName}"
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color(0xFF000000),
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            text = "${req.hospitalName} • ${req.district}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF545454),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                Surface(
-                    color = LifelineBlush,
-                    shape = CircleShape
-                ) {
-                    Text(
-                        text = req.neededDateTime.ifBlank { req.urgencyLevel },
-                        color = IosSystemRed,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Clinical Metrics Box (Hemoglobin, Bags, Problem, Ward/Cabin)
-            Surface(
-                color = Color(0xFFF6F6F6),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(0.8.dp, Color(0xFFE8E8E8), RoundedCornerShape(16.dp))
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (language == AppLanguage.BENGALI) "হিমোগ্লোবিন (Hb)" else "Hemoglobin (Hb)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF5E5E5E)
-                            )
-                            Text(
-                                text = req.hemoglobinLevel.ifBlank { "6.5 g/dL" },
-                                style = MaterialTheme.typography.titleSmall,
-                                color = IosSystemRed,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (language == AppLanguage.BENGALI) "রক্তের পরিমাণ" else "Blood Bags",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF5E5E5E)
-                            )
-                            Text(
-                                text = "${req.unitsNeeded} ব্যাগ (Bags)",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Color(0xFF000000),
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1.1f)) {
-                            Text(
-                                text = if (language == AppLanguage.BENGALI) "ওয়ার্ড / কেবিন" else "Ward / Cabin",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF5E5E5E)
-                            )
-                            Text(
-                                text = req.wardCabinNumber.ifBlank { "Emergency Ward" },
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Color(0xFF000000),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    HorizontalDivider(thickness = 0.5.dp, color = Color(0xFFE8E8E8))
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = UIcons.MedicalServices,
-                            contentDescription = null,
-                            tint = IosSystemRed,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) {
-                                "সমস্যা: ${req.patientProblem}"
-                            } else {
-                                "Diagnosis: ${req.patientProblem}"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF000000),
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Your own request: no "Donate" (you can't pledge to yourself), only Call + Managed.
-                if (!isOwner) Button(
-                    onClick = onDonateClick,
-                    enabled = !hasPledged,
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = IosSystemRed,
-                        disabledContainerColor = IosSystemGreen.copy(alpha = 0.16f),
-                        disabledContentColor = IosSystemGreen
-                    ),
                     modifier = Modifier
                         .weight(1f)
-                        .testTag("donate_blood_button_${req.id}")
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (hasPledged) RokkhonPalette.Positive.copy(alpha = 0.12f) else Color.Black)
+                        .springClick(enabled = !hasPledged, pressedScale = 0.97f, onClick = onDonateClick)
+                        .testTag("donate_blood_button_${req.id}"),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (hasPledged) UIcons.CheckCircle else UIcons.Bloodtype,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    val fg = if (hasPledged) RokkhonPalette.Positive else Color.White
+                    Icon(if (hasPledged) UIcons.CheckCircle else UIcons.Bloodtype, contentDescription = null, tint = fg, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (hasPledged) {
-                            if (language == AppLanguage.BENGALI) {
-                                "সাড়া দিয়েছেন (${req.respondersCount})"
-                            } else {
-                                "Pledged (${req.respondersCount})"
-                            }
-                        } else {
-                            if (language == AppLanguage.BENGALI) {
-                                "রক্ত দিন (${req.respondersCount} সাড়া)"
-                            } else {
-                                "Donate Blood (${req.respondersCount})"
-                            }
-                        },
-                        fontWeight = FontWeight.Bold
+                        if (hasPledged) (if (bn) "সাড়া দিয়েছেন" else "You responded") else (if (bn) "রক্ত দেব" else "I'll donate"),
+                        color = fg, fontSize = 15.sp, fontWeight = FontWeight.Bold
                     )
                 }
-
-                val context = LocalContext.current
-                OutlinedButton(
-                    onClick = onCallClick,
-                    shape = CircleShape
-                ) {
-                    Icon(UIcons.Call, contentDescription = "Call", modifier = Modifier.size(16.dp), tint = IosSystemRed)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (language == AppLanguage.BENGALI) "কল" else "Call", color = IosSystemRed, fontWeight = FontWeight.Bold)
-                }
-
-                IconButton(
-                    onClick = { RokkhonIntents.shareBloodRequest(context, req, language) },
+            } else {
+                Row(
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(LifelineBlush)
-                        .testTag("share_blood_request_button_${req.id}")
+                        .weight(1f)
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black)
+                        .springClick(pressedScale = 0.97f, onClick = onFulfillClick)
+                        .testTag("delete_fulfilled_request_button_${req.id}"),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = UIcons.Share,
-                        contentDescription = if (language == AppLanguage.BENGALI) "শেয়ার করুন" else "Share",
-                        tint = IosSystemRed,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-
-                if (isOwner) {
-                    OutlinedButton(
-                        onClick = onFulfillClick,
-                        shape = CircleShape,
-                        modifier = Modifier.testTag("delete_fulfilled_request_button_${req.id}")
-                    ) {
-                        Icon(
-                            imageVector = UIcons.DeleteOutline,
-                            contentDescription = "Remove Post",
-                            tint = Color(0xFF1F1F1F),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (language == AppLanguage.BENGALI) "ম্যানেজড" else "Managed",
-                            color = Color(0xFF1F1F1F),
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Icon(UIcons.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (bn) "রক্ত পেয়েছি, বন্ধ করুন" else "Got blood, close", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
             }
+            RoundIconButton(icon = UIcons.Call, onClick = onCallClick, contentDescription = if (bn) "কল" else "Call")
+            RoundIconButton(
+                icon = UIcons.Share,
+                onClick = { RokkhonIntents.shareBloodRequest(context, req, language) },
+                contentDescription = if (bn) "শেয়ার করুন" else "Share",
+                testTag = "share_blood_request_button_${req.id}"
+            )
         }
     }
 }
 
+@Composable
+private fun InfoLine(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String?) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = RokkhonPalette.Ink, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, color = RokkhonPalette.Ink)
+            if (!value.isNullOrBlank()) Text(value, fontSize = 13.sp, color = RokkhonPalette.Muted)
+        }
+    }
+}

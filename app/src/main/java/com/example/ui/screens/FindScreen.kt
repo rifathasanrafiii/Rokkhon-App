@@ -41,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AppLanguage
+import com.example.data.model.areaLabel
+import com.example.data.model.localDigits
+import com.example.ui.components.SkeletonRow
 import com.example.data.model.BloodRequest
 import com.example.data.model.DonorNode
 import com.example.data.model.canDonateTo
@@ -122,17 +125,6 @@ fun FindScreen(
                         color = RokkhonPalette.Ink,
                         modifier = Modifier.weight(1f)
                     )
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black)
-                            .springClick(onClick = onOpenBloodRequestDialog)
-                            .testTag("new_blood_request_fab"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(UIcons.Add, contentDescription = if (bn) "রক্তের আবেদন" else "Request blood", tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
                 }
 
                 // Where: tap to pick any district or upazila
@@ -226,8 +218,8 @@ fun FindScreen(
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)) {
                 SegmentedControl(
                     segments = listOf(
-                        Segment("${if (bn) "ডোনার" else "Donors"} ${donors.size}", UIcons.People, "map_filter_tab_available_donors"),
-                        Segment("${if (bn) "রোগী" else "Patients"} ${requests.size}", UIcons.LocalHospital, "map_filter_tab_patient_requests")
+                        Segment("${if (bn) "ডোনার" else "Donors"} ${localDigits(donors.size.toString(), bn)}", UIcons.People, "map_filter_tab_available_donors"),
+                        Segment("${if (bn) "রোগী" else "Patients"} ${localDigits(requests.size.toString(), bn)}", UIcons.LocalHospital, "map_filter_tab_patient_requests")
                     ),
                     selectedIndex = if (showRequests) 1 else 0,
                     onSelect = { viewModel.setMapLayerFilter(if (it == 1) MapLayerFilter.BLOOD_REQUESTS_ONLY else MapLayerFilter.DONORS_ONLY) },
@@ -261,7 +253,9 @@ fun FindScreen(
             }
         }
 
-        if (!showRequests) {
+        if ((if (showRequests) requestsState else donorsState) is UiState.Loading) {
+            items(5, key = { "find_skeleton_$it" }) { SkeletonRow() }
+        } else if (!showRequests) {
             if (donors.isEmpty()) {
                 item(key = "find_empty_donors") {
                     FindEmpty(
@@ -383,7 +377,7 @@ private fun RequestRow(req: BloodRequest, language: AppLanguage, onClick: () -> 
                     }
                 }
                 Text(
-                    text = req.hospitalName + (if (req.district.isNotBlank()) " · " + req.district.substringBefore(",") else ""),
+                    text = req.hospitalName + (if (req.district.isNotBlank()) " · " + areaLabel(req.district, bn, short = true) else ""),
                     fontSize = 13.5.sp,
                     color = RokkhonPalette.Muted,
                     maxLines = 1,

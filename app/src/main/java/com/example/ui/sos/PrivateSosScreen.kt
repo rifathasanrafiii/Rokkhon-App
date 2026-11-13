@@ -78,7 +78,8 @@ fun PrivateSosScreen(
     onBack: () -> Unit,
     onOpenAccess: () -> Unit,
     onOpenSession: (String) -> Unit,
-    showBack: Boolean = true
+    showBack: Boolean = true,
+    onSignIn: (() -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
     val owner by vm.owner.collectAsStateWithLifecycle()
@@ -94,7 +95,7 @@ fun PrivateSosScreen(
             }
             Box(Modifier.weight(1f)) {
                 if (owner.active) OwnerDashboard(vm, bn, owner)
-                else SosHome(vm, bn, onOpenSession)
+                else SosHome(vm, bn, onOpenSession, onSignIn)
             }
         }
         message?.let { text ->
@@ -118,7 +119,7 @@ fun PrivateSosScreen(
 }
 
 @Composable
-private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenSession: (String) -> Unit) {
+private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenSession: (String) -> Unit, onSignIn: (() -> Unit)?) {
     val context = LocalContext.current
     val viewers by vm.viewers.collectAsStateWithLifecycle()
     val contacts by vm.contacts.collectAsStateWithLifecycle()
@@ -145,7 +146,7 @@ private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenSession: (String
             .padding(bottom = 28.dp)
     ) {
         if (!vm.available) {
-            UnavailableCard(bn, vm.signedIn)
+            UnavailableCard(bn, vm.signedIn, onSignIn)
             Spacer(Modifier.height(16.dp))
         }
 
@@ -216,7 +217,7 @@ private fun SosHome(vm: PrivateSosViewModel, bn: Boolean, onOpenSession: (String
 }
 
 @Composable
-private fun UnavailableCard(bn: Boolean, signedIn: Boolean) {
+private fun UnavailableCard(bn: Boolean, signedIn: Boolean, onSignIn: (() -> Unit)?) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -235,12 +236,16 @@ private fun UnavailableCard(bn: Boolean, signedIn: Boolean) {
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            if (!signedIn) t(bn, "কে আপনার SOS দেখবে তা নিরাপদে মেলাতে Rokkhon অ্যাকাউন্ট লাগে। প্রোফাইল থেকে লগইন করুন। জরুরি হলে এখনই ৯৯৯-এ কল করুন।",
-                "Rokkhon needs your account to match who may see your SOS. Sign in from Profile. In an emergency, call 999 now.")
+            if (!signedIn) t(bn, "কে আপনার SOS দেখবে তা নিরাপদে মেলাতে Rokkhon অ্যাকাউন্ট লাগে। জরুরি হলে এখনই ৯৯৯-এ কল করুন।",
+                "Rokkhon needs your account to match who may see your SOS. In an emergency, call 999 now.")
             else t(bn, "অ্যাপের Firebase প্রজেক্টে Realtime Database তৈরি করা হয়নি, তাই লাইভ লোকেশন পাঠানো যাবে না। এখন ৯৯৯ ব্যবহার করুন।",
                 "Realtime Database isn't created in this app's Firebase project, so live location can't be sent. Use 999 for now."),
             fontSize = 13.sp, lineHeight = 19.sp, color = RokkhonPalette.Muted
         )
+        if (!signedIn && onSignIn != null) {
+            Spacer(Modifier.height(12.dp))
+            PrimaryButton(t(bn, "লগইন করুন", "Sign in"), onClick = onSignIn, testTag = "sos_sign_in")
+        }
     }
 }
 

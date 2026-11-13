@@ -64,6 +64,8 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.AppLanguage
+import com.example.data.model.areaLabel
+import com.example.ui.components.SkeletonRow
 import com.example.data.model.BloodRequest
 import com.example.data.model.DonorNode
 import com.example.data.model.NotificationKind
@@ -479,7 +481,10 @@ fun HomeMatchHubScreen(
             )
         }
 
-        if (matchingDonors.isEmpty()) {
+        if (donorsState is UiState.Loading) {
+            // Still loading: outlines, not "nobody here".
+            items(4, key = { "donor_skeleton_$it" }) { SkeletonRow() }
+        } else if (matchingDonors.isEmpty()) {
             item(key = "empty_donors") {
                 Column(
                     modifier = Modifier
@@ -818,11 +823,11 @@ private fun HomeTopBar(
             ) {
                 Icon(UIcons.LocalFireDepartment, contentDescription = null, tint = fg, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(if (bn) "${streakDays}দি" else "${streakDays}d", color = fg, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                Text(if (bn) "${bnDigits(streakDays)} দিন" else "${streakDays}d", color = fg, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(UIcons.Star, contentDescription = null, tint = fg, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("$points", color = fg, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                Text(if (bn) bnDigits(points) else "$points", color = fg, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
             }
             if (onSosClick != null) {
                 // Private SOS: hold-to-start lives behind this, so a stray tap here starts nothing.
@@ -982,7 +987,7 @@ internal fun DonorRow(
     modifier: Modifier = Modifier
 ) {
     val bn = language == AppLanguage.BENGALI
-    val area = donor.district.substringBefore(",").ifBlank { if (bn) "এলাকা জানা নেই" else "Area unknown" }
+    val area = areaLabel(donor.district, bn, short = true).ifBlank { if (bn) "এলাকা জানা নেই" else "Area unknown" }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -1077,7 +1082,7 @@ internal fun DonorDetail(donor: DonorNode, language: AppLanguage, onCall: () -> 
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(donor.displayName.ifBlank { if (bn) "নাম নেই" else "No name" }, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = RokkhonPalette.Ink)
-            Text(donor.district.ifBlank { "—" }, fontSize = 14.sp, color = RokkhonPalette.Muted)
+            Text(areaLabel(donor.district, language == AppLanguage.BENGALI).ifBlank { "—" }, fontSize = 14.sp, color = RokkhonPalette.Muted)
         }
         Text(
             text = donor.bloodGroup,

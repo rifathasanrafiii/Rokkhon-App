@@ -5,7 +5,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -155,7 +157,8 @@ fun RollingNumber(
     color: Color,
     modifier: Modifier = Modifier,
     fontWeight: FontWeight = FontWeight.ExtraBold,
-    suffix: String = ""
+    suffix: String = "",
+    bn: Boolean = false
 ) {
     AnimatedContent(
         targetState = value,
@@ -168,7 +171,7 @@ fun RollingNumber(
         modifier = modifier
     ) { n ->
         Text(
-            text = "$n$suffix",
+            text = com.example.data.model.localDigits("$n", bn) + suffix,
             fontSize = fontSize,
             lineHeight = fontSize,
             color = color,
@@ -534,6 +537,8 @@ fun BloodGroupGrid(selected: String?, onSelect: (String) -> Unit, modifier: Modi
 class FullScreenHost {
     internal class Entry(content: @Composable () -> Unit) {
         var content by mutableStateOf(content)
+        /** Starts hidden so the page slides in; set to false to slide it out before it is dropped. */
+        val visible = androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true }
     }
 
     internal val entries = mutableStateListOf<Entry>()
@@ -554,19 +559,29 @@ fun FullScreenHostBox(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalFullScreenHost provides host) {
         Box(modifier = Modifier.fillMaxSize()) {
             content()
-            host.entries.forEach { entry ->
+            host.entries.toList().forEach { entry ->
                 key(entry) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.White)
-                            // Swallow touches so nothing underneath reacts.
-                            .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false).consume() } }
-                            .statusBarsPadding()
-                            .navigationBarsPadding()
-                            .imePadding()
+                    // Slid out completely: now it can go.
+                    if (entry.visible.isIdle && !entry.visible.currentState) {
+                        SideEffect { host.entries.remove(entry) }
+                    }
+                    androidx.compose.animation.AnimatedVisibility(
+                        visibleState = entry.visible,
+                        enter = slideInVertically(tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { it / 8 } + fadeIn(tween(200)),
+                        exit = slideOutVertically(tween(200)) { it / 10 } + fadeOut(tween(160))
                     ) {
-                        entry.content()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.White)
+                                // Swallow touches so nothing underneath reacts.
+                                .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false).consume() } }
+                                .statusBarsPadding()
+                                .navigationBarsPadding()
+                                .imePadding()
+                        ) {
+                            entry.content()
+                        }
                     }
                 }
             }
@@ -588,7 +603,8 @@ fun FullScreenDialog(onDismiss: () -> Unit, content: @Composable () -> Unit) {
         val entry = remember { FullScreenHost.Entry { latest() } }
         DisposableEffect(host) {
             host.entries.add(entry)
-            onDispose { host.entries.remove(entry) }
+            // The page plays its exit, then the host drops it.
+            onDispose { entry.visible.targetState = false }
         }
         return
     }
@@ -700,3 +716,32 @@ fun Modifier.riseIn(order: Int = 0): Modifier = composed {
         scaleY = sc
     }
 }
+
+/** A grey block that softly pulses while real content is loading. */
+@Composable
+fun SkeletonBlock(modifier: Modifier = Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(8.dp)) {
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton")
+    val a by t.animateFloat(
+        0.45f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(tween(800), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "skeleton_alpha"
+    )
+    Box(modifier.graphicsLayer { alpha = a }.clip(shape).background(RokkhonPalette.Chip))
+}
+
+/** The outline of a donor or request row, shown while the list is loading. */
+@Composable
+fun SkeletonRow(modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).testTag("skeleton_row"), verticalAlignment = Alignment.CenterVertically) {
+        SkeletonBlock(Modifier.size(50.dp), CircleShape)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            SkeletonBlock(Modifier.fillMaxWidth(0.55f).height(14.dp))
+            Spacer(Modifier.height(8.dp))
+            SkeletonBlock(Modifier.fillMaxWidth(0.8f).height(11.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        SkeletonBlock(Modifier.size(42.dp), CircleShape)
+    }
+}
+
