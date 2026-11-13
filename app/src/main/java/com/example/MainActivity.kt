@@ -175,7 +175,7 @@ class MainActivity : ComponentActivity() {
                 _pendingHardwareSosMethod.value = triggerMethod
             }
         )
-        if (FeatureFlags.SOS_ENABLED) hardwareSosDetector.startListening()
+        hardwareSosDetector.startListening()
 
         setContent {
             MyApplicationTheme {
@@ -196,7 +196,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (FeatureFlags.SOS_ENABLED && ::hardwareSosDetector.isInitialized && hardwareSosDetector.onKeyDown(keyCode, event)) {
+        if (::hardwareSosDetector.isInitialized && hardwareSosDetector.onKeyDown(keyCode, event)) {
             return true
         }
         return super.onKeyDown(keyCode, event)
@@ -493,6 +493,14 @@ fun RokkhonAuthenticatedShell(
     }
 
     var showSosVerificationDialog by remember { mutableStateOf(false) }
+    var quickSosSeconds by remember { mutableStateOf(0) }
+    LaunchedEffect(quickSosSeconds) {
+        if (quickSosSeconds > 0) {
+            kotlinx.coroutines.delay(1000)
+            if (quickSosSeconds == 1) sosVm.startSos()
+            quickSosSeconds -= 1
+        }
+    }
     var showPostBloodRequestDialog by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val openSosVerification = {
@@ -502,7 +510,13 @@ fun RokkhonAuthenticatedShell(
 
     LaunchedEffect(hardwareTriggerMethod) {
         if (hardwareTriggerMethod != null) {
-            viewModel.startHardwareSosCountdown(hardwareTriggerMethod)
+            // 3 quick presses of power or volume: the private SOS, after a few seconds to cancel.
+            if (FeatureFlags.SOS_ENABLED) viewModel.startHardwareSosCountdown(hardwareTriggerMethod)
+            else if (!ownerSos.active) {
+                sosRoute = null
+                viewModel.selectTab(RokkhonTab.SOS_GUARDIAN)
+                quickSosSeconds = 5
+            }
             onConsumeHardwareTrigger()
         }
     }
@@ -720,6 +734,26 @@ fun RokkhonAuthenticatedShell(
                 factory = viewModelFactory { initializer { SosMonitorViewModel(app, route.sessionId) } }
             )
             SosMonitorScreen(vm = monitorVm, bn = bn, onBack = { sosRoute = null })
+        }
+    }
+
+    if (quickSosSeconds > 0) {
+        val bnQuick = language == AppLanguage.BENGALI
+        Column(
+            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f)).padding(32.dp).testTag("quick_sos_countdown"),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(com.example.data.model.localDigits("$quickSosSeconds", bnQuick), color = Color.White, fontSize = 96.sp, fontWeight = FontWeight.Bold)
+            Text(
+                if (!sosVm.available) (if (bnQuick) "SOS-এর জন্য লগইন দরকার — ৯৯৯-এ কল করুন" else "Sign in to use SOS — call 999")
+                else if (bnQuick) "SOS চালু হচ্ছে" else "Starting SOS",
+                color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            Surface(color = Color.White, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(56.dp).testTag("quick_sos_cancel"), onClick = { quickSosSeconds = 0 }) {
+                Box(contentAlignment = Alignment.Center) { Text(if (bnQuick) "বাতিল করুন" else "Cancel", color = Color.Black, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+            }
         }
     }
 

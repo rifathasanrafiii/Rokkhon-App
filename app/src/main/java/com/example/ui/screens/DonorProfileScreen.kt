@@ -386,14 +386,7 @@ fun DonorProfileScreen(
                             .height(22.dp)
                             .align(Alignment.CenterHorizontally)
                     )
-                    Text(
-                        text = "Icons: Uicons by Flaticon",
-                        color = RokkhonPalette.Faint,
-                        fontSize = 11.sp,
-                        modifier = Modifier
-                            .padding(top = 6.dp, bottom = 12.dp)
-                            .align(Alignment.CenterHorizontally)
-                    )
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
